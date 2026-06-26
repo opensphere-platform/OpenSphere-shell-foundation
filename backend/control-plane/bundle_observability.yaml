@@ -1,0 +1,107 @@
+# observability operand 번들 — control plane이 SSA로 적용(__NAMESPACE__/__IMAGE__ 치환).
+# D-1: OTel Collector(OTLP 수신 → batch → debug exporter). 다운스트림(Tempo/Loki/Prometheus)은 D-2(정직: 미연결).
+# Namespace는 코드에서 별도 ensure(공유 ns라 owner 라벨 미부착·삭제 안 함).
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: foundation-observability-collector
+  namespace: __NAMESPACE__
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foundation-observability-collector-config
+  namespace: __NAMESPACE__
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc: { endpoint: 0.0.0.0:4317 }
+          http: { endpoint: 0.0.0.0:4318 }
+    processors:
+      memory_limiter:
+        check_interval: 5s
+        limit_percentage: 80
+        spike_limit_percentage: 25
+      batch: {}
+    exporters:
+      debug:
+        verbosity: basic
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+    service:
+      extensions: [health_check]
+      telemetry:
+        metrics:
+          address: 0.0.0.0:8888
+      pipelines:
+        traces:  { receivers: [otlp], processors: [memory_limiter, batch], exporters: [debug] }
+        metrics: { receivers: [otlp], processors: [memory_limiter, batch], exporters: [debug] }
+        logs:    { receivers: [otlp], processors: [memory_limiter, batch], exporters: [debug] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: foundation-observability-collector
+  namespace: __NAMESPACE__
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: foundation-observability-collector }
+  template:
+    metadata:
+      labels: { app: foundation-observability-collector }
+    spec:
+      serviceAccountName: foundation-observability-collector
+      securityContext: { runAsNonRoot: true }
+      containers:
+        - name: collector
+          image: __IMAGE__
+          args: ["--config=/etc/otelcol/config.yaml"]
+          ports:
+            - { name: otlp-grpc, containerPort: 4317 }
+            - { name: otlp-http, containerPort: 4318 }
+            - { name: metrics, containerPort: 8888 }
+            - { name: health, containerPort: 13133 }
+          readinessProbe: { httpGet: { path: /, port: 13133 }, initialDelaySeconds: 5, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /, port: 13133 }, initialDelaySeconds: 10, periodSeconds: 20 }
+          resources: { requests: { cpu: 20m, memory: 96Mi }, limits: { cpu: 500m, memory: 256Mi } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          volumeMounts:
+            - { name: config, mountPath: /etc/otelcol, readOnly: true }
+      volumes:
+        - name: config
+          configMap: { name: foundation-observability-collector-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: foundation-observability-collector
+  namespace: __NAMESPACE__
+spec:
+  selector: { app: foundation-observability-collector }
+  ports:
+    - { name: otlp-grpc, port: 4317, targetPort: 4317 }
+    - { name: otlp-http, port: 4318, targetPort: 4318 }
+    - { name: metrics, port: 8888, targetPort: 8888 }
+    - { name: health, port: 13133, targetPort: 13133 }
+---
+# default-deny 클러스터에서도 (a) control plane→:8888 메트릭 스크레이프, (b) 소비자→OTLP(4317/4318)가 끊기지 않도록 동봉.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foundation-observability-collector
+  namespace: __NAMESPACE__
+spec:
+  podSelector:
+    matchLabels: { app: foundation-observability-collector }
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - { protocol: TCP, port: 4317 }
+        - { protocol: TCP, port: 4318 }
+        - { protocol: TCP, port: 8888 }
+        - { protocol: TCP, port: 13133 }

@@ -1,0 +1,347 @@
+/* 자체완결 격리(Shadow DOM): Clarity 전체 CSS를 shadow root로. 셸 CSS 영향 0. */
+@import '@clr/ui/clr-ui.min.css';
+
+/* ──────────────────────────────────────────────
+ * OpenSphere Foundation Shell — 컴포넌트 스타일
+ * 원칙: Clarity 구조/컴포넌트 + OS 토큰 변수만 사용. 하드코딩 색상 금지.
+ * ────────────────────────────────────────────── */
+
+/* ───── 호스트 기반선 ───── */
+:host {
+  display: block; height: 100%;
+  line-height: 1.428571429;
+  font-family: Metropolis, 'Avenir Next', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 0.875rem;
+  color: var(--os-ink, #21333b);
+}
+
+/* ───── 최상위 레이아웃: flex(nav + content) ───── */
+.fs-app { display: flex; height: 100%; box-sizing: border-box; position: relative; }
+
+/* ───── Clarity vertical nav (nav 영역) ───── */
+clr-vertical-nav.fs-nav { flex: 0 0 232px; height: 100%; overflow-y: auto; }
+
+/* ── Dark nav 토큰 (cluster nav 동일 색조) ── */
+clr-vertical-nav.fs-nav {
+  --clr-vertical-nav-bg-color: var(--os-nav-bg, #101a38);
+  --clr-vertical-nav-item-color: var(--os-nav-item, #c7d0e8);
+  --clr-vertical-nav-item-active-color: var(--os-nav-item-active, #ffffff);
+  --clr-vertical-nav-item-active-bg-color: var(--os-nav-item-active-bg, rgba(76,111,255,.22));
+  --clr-vertical-nav-selected-bg-color: var(--os-nav-selected-bg, rgba(76,111,255,.22));
+  --clr-vertical-nav-hover-bg-color: var(--os-nav-hover-bg, rgba(255,255,255,.06));
+}
+.fs-nav a[clrVerticalNavLink] { display: flex; align-items: center; gap: 6px; }
+.fs-navmodel { text-transform: capitalize; }
+.fs-navphase { margin-left: auto; font-size: 0.6rem; padding: 1px 6px; border-radius: 8px; }
+clr-vertical-nav .nav-link.active { font-weight: 600; }
+
+/* nav 안 로고/모노 아이콘 */
+.os-tlogo { height: 15px; width: auto; max-width: 20px; object-fit: contain; flex: 0 0 auto; }
+.os-tmono {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 15px; min-width: 15px; padding: 0 3px; border-radius: 3px;
+  color: #fff; /* 모노 텍스트는 배경 hsl(동적)에 대한 흰색 대비 — 동적 배경과 쌍, 토큰 불가 */
+  font-size: 0.5rem; font-weight: 700; flex: 0 0 auto;
+}
+
+/* nav 인덱스 링크(개요) */
+.fs-nav-index { font-weight: 600; }
+
+/* ───── 콘텐츠 영역 ───── */
+.fs-content { flex: 1 1 auto; min-width: 0; overflow: auto; padding: 16px 20px; box-sizing: border-box; }
+
+/* ───── 페이지 헤더(모듈 operand 페이지) ───── */
+.fs-pagehead {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; padding: 2px 0 10px;
+  border-bottom: 1px solid var(--clr-table-border-color, #e3e6ec);
+  margin-bottom: 10px;
+}
+.fs-h3 {
+  margin: 0 0 4px; font-weight: 400; font-size: 1.1rem;
+  color: var(--os-ink); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.fs-pagehead-l { min-width: 0; }
+
+/* ───── 개요 표의 인라인 로고 ───── */
+.fs-logos-inline { display: inline-flex; gap: 6px; align-items: center; min-height: 0; padding: 0; flex-wrap: wrap; }
+.fs-logos-inline .fs-logo { height: 18px; }
+.fs-logos-inline .fs-mono { height: 18px; min-width: 18px; font-size: 0.55rem; }
+
+/* ───── index KPI 스트립 ───── */
+.fs-kpi { display: flex; gap: 12px; margin: 6px 0 14px; }
+.fs-kpi-box {
+  border: 1px solid var(--clr-table-border-color, #cccfd6);
+  border-radius: 4px; padding: 8px 16px; min-width: 108px;
+  background: var(--clr-card-bg-color, #fff);
+}
+.fs-kpi-n { font-size: 1.4rem; font-weight: 600; color: var(--os-ink); line-height: 1.1; }
+.fs-kpi-l { font-size: 0.72rem; color: var(--os-muted); }
+.fs-kpi-live { border-color: var(--clr-color-success-700, #2e7d32); }
+.fs-kpi-live .fs-kpi-n { color: var(--clr-color-success-700, #2e7d32); }
+.fs-kpi-plan { border-color: var(--clr-color-warning-700, #c8a23a); }
+
+/* ───── operand 정직 배지 ───── */
+.fs-badge { padding: 7px 10px; border-radius: 4px; font-size: 0.78rem; margin: 6px 0; }
+.fs-badge-live {
+  background: var(--clr-color-success-50, #eafaea);
+  border: 1px solid var(--clr-color-success-300, #8fd19e);
+  color: var(--clr-color-success-800, #1d6b2c);
+}
+.fs-badge-plan {
+  background: var(--clr-color-warning-50, #fff3d6);
+  border: 1px solid var(--clr-color-warning-300, #e0c878);
+  color: var(--clr-color-warning-900, #6b5314);
+}
+.fs-badge-model {
+  background: var(--clr-color-action-50, #eef3fb);
+  border: 1px solid var(--clr-color-action-200, #b9c8e0);
+  color: var(--clr-color-action-800, #2a4a6b);
+}
+
+/* ───── 공통 텍스트 유틸 ───── */
+.fs-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.fs-h2 { margin: 0; font-weight: 400; color: var(--os-ink); }
+.fs-sub { color: var(--os-muted); font-size: 0.8rem; }
+.fs-h4 { margin: 14px 0 6px; font-size: 0.82rem; font-weight: 600; color: var(--os-ink); }
+.fs-muted { color: var(--os-muted); }
+.fs-summary { color: var(--os-muted); font-size: 0.82rem; margin: 4px 0 8px; }
+.fs-model { font-weight: 600; font-size: 0.95rem; color: var(--os-ink); text-transform: capitalize; }
+.fs-phase { font-size: 0.7rem; }
+.fs-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--os-muted); cursor: pointer; }
+
+/* ───── P5 @foblex/flow 래퍼(foblex는 예외 허용 컴포넌트) ───── */
+.fs-flowwrap {
+  height: 360px;
+  border: 1px solid var(--clr-table-border-color, #e3e6ec);
+  border-radius: 4px; margin: 8px 0; overflow: hidden;
+  background: var(--os-surface);
+}
+app-relation-flow { display: block; height: 100%; }
+.fs-legend { margin-left: 12px; font-size: 0.72rem; color: var(--os-muted); }
+.fs-legend .lg { display: inline-block; width: 18px; height: 0; border-top-width: 2px; border-top-style: solid; vertical-align: middle; margin: 0 4px 3px 0; }
+.lg-connected { border-top-color: var(--clr-color-success-700, #2e7d32); }
+.lg-degraded { border-top-color: var(--clr-color-warning-700, #c47b00); }
+.lg-pending { border-top-color: var(--os-muted); }
+.lg-declare { border-top-color: var(--clr-table-border-color, #b9bec8); border-top-style: dashed !important; }
+
+/* ───── foblex 노드 카드(자체 스타일 — foblex는 위치/엣지만 담당) ───── */
+/* [예외 등록] @foblex/flow 노드는 Clarity 컴포넌트 없음 — 최소 토큰 허용 */
+.fnode {
+  background: var(--clr-card-bg-color, #fff);
+  border: 1px solid var(--clr-table-border-color, #b3b9c4);
+  border-radius: 6px; padding: 7px 12px; min-width: 148px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.1); position: relative;
+}
+.fnode.side-self {
+  border-color: var(--clr-link-color, #0072a3);
+  background: var(--clr-color-action-50, #e0effa);
+}
+.fnode.side-consumer { border-color: var(--clr-color-action-300, #6b8aa3); }
+.fnode.side-consumed {
+  border-color: var(--clr-color-secondary-action-300, #8e6ba3);
+  background: var(--clr-color-secondary-action-50, #f5f1f8);
+}
+.fnode.side-active {
+  border-color: var(--clr-color-success-700, #2e7d32);
+  background: var(--clr-color-success-50, #eaf5ea);
+}
+.fnode-label { font-weight: 600; font-size: 0.78rem; color: var(--os-ink); }
+.fnode-sub { font-size: 0.64rem; color: var(--os-muted); }
+.fconn { width: 9px; height: 9px; border-radius: 50%; background: var(--clr-table-border-color, #b3b9c4); position: absolute; top: 50%; transform: translateY(-50%); }
+.fconn-in { left: -5px; }
+.fconn-out { right: -5px; }
+
+/* foblex 엣지 색(라이브 binding 상태) */
+f-connection.edge-connected { --ff-connection-color: var(--clr-color-success-700, #2e7d32); }
+f-connection.edge-degraded { --ff-connection-color: var(--clr-color-warning-700, #c47b00); }
+f-connection.edge-pending { --ff-connection-color: var(--os-muted); }
+f-connection.edge-declare { --ff-connection-color: var(--clr-table-border-color, #b9bec8); }
+f-connection.edge-declare .f-connection-path { stroke-dasharray: 6 4; }
+
+/* ───── P6 요청 패널 ───── */
+.fs-reqpanel {
+  background: var(--os-surface);
+  border: 1px solid var(--clr-table-border-color, #e3e6ec);
+  border-radius: 4px; padding: 10px 12px; margin: 6px 0 10px;
+}
+.fs-reqrow { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.fs-reqrow label { display: flex; flex-direction: column; font-size: 0.72rem; color: var(--os-muted); gap: 3px; }
+.fs-reqrow .clr-input, .fs-reqrow .clr-select { min-width: 180px; }
+
+/* ───── 상세 ───── */
+.table.left, .table td.left, .table th.left { text-align: left; }
+
+/* ───── 제품-등급 카탈로그 패널(상세 탭) ───── */
+.op-panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; margin: 10px 0 16px; align-items: start; }
+app-operand-panel { display: block; min-width: 0; }
+app-operand-panel.op-panel-kpi { grid-column: 1 / -1; }
+app-operand-panel.op-panel-wide { grid-column: 1 / -1; }
+.op-panel {
+  background: var(--clr-card-bg-color, #fff);
+  border: 1px solid var(--clr-table-border-color, #d3d8e0);
+  border-radius: 5px; padding: 8px 12px 10px; height: 100%; box-sizing: border-box;
+}
+.op-panel-kpi .op-panel {
+  border-color: var(--clr-color-action-200, #b9c8e0);
+  background: var(--os-surface);
+}
+.op-panel .fs-h4 { margin: 2px 0 6px; font-size: 0.78rem; border-bottom: 1px solid var(--clr-table-border-color, #eef1f5); padding-bottom: 4px; }
+.op-kv td, .op-panel .table td, .op-panel .table th { padding: 3px 8px 3px 0; font-size: 0.76rem; vertical-align: top; border: none; }
+.op-panel .table th { color: var(--os-muted); font-weight: 600; border-bottom: 1px solid var(--clr-table-border-color, #eef1f5); }
+.op-panel .table { margin: 0; width: 100%; }
+.op-k { color: var(--os-muted); white-space: nowrap; }
+.op-v { width: 99%; }
+.op-note { font-size: 0.68rem; margin: 6px 0 0; line-height: 1.35; }
+
+/* ───── value-cell 상태(위조 불가 4상태 + 라벨) ───── */
+.vc { font-size: 0.76rem; font-weight: 600; }
+.vc-live { color: var(--clr-color-success-800, #1d6b2c); }
+.vc-na { color: var(--os-muted); font-style: italic; font-weight: 400; }
+.vc-pending { color: var(--clr-color-warning-900, #8a6d1a); font-weight: 400; }
+.vc-planned { color: var(--os-muted); font-weight: 400; font-style: italic; }
+.vc-lbl { color: var(--os-ink); font-weight: 400; }
+.vc-slo { display: inline-block; margin-left: 6px; font-size: 0.62rem; color: var(--os-muted); font-weight: 400; white-space: nowrap; }
+.vc-badge { display: inline-block; margin-left: 5px; font-size: 0.56rem; font-weight: 700; padding: 0 5px; border-radius: 8px; vertical-align: middle; }
+.vc-contract {
+  background: var(--clr-color-action-50, #e7eefc);
+  color: var(--clr-color-action-800, #2a4a6b);
+  border: 1px solid var(--clr-color-action-200, #b9c8e0);
+}
+
+/* ───── operand-actions ───── */
+.op-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.op-reveal {
+  background: var(--os-brand-900, #1f2a30);
+  color: var(--clr-color-neutral-100, #d7e0e6);
+  font-size: 0.68rem; line-height: 1.4; padding: 8px 10px; border-radius: 4px;
+  max-height: 260px; overflow: auto; margin: 6px 0; white-space: pre-wrap; word-break: break-all;
+}
+.op-copied { font-size: 0.7rem; color: var(--clr-color-success-800, #1d6b2c); margin-left: 8px; }
+
+/* ───── Bootstrap 마법사 — 모달 ───── */
+.bs-modal-backdrop {
+  position: absolute; inset: 0; z-index: 1000;
+  background: rgba(20, 28, 33, 0.5);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 28px 16px; box-sizing: border-box; overflow: auto;
+}
+.bs-modal {
+  background: var(--clr-card-bg-color, #fff);
+  border-radius: 6px; box-shadow: 0 8px 40px rgba(0,0,0,.35);
+  width: min(920px, 96%); max-height: calc(100% - 56px);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.bs-modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 12px 18px;
+  border-bottom: 1px solid var(--clr-table-border-color, #e3e6ec);
+  background: var(--os-surface); flex: 0 0 auto;
+}
+.bs-modal-x { white-space: nowrap; }
+.bs-modal-body { padding: 12px 18px 18px; overflow: auto; }
+
+/* Bootstrap 배너 / 진행 단계 */
+.bs-banner {
+  display: flex; align-items: center; gap: 12px; justify-content: space-between;
+  background: var(--clr-color-warning-50, #fff3d6);
+  border: 1px solid var(--clr-color-warning-300, #e0c878);
+  color: var(--clr-color-warning-900, #6b5314);
+  border-radius: 4px; padding: 8px 12px; margin: 6px 0 12px; font-size: 0.82rem;
+}
+.bs-banner.bs-ok {
+  background: var(--clr-color-success-50, #eafaea);
+  border-color: var(--clr-color-success-300, #8fd19e);
+  color: var(--clr-color-success-800, #1d6b2c);
+}
+.bs-steps { display: flex; gap: 8px; margin: 10px 0 6px; }
+.bs-step {
+  flex: 1 1 0; text-align: center; font-size: 0.76rem; font-weight: 600;
+  color: var(--os-muted);
+  background: var(--os-surface);
+  border: 1px solid var(--clr-table-border-color, #e3e6ec);
+  border-radius: 4px; padding: 7px 8px;
+}
+.bs-step.on {
+  color: var(--clr-color-action-800, #2a4a6b);
+  background: var(--clr-color-action-50, #eef3fb);
+  border-color: var(--clr-color-action-200, #b9c8e0);
+}
+.bs-step.done {
+  color: var(--clr-color-success-800, #1d6b2c);
+  background: var(--clr-color-success-50, #eafaea);
+  border-color: var(--clr-color-success-300, #8fd19e);
+}
+
+/* ───── 설치 옵션 폼(PostgreSQL) ───── */
+.pg-install {
+  background: var(--os-surface);
+  border: 1px solid var(--clr-table-border-color, #d3d8e0);
+  border-radius: 5px; padding: 8px 14px 10px; margin: 8px 0 12px;
+}
+.pg-install .pg-apply { float: right; }
+.pg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 16px; align-items: start; }
+.pg-sec {
+  border: 1px solid var(--clr-table-border-color, #e3e6ec);
+  border-radius: 4px; padding: 6px 10px 8px;
+  background: var(--clr-card-bg-color, #fff);
+}
+.pg-sec-wide { grid-column: 1 / -1; }
+.pg-sec-t {
+  font-size: 0.72rem; font-weight: 700; color: var(--os-ink);
+  margin-bottom: 5px;
+  border-bottom: 1px solid var(--clr-table-border-color, #eef1f5);
+  padding-bottom: 3px;
+}
+.pg-sec > label { display: flex; flex-direction: column; font-size: 0.7rem; color: var(--os-muted); gap: 2px; margin-bottom: 6px; }
+.pg-sec .clr-select { width: 100%; }
+.pg-num { width: 100%; box-sizing: border-box; }
+.pg-wide { width: 100%; box-sizing: border-box; }
+.pg-verrow { display: flex; gap: 6px; align-items: center; }
+.pg-verrow .clr-input { flex: 1 1 auto; min-width: 0; }
+.pg-verrow .pg-versel { flex: 0 0 auto; max-width: 130px; }
+.pg-chk { flex-direction: row !important; align-items: center; gap: 5px; }
+.pg-exts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 0.72rem; margin-bottom: 6px; }
+.pg-exts-scroll {
+  max-height: 156px; overflow: auto;
+  border: 1px solid var(--clr-table-border-color, #eef1f5);
+  border-radius: 4px; padding: 6px 8px; align-content: flex-start;
+}
+.pg-ext { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; color: var(--os-ink); }
+.pg-ext-inst { color: var(--clr-color-success-800, #1d6b2c); margin-left: 2px; }
+.pg-extadd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pg-extadd .clr-input { width: 180px; }
+
+/* ───── 관계 탭(operand 수준) ───── */
+.rel-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 6px 0; }
+@media (max-width: 760px) { .rel-cols { grid-template-columns: 1fr; } }
+.rel-col .table td { font-size: 0.74rem; padding: 3px 8px 3px 0; }
+.rel-k { font-weight: 600; padding: 0 4px; border-radius: 3px; }
+.rel-live { color: var(--clr-color-success-800, #1d6b2c); }
+.rel-decl { color: var(--os-muted); }
+.rel-plan { color: var(--os-muted); }
+
+/* ───── 구성 제품(operand) 로고 ───── */
+.fs-logos { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 4px 2px 10px; min-height: 30px; }
+.fs-logo { height: 22px; width: auto; max-width: 84px; object-fit: contain; opacity: .9; }
+.fs-logo:hover { opacity: 1; }
+.fs-mono {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 22px; min-width: 22px; padding: 0 5px; border-radius: 4px;
+  color: #fff; /* 동적 hsl 배경에 대한 흰색 대비 — 토큰 불가 */
+  font-size: 0.62rem; font-weight: 700; letter-spacing: .3px;
+}
+.fs-logo-lg { height: 34px; width: auto; max-width: 72px; object-fit: contain; }
+.fs-mono-lg { height: 34px; min-width: 34px; font-size: 0.8rem; border-radius: 6px; }
+
+/* ───── 스페이싱/레이아웃 유틸(인라인 style 대체) ───── */
+.fs-btn-ml-auto { margin-left: auto; }
+.fs-btn-ml-sm { margin-left: 6px; }
+.fs-btn-ml-8 { margin-left: 8px; }
+.fs-btn-inline { margin: 0; }
+.fs-btn-no-pl { padding-left: 0; }
+.fs-pg-reconfig-note { margin-top: 0; }
+.fs-h3-no-margin { margin: 0; }
+.fs-tab-badge { margin-left: 4px; }
+/* 배지+버튼 가로 정렬(display:flex 인라인 스타일 대체) */
+.fs-badge-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

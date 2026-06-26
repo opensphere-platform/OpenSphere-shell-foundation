@@ -1,0 +1,6 @@
+// @foblex/flow 디자인 토큰(:root --ff-*) — 문서 레벨에 둔다.
+// 이유: 플러그인 컴포넌트는 ShadowDom이고 foblex 토큰은 :root에만 방출된다(:host 미방출).
+// CSS custom property는 shadow 경계를 넘어 상속되므로, 문서 :root의 --ff-* 가 shadow 안 규칙(theme-all)에서 해소된다.
+// 규칙 셀렉터(f-flow/.f-flow)는 shadow를 못 넘으므로 app.component.scss(shadow)에서 theme-all()로 방출한다.
+@use '@foblex/flow/styles/index' as fflow;
+@include fflow.theme-tokens();

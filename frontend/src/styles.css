@@ -1,0 +1,4 @@
+/* 전역 최소화 — Clarity·컴포넌트 스타일은 Shadow DOM(app.component.css)에 격리. */
+:root, body { margin: 0; }
+os-plugin-host, os-plugin-host > div { display: block; height: 100%; min-height: 0; }
+osp-foundation-shell { display: block; height: 100%; width: 100%; }

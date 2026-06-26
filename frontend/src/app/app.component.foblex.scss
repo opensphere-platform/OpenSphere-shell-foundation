@@ -1,0 +1,5 @@
+// @foblex/flow 규칙(f-flow/.f-flow/.f-canvas/.f-connection …)을 shadow root 안으로 방출.
+// 토큰(--ff-*)은 문서 :root(foblex-tokens.scss, global)에서 상속되어 들어온다(custom prop는 shadow 경계 상속).
+// 규칙 셀렉터는 shadow를 못 넘으므로 반드시 이 컴포넌트(ShadowDom) 스타일에 둔다(angular.json styles[]에 두면 head로 가 안 먹힘).
+@use '@foblex/flow/styles/index' as fflow;
+@include fflow.theme-all();

@@ -1,0 +1,115 @@
+# identity operand 번들 — control plane이 SSA로 적용(__NAMESPACE__/__IMAGE__ 치환).
+# D-3: Keycloak(start-dev, H2) + workforce realm import. operand=Keycloak 1개만.
+#   Syncope(IGA)·OPA·Samba-AD·SCIM-GW는 D-7(정직: 미배포).
+# INV-2(JIT 금지): realm은 registrationAllowed:false + identityProviders 없음(first-broker-login 자동생성 경로 부재). G-JIT가 강제(소스+realm 스캔).
+# 사용자 프로비저닝 권위=Syncope(D-7)이므로 슬라이스엔 사용자/시크릿을 심지 않는다(OIDC issuer 라이브 + discovery/JWKS로 실증).
+# 클라이언트는 public+PKCE(S256), redirectUris/webOrigins는 와일드카드 호스트 금지(D-7 실 소비자 온보딩 시 확정 — 현재 placeholder).
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: foundation-identity-keycloak
+  namespace: __NAMESPACE__
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foundation-identity-keycloak-realm
+  namespace: __NAMESPACE__
+data:
+  opensphere-workforce-realm.json: |
+    {
+      "realm": "opensphere-workforce",
+      "enabled": true,
+      "registrationAllowed": false,
+      "registrationEmailAsUsername": false,
+      "resetPasswordAllowed": false,
+      "rememberMe": false,
+      "verifyEmail": false,
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
+      "identityProviders": [],
+      "clients": [
+        {
+          "clientId": "workforce-oidc",
+          "name": "OpenSphere Workforce OIDC",
+          "enabled": true,
+          "protocol": "openid-connect",
+          "publicClient": true,
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": false,
+          "serviceAccountsEnabled": false,
+          "redirectUris": ["https://edge.opensphere.local/oidc/*", "https://console.opensphere.local/oidc/*"],
+          "webOrigins": ["https://edge.opensphere.local", "https://console.opensphere.local"],
+          "attributes": { "pkce.code.challenge.method": "S256" }
+        }
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: foundation-identity-keycloak
+  namespace: __NAMESPACE__
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: foundation-identity-keycloak }
+  template:
+    metadata:
+      labels: { app: foundation-identity-keycloak }
+    spec:
+      serviceAccountName: foundation-identity-keycloak
+      automountServiceAccountToken: false   # Keycloak은 k8s API 불필요 — 토큰 미마운트(블래스트 반경 축소)
+      securityContext: { runAsNonRoot: true }
+      containers:
+        - name: keycloak
+          image: __IMAGE__
+          args: ["start-dev", "--import-realm"]
+          env:
+            - { name: KC_HTTP_ENABLED, value: "true" }
+          ports:
+            - { name: http, containerPort: 8080 }
+          readinessProbe:
+            httpGet: { path: /realms/opensphere-workforce, port: 8080 }
+            initialDelaySeconds: 25
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 18
+          livenessProbe:
+            httpGet: { path: /realms/opensphere-workforce, port: 8080 }
+            initialDelaySeconds: 90
+            periodSeconds: 20
+            failureThreshold: 6
+          resources: { requests: { cpu: 250m, memory: 384Mi }, limits: { cpu: "1", memory: 1Gi } }
+          # Keycloak은 /opt/keycloak/data(H2)에 써야 하므로 readOnlyRootFilesystem 불가. 그 외 하드닝 유지.
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: false, capabilities: { drop: [ALL] } }
+          volumeMounts:
+            - { name: realm, mountPath: /opt/keycloak/data/import, readOnly: true }
+      volumes:
+        - name: realm
+          configMap: { name: foundation-identity-keycloak-realm }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: foundation-identity-keycloak
+  namespace: __NAMESPACE__
+spec:
+  selector: { app: foundation-identity-keycloak }
+  ports:
+    - { name: http, port: 8080, targetPort: 8080 }
+---
+# default-deny 클러스터에서도 소비자→OIDC(8080) 도달 보장.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foundation-identity-keycloak
+  namespace: __NAMESPACE__
+spec:
+  podSelector:
+    matchLabels: { app: foundation-identity-keycloak }
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - { protocol: TCP, port: 8080 }
