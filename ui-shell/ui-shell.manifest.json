@@ -1,0 +1,21 @@
+{
+  "manifestVersion": 2,
+  "kind": "subShell",
+  "id": "foundation",
+  "version": "0.1.0",
+  "title": "Foundation",
+  "description": "OpenSphere subShell — Foundation (SDK 표준 골격).",
+  "entry": "ui-shell.plugin.js",
+  "entrySha256": "REPLACE_ON_SIGN",
+  "shellCompat": ">=0.2.0 <0.9.0",
+  "permissions": [
+    "page:register",
+    "api:proxy"
+  ],
+  "nav": {
+    "band": "운영 Operate",
+    "label": "Foundation"
+  },
+  "designSystem": "clarity",
+  "apiBase": "/api/plugins/foundation"
+}
