@@ -6,7 +6,7 @@
   "title": "Foundation",
   "description": "OpenSphere subShell — Foundation (SDK 표준 골격).",
   "entry": "ui-shell.plugin.js",
-  "entrySha256": "REPLACE_ON_SIGN",
+  "entrySha256": "f8371f0750189dee2fe82a2869654a4aaaa1bbc07cd8a5f33f54c09358276143",
   "shellCompat": ">=0.2.0 <0.9.0",
   "permissions": [
     "page:register",

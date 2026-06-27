@@ -6,23 +6,22 @@ metadata:
   name: foundation
   namespace: opensphere-system
 spec:
-  kind: subShell
   displayName: "Foundation"
   owner: platform-experience
   version: 0.1.0
   description: "Foundation — OpenSphere subShell (SDK 표준 골격)"
   image:
     repository: localhost:5000/foundation
-    digest: v1
+    digest: v2
   nav:
     band: "운영 Operate"
     label: "Foundation"
   manifest:
     path: /plugins/ui-shell.manifest.json
-    sha256: "REPLACE_ON_SIGN"
+    sha256: "cf17a2b66ea6f02e9551373a7311788006b69d09ffc5f398d4c8781f1266bf08"
     signaturePath: /plugins/ui-shell.manifest.json.sig
   trust:
-    keyId: opensphere-plugins-v1
+    keyId: opensphere-plugins-v2
   shellCompat: ">=0.2.0 <0.9.0"
   permissions:
     - page:register
