@@ -196,6 +196,27 @@ async function k8sProxy(req, res, rawUrl) {
   res.end(text);
 }
 
+// ── Foundation 모듈: OpenSearch 읽기 프록시 ──
+// /api/opensearch/<진단경로> → opensphere-search.opensphere-foundation.svc:9200 (dev, security 비활성, 읽기 전용).
+async function opensearchProxy(req, res, rawUrl) {
+  const OS = process.env.OPENSEARCH_URL || 'http://opensphere-search.opensphere-foundation.svc:9200';
+  if (req.method !== 'GET' && req.method !== 'HEAD') return jsonRes(res, 405, { error: 'read-only proxy' });
+  let path;
+  try { path = decodeURIComponent(rawUrl.slice('/api/opensearch'.length).split('?')[0]); }
+  catch { return jsonRes(res, 400, { error: 'bad path' }); }
+  // 화이트리스트: 진단/조회 경로만(_cluster·_cat·_nodes·_stats·_aliases·루트). 쓰기·임의 인덱스 조작 차단.
+  const okPath = path === '' || path === '/' || /^\/_(cluster|cat|nodes|stats|aliases)/.test(path);
+  if (!okPath) return jsonRes(res, 403, { error: 'only diagnostic GET paths allowed' });
+  const qIdx = rawUrl.indexOf('?');
+  const rawQuery = qIdx >= 0 ? rawUrl.slice(qIdx) : '';
+  try {
+    const r = await fetch(`${OS}${path || '/'}${rawQuery}`, { headers: { Accept: 'application/json' } });
+    const text = await r.text();
+    res.writeHead(r.status, { 'content-type': r.headers.get('content-type') || 'application/json', 'cache-control': 'no-store' });
+    res.end(text);
+  } catch (e) { jsonRes(res, 502, { error: 'opensearch unreachable: ' + String(e) }); }
+}
+
 const server = http.createServer(async (req, res) => {
   const p = new URL(req.url, `http://${req.headers.host}`).pathname;
   try {
@@ -213,6 +234,7 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ user: actor.username }));
     }
     if (p.startsWith('/api/k8s/')) return k8sProxy(req, res, req.url);
+    if (p.startsWith('/api/opensearch')) return opensearchProxy(req, res, req.url);
     if (p === '/api/nodes') {
       const list = await nodes();
       res.writeHead(200, { 'content-type': 'application/json' });
