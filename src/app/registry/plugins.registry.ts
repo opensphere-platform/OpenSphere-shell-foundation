@@ -18,4 +18,11 @@ export const FOUNDATION_PLUGINS: HostedPlugin[] = [
     consumePoint: 'opensphere-search.opensphere-foundation.svc:9200',
     healthRef: 'os', view: { module: 'opensearch' },
   },
+  {
+    id: 'rustfs', name: 'RustFS', icon: 'storage', kind: 'plugin', hostRef: 'foundation',
+    capability: 'data.object.s3', capabilityLabel: '오브젝트 스토리지(S3)',
+    desc: '공용 S3 호환 object storage capability · RustFS(MinIO 대안). 버킷·정적자산·백업 대상.',
+    consumePoint: 'opensphere-rustfs.opensphere-foundation.svc:9000',
+    healthRef: 'rustfs', view: { module: 'rustfs' },
+  },
 ];

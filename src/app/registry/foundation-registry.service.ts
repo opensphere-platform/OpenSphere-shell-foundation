@@ -3,6 +3,7 @@ import { FOUNDATION_PLUGINS } from './plugins.registry';
 import { HostedPlugin, PluginHealth } from './hosted-plugin';
 import { CnpgService } from '../modules/postgres/cnpg.service';
 import { OsService } from '../modules/opensearch/os.service';
+import { RsService } from '../modules/rustfs/rs.service';
 import { PILL, Phase } from '../modules/postgres/cnpg.types';
 
 const DISABLED_KEY = 'fnd.disabled';
@@ -14,6 +15,7 @@ const DISABLED_KEY = 'fnd.disabled';
 export class FoundationRegistryService {
   private cnpg = inject(CnpgService);
   private os = inject(OsService);
+  private rs = inject(RsService);
 
   readonly all: HostedPlugin[] = FOUNDATION_PLUGINS;
 
@@ -39,7 +41,9 @@ export class FoundationRegistryService {
 
   // health 어댑터 — 두 이질 서비스를 PluginHealth로 통일. registry가 가리킨 곳에서 읽어 답한다.
   health(p: HostedPlugin): PluginHealth {
-    return p.healthRef === 'cnpg' ? this.pgHealth() : this.osHealth();
+    if (p.healthRef === 'cnpg') { return this.pgHealth(); }
+    if (p.healthRef === 'os') { return this.osHealth(); }
+    return this.rsHealth();
   }
 
   private pgHealth(): PluginHealth {
@@ -70,6 +74,20 @@ export class FoundationRegistryService {
       ],
     };
   }
+  private rsHealth(): PluginHealth {
+    const ph = this.rs.phaseCls();
+    const st = this.rs.state();
+    return {
+      phase: ph, pill: PILL[ph], state: st, ready: this.rs.ready(),
+      label: this.healthLabel(ph, st),
+      metrics: [
+        { val: `${this.rs.readyN()}/${this.rs.totalN()}`, lab: 'Replicas Ready' },
+        { val: this.rs.capacity(), lab: 'Capacity' },
+        { val: 'S3', lab: 'API :9000' },
+        { val: ':9001', lab: 'Console' },
+      ],
+    };
+  }
   private healthLabel(ph: Phase, st: string): string {
     if (st === 'noperm') { return '권한 없음'; }
     if (st === 'nocrd') { return '미배포'; }
@@ -94,8 +112,8 @@ export class FoundationRegistryService {
   });
 
   // 폴러 라이프사이클 = shell 소유. foundation subShell 마운트/언마운트에 묶임(app.component).
-  start(): void { this.cnpg.start(); this.os.start(); }
-  stop(): void { this.cnpg.stop(); this.os.stop(); }
+  start(): void { this.cnpg.start(); this.os.start(); this.rs.start(); }
+  stop(): void { this.cnpg.stop(); this.os.stop(); this.rs.stop(); }
 }
 
 function shorten(s: string): string { return s ? s.replace('opensphere-pg-', '#') : '—'; }
