@@ -17,11 +17,29 @@
 3. **그룹/버전 = `provisioning.opensphere.io/v1alpha1` 고정.**
    read RBAC(`rbac-foundation-read.yaml`)·ApplicationSet·기존 facade CRD가 못박음. (설계안의 `foundation.opensphere.io`/`v1` 승격은 기각.)
 
+## ⚠️ 검증 발견 — managed.roles는 atomic 배열 (설계 종합 정정)
+
+설계 종합은 "공유 `Cluster.spec.managed.roles[]`에 owner role을 **항목별 SSA로 부분소유**"한다고 가정했다. **실 CNPG CRD 확인 결과 이 가정은 틀렸다:**
+
+```
+clusters.postgresql.cnpg.io  spec.managed.roles
+  x-kubernetes-list-type: None      ← atomic 배열 (map 아님)
+  x-kubernetes-list-map-keys: None
+```
+
+- **atomic 배열**이라 SSA가 항목별 머지를 못 한다. 한 claim이 `managed.roles:[{name:svc_x}]`를 force-apply하면 **배열 전체를 소유**(다른 claim들의 role을 clobber)하거나, 다른 field-manager와 **충돌**한다.
+- 더해 `modelReconciler`(install 번들)가 같은 Cluster를 SSA하고 pgclaim 컨트롤러가 Update(RMW)하면 **SSA↔Update 혼용 clobber** 위험.
+
+**정정된 올바른 패턴 (구현 시 이걸로):**
+> pgclaim 컨트롤러(또는 cluster-level 집계 reconciler)가 **clusterRef의 모든 PostgresClaim을 list → 전체 managed.roles 배열을 재구성 → 그 배열 필드의 단일 field-manager로 SSA 적용**. 원자배열을 *통째로* 한 manager가 소유하므로 충돌·clobber 없음. 불변식: **FoundationModel install 번들(bundle_data.go)은 공유 Cluster의 managed.roles를 설정하지 않는다**(컨트롤러가 유일 writer). 확장 시 `isolation: dedicated`(claim별 전용 Cluster)로 격상하면 집계 자체가 불필요.
+
+이 정정 없이는 멀티-claim에서 role이 사라진다. (Database CR은 `spec.cluster·name·owner·ensure·extensions`, status.applied 확인 — 정상.)
+
 ## MVP 1차 (라이브 검증까지)
 
 PostgresClaim만 · CNPG managed roles + Database CR · 컨트롤러 SSA · connection Secret = `opensphere-foundation` ns.
 
-흐름: `PostgresClaim` → [Accept clusterRef Ready] → [password Secret mint(crypto-rand)] → [`Cluster.managed.roles[]` SSA 패치] → [`Database` CR SSA] → [connection Secret 작성] → `status.phase=Ready`.
+흐름: `PostgresClaim` → [Accept clusterRef Ready] → [password Secret mint(crypto-rand)] → [**전 claim 집계 → 전체 `managed.roles` 배열 재구성 → 단일 field-manager SSA**(atomic 배열, 위 정정)] → [`Database` CR SSA] → [connection Secret 작성] → `status.phase=Ready`.
 
 ## 생성/변경 파일 (라벨)
 
