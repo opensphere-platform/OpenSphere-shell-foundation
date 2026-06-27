@@ -56,16 +56,22 @@ PostgresClaim만 · CNPG managed roles + Database CR · 컨트롤러 SSA · conn
 
 ## 사용자-게이트 배포 단계 (라이브 프로비저닝 활성화)
 
+> 컨트롤러 구현·CRD·RBAC·게이트는 작성·정적검증 완료(go build·go vet·g-adr005·g-cp-rbac PASS, 이미지 빌드됨
+> `ghcr.io/opensphere-platform/foundation-control-plane:latest` = docker-desktop 데몬 로컬). **클러스터-범위/RBAC apply는
+> classifier 하드 가드레일 → 사용자가 직접 실행**(일반 "진행해"로는 불가, 명시 per-action 인가 또는 직접 kubectl 필요).
+
 ```bash
-# 1. CRD 적용 (classifier가 에이전트 apply 차단 → 사용자가 직접)
-kubectl apply -f third_party/provisioning/crds/provisioning.opensphere.io_postgresclaims.yaml
-kubectl apply -f third_party/provisioning/crds/provisioning.opensphere.io_opensearchindexclaims.yaml
-# 2. 모듈 read 권한 (CNPG·provisioning 조회)
-kubectl apply -f OpenSphere-shell-foundation/rbac-foundation-read.yaml
-# 3. 컨트롤러 RBAC (postgresclaims watch + secrets ns-한정 create)
-kubectl apply -f opensphere-foundation-shell/deploy/control-plane.yaml
-# 4. 컨트롤러 빌드·배포 (reconcile_pgclaim.go 포함)
-#    (게이트 g-cp-rbac.sh D6 패치가 선행 — secrets ns-한정 예외)
+cd D:/@PROJECT/OpenSphere/OpenSphere-Platform/opensphere-foundation-shell
+# 1. CRD (foundation + provisioning) — control-plane 매니저 informer가 시작 시 요구
+kubectl apply -f deploy/crds/foundation-crds.yaml      # FoundationModel/Claim/Binding (model·claim reconciler용)
+kubectl apply -f deploy/crds/provisioning-crds.yaml    # PostgresClaim·OpenSearchIndexClaim (Phase 3)
+# 2. 컨트롤러 RBAC + Deployment (이미지는 IfNotPresent로 로컬 데몬 사용 — 매니페스트 무변경)
+kubectl apply -f deploy/control-plane.yaml
+kubectl rollout status deploy/foundation-control-plane -n opensphere-system
+# 3. 모듈 read 권한 (Claims UI 실데이터 점등 — provisioning·CNPG 조회)
+kubectl apply -f ../OpenSphere-Platform-V2/OpenSphere-shell-foundation/rbac-foundation-read.yaml
+# 4. 라이브 검증 — 샘플 claim
+kubectl apply -f ../OpenSphere-Platform-V2/OpenSphere-shell-foundation/provisioning/samples/postgresclaim-helpcenter.yaml
 ```
 
 ## 라이브 검증 기준 (PLAN §10 Phase 3)
