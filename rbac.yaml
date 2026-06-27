@@ -59,6 +59,8 @@ rules:
   - apiGroups: ["cluster.open-cluster-management.io"]
     resources: ["managedclusters"]
     verbs: ["get","list","watch"]
+  # Foundation 모듈 read(CNPG·opensearch·Claim)는 별도 ClusterRole(rbac-foundation-read.yaml)로 분리.
+  # impersonate 포함 본 ClusterRole을 재apply하지 않기 위함(최소권한 read-only 분리).
   # 쓰기 인가: 검증된 사용자로 임퍼소네이션(쓰기는 K8s가 사용자 본인 RBAC로 인가).
   - apiGroups: [""]
     resources: ["users","groups"]

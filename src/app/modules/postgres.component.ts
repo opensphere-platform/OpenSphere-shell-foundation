@@ -19,7 +19,7 @@ import { apiBase, FND_NS } from '../api-base';
       <div class="card">
         <div class="card-h">클러스터 · opensphere-pg</div>
         <dl class="kv">
-          <dt>상태</dt><dd><span class="pill" [class.ok]="ready()" [class.bad]="loaded() && !cluster()">{{ phase() }}</span></dd>
+          <dt>상태</dt><dd><span class="pill" [class.ok]="ready()" [class.bad]="loaded() && !ready()">{{ phase() }}</span></dd>
           <dt>인스턴스</dt><dd>{{ readyN() }} / {{ totalN() }} ready</dd>
           <dt>Primary</dt><dd class="mono">{{ primary() || '—' }}</dd>
           <dt>이미지</dt><dd class="mono">{{ image() || '—' }}</dd>
@@ -49,6 +49,7 @@ import { apiBase, FND_NS } from '../api-base';
         <tr *ngIf="!pods().length"><td colspan="4" class="muted">{{ loaded() ? 'Pod 없음 / 권한 없음' : '불러오는 중…' }}</td></tr>
       </tbody>
     </table>
+    <p class="muted" *ngIf="loaded() && !cluster()">ⓘ 상태·Primary는 Pod에서 도출. CNPG Cluster CR 상세(image·backup·storage)는 SA에 <code>postgresql.cnpg.io</code> read 부여 시 표시 (rbac-foundation-read.yaml).</p>
     <p class="muted">앱별 DB는 <code>PostgresClaim</code> 선언으로 발급됩니다 (Phase 3 — 선언형 write-path, execInPod 금지).</p>
   `,
 })
@@ -82,10 +83,22 @@ export class PostgresComponent implements OnInit {
     this.loaded.set(true);
   }
 
-  phase(): string { return this.cluster()?.status?.phase || (this.loaded() ? '권한/미발견' : '확인 중'); }
-  ready(): boolean { return /healthy/i.test(this.cluster()?.status?.phase || ''); }
+  // CNPG Cluster CR을 못 읽어도(SA RBAC) Pod에서 상태·Primary를 도출 — graceful degrade.
+  phase(): string {
+    if (this.cluster()?.status?.phase) return this.cluster().status.phase;
+    if (!this.loaded()) return '확인 중';
+    const ps = this.pods();
+    if (!ps.length) return '미발견';
+    if (ps.every((p) => p.ready)) return 'Running';
+    return ps.some((p) => p.ready) ? 'Degraded' : 'Down';
+  }
+  ready(): boolean {
+    if (/healthy/i.test(this.cluster()?.status?.phase || '')) return true;
+    const ps = this.pods();
+    return ps.length > 0 && ps.every((p) => p.ready);
+  }
   readyN(): number { return this.cluster()?.status?.readyInstances ?? this.pods().filter((p) => p.ready).length; }
   totalN(): number { return this.cluster()?.spec?.instances ?? this.pods().length; }
-  primary(): string { return this.cluster()?.status?.currentPrimary || ''; }
+  primary(): string { return this.cluster()?.status?.currentPrimary || this.pods().find((p) => /primary/i.test(p.role))?.name || ''; }
   image(): string { return this.cluster()?.status?.image || this.cluster()?.spec?.imageName || ''; }
 }
