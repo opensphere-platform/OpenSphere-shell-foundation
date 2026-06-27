@@ -7,14 +7,18 @@ import { Component, Input } from '@angular/core';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="topo-card" [class.primary]="isMaster">
-      <div class="topo-role">{{ roles || 'node' }}{{ isMaster ? ' · master' : '' }}</div>
-      <div class="topo-name">{{ node.name }}</div>
-      <div class="topo-kv">
-        <span>heap</span><span>{{ node['heap.percent'] ?? '—' }}%</span>
-        <span>cpu</span><span>{{ node.cpu ?? '—' }}%</span>
-        <span>disk</span><span>{{ node['disk.used_percent'] ?? '—' }}%</span>
-        <span>version</span><span class="mono">{{ node.version || '—' }}</span>
+    <div class="card">
+      <div class="card-header">
+        {{ roles || 'node' }}<span *ngIf="isMaster" class="label label-info">master</span>
+        <span class="label">{{ node.name }}</span>
+      </div>
+      <div class="card-block">
+        <dl class="os-kv">
+          <dt>heap</dt><dd>{{ node['heap.percent'] ?? '—' }}%</dd>
+          <dt>cpu</dt><dd>{{ node.cpu ?? '—' }}%</dd>
+          <dt>disk</dt><dd>{{ node['disk.used_percent'] ?? '—' }}%</dd>
+          <dt>version</dt><dd class="os-mono">{{ node.version || '—' }}</dd>
+        </dl>
       </div>
     </div>
   `,

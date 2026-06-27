@@ -11,13 +11,13 @@ import { PgMetric } from '../modules/postgres/ui/pg-metric';
   standalone: true,
   imports: [CommonModule, PgMetric],
   template: `
-    <div class="mod-h"><h2>Foundation <span class="tag tag-shell">subShell · host</span></h2></div>
-    <p class="muted">
+    <div class="os-title-row"><h2 class="os-h2">Foundation <span class="label label-info">subShell · host</span></h2></div>
+    <p class="os-sub">
       플랫폼 공용 데이터/인프라 capability를 <strong>호스팅</strong>하는 subShell.
-      아래 plugin은 <code>hostRef=foundation</code>으로 귀속되며, 이 셸이 등록·상태·수명주기를 소유한다(§2.7).
+      아래 plugin은 <code class="os-mono">hostRef=foundation</code>으로 귀속되며, 이 셸이 등록·상태·수명주기를 소유한다(§2.7).
     </p>
 
-    <div class="metric-row">
+    <div class="os-metrics">
       <pg-metric label="Hosted Plugins" [value]="s().hosted" sub="hostRef=foundation"></pg-metric>
       <pg-metric label="Enabled" [value]="s().enabled" [status]="s().enabled === s().hosted ? 'ok' : 'warn'"
                  [sub]="s().disabled ? s().disabled + ' disabled' : '전부 활성'"></pg-metric>
@@ -26,36 +26,30 @@ import { PgMetric } from '../modules/postgres/ui/pg-metric';
       <pg-metric label="Capabilities" [value]="s().capabilities" sub="제공 역량 종류"></pg-metric>
     </div>
 
-    <div class="sec-h">호스팅 Plugins</div>
-    <div class="cards">
-      <div class="card" *ngFor="let p of reg.all" [class.dimmed]="!reg.isEnabled(p.id)">
-        <div class="card-h">
-          <span class="tag tag-plugin">plugin</span> {{ p.name }}
-          <span class="pill" [ngClass]="h(p).pill" style="margin-left:auto">{{ h(p).label }}</span>
+    <div class="os-sech">호스팅 Plugins</div>
+    <div class="os-cardgrid">
+      <div class="card" *ngFor="let p of reg.all" [class.os-dim]="!reg.isEnabled(p.id)">
+        <div class="card-header">
+          <span class="label label-info">plugin</span> {{ p.name }}
+          <span class="label os-ml-auto" [ngClass]="h(p).pill">{{ h(p).label }}</span>
         </div>
-        <p class="muted" style="margin:.2rem 0 .6rem">{{ p.desc }}</p>
-        <div class="pc-metrics">
-          <div class="pc-m" *ngFor="let m of h(p).metrics"><b>{{ m.val }}</b><span>{{ m.lab }}</span></div>
-        </div>
-        <dl class="kv" style="margin-top:.6rem">
-          <dt>capability</dt><dd><code>{{ p.capability }}</code> · {{ p.capabilityLabel }}</dd>
-          <dt>제공 주소</dt><dd class="mono">{{ p.consumePoint }}</dd>
-        </dl>
-        <div class="pc-act">
-          <button class="rbtn primary" (click)="open(p)" [disabled]="!reg.isEnabled(p.id)">콘솔 열기 →</button>
-          <span class="pill" *ngIf="!reg.isEnabled(p.id)">비활성 — Plugins 관리에서 활성화</span>
+        <div class="card-block">
+          <p class="os-sub">{{ p.desc }}</p>
+          <div class="os-pcm">
+            <div *ngFor="let m of h(p).metrics"><b>{{ m.val }}</b><span>{{ m.lab }}</span></div>
+          </div>
+          <dl class="os-kv">
+            <dt>capability</dt><dd><code class="os-mono">{{ p.capability }}</code> · {{ p.capabilityLabel }}</dd>
+            <dt>제공 주소</dt><dd class="os-mono">{{ p.consumePoint }}</dd>
+          </dl>
+          <div class="os-actions">
+            <button class="btn btn-sm btn-primary" (click)="open(p)" [disabled]="!reg.isEnabled(p.id)">콘솔 열기 →</button>
+            <span class="label" *ngIf="!reg.isEnabled(p.id)">비활성 — Plugins 관리에서 활성화</span>
+          </div>
         </div>
       </div>
     </div>
   `,
-  styles: [`
-    .pc-metrics{ display:flex; gap:1.4rem; flex-wrap:wrap; margin:.4rem 0; }
-    .pc-m{ display:flex; flex-direction:column; }
-    .pc-m b{ font-size:1.15rem; color:#1f2733; line-height:1.1; }
-    .pc-m span{ font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; color:#7a828f; margin-top:.15rem; }
-    .pc-act{ display:flex; align-items:center; gap:.6rem; margin-top:.8rem; flex-wrap:wrap; }
-    .card.dimmed{ opacity:.62; }
-  `],
 })
 export class FoundationOverviewComponent {
   readonly reg = inject(FoundationRegistryService);

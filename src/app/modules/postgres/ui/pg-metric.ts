@@ -8,12 +8,12 @@ import { Phase } from '../cnpg.types';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="metric" [ngClass]="status" [class.click]="clickable"
+    <div class="os-metric" [ngClass]="'os-'+status" [class.os-click]="clickable"
          [attr.role]="clickable ? 'button' : null" [attr.tabindex]="clickable ? 0 : null"
          (click)="clickable && go.emit()" (keydown.enter)="clickable && go.emit()">
-      <div class="m-val">{{ value }}</div>
-      <div class="m-lab">{{ label }}</div>
-      <div class="m-sub" *ngIf="sub"><span class="dot" [ngClass]="status"></span>{{ sub }}</div>
+      <div class="os-num">{{ value }}</div>
+      <div class="os-lbl">{{ label }}</div>
+      <div class="os-msub" *ngIf="sub">{{ sub }}</div>
     </div>
   `,
 })

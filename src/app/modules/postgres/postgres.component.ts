@@ -28,22 +28,24 @@ const TABS: { id: Tab; label: string }[] = [
   standalone: true,
   imports: [CommonModule, PgOverviewTab, PgTopologyTab, PgConfigTab, PgDatabasesTab, PgBackupsTab, PgEventsTab, PgClaimsTab],
   template: `
-    <div class="mod-h">
-      <h2>PostgreSQL <span class="tag tag-plugin">plugin</span></h2>
-      <span class="pill" [ngClass]="pillCls()">{{ svc.phase() }}</span>
-      <label class="auto-tog" style="margin-left:auto">
-        <input type="checkbox" [checked]="svc.autoRefresh()" (change)="svc.toggleAuto()"> auto 15s
+    <div class="os-title-row">
+      <h2 class="os-h2">PostgreSQL <span class="label label-info">plugin</span></h2>
+      <span class="label" [ngClass]="pillCls()">{{ svc.phase() }}</span>
+      <label class="clr-control-label os-ml-auto">
+        <input type="checkbox" class="clr-checkbox" [checked]="svc.autoRefresh()" (change)="svc.toggleAuto()"> auto 15s
       </label>
-      <button class="rbtn" (click)="svc.refresh()" [disabled]="svc.busy()">{{ svc.busy() ? '동기화…' : '새로고침' }}</button>
+      <button class="btn btn-sm" (click)="svc.refresh()" [disabled]="svc.busy()">{{ svc.busy() ? '동기화…' : '새로고침' }}</button>
     </div>
-    <p class="muted">공용 관계형 DB capability · CloudNativePG · {{ svc.name }} · ns {{ svc.ns }}<span *ngIf="svc.lastSync()"> · {{ svc.lastSync() }}</span></p>
+    <p class="os-sub">공용 관계형 DB capability · CloudNativePG · {{ svc.name }} · ns {{ svc.ns }}<span *ngIf="svc.lastSync()"> · {{ svc.lastSync() }}</span></p>
 
-    <div class="tabs" role="tablist">
-      <button class="tab" *ngFor="let t of tabs" [class.on]="tab() === t.id" (click)="vr.setTab(t.id)"
-              role="tab" [attr.aria-selected]="tab() === t.id">
-        {{ t.label }}<span class="badge-mod" *ngIf="badge(t.id)">{{ badge(t.id) }}</span>
-      </button>
-    </div>
+    <ul class="nav" role="tablist">
+      <li class="nav-item" *ngFor="let t of tabs">
+        <button class="btn btn-link nav-link" [class.active]="tab() === t.id" (click)="vr.setTab(t.id)"
+                type="button" role="tab" [attr.aria-selected]="tab() === t.id">
+          {{ t.label }} <span class="label" *ngIf="badge(t.id)">{{ badge(t.id) }}</span>
+        </button>
+      </li>
+    </ul>
 
     <pg-overview *ngIf="tab() === 'overview'" (jump)="vr.setTab($event)"></pg-overview>
     <pg-topology *ngIf="tab() === 'topology'"></pg-topology>

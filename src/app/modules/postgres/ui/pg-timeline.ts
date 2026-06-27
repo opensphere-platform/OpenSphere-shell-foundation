@@ -1,22 +1,28 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
-import { TlItem } from '../cnpg.types';
+import { PILL, TlItem } from '../cnpg.types';
 
-// 도트+라인 타임라인 — conditions·events 공용. cls(ok/warn/bad/'')로 도트 색.
+// conditions·events 공용 — cls(ok/warn/bad/'')로 상태 라벨 색.
 @Component({
   selector: 'pg-timeline',
   standalone: true,
   imports: [CommonModule],
   template: `
-    <ul class="tl">
-      <li *ngFor="let it of items" [ngClass]="it.cls">
-        <span class="t-title">{{ it.title }}</span>
-        <span class="t-when" *ngIf="it.when">{{ it.when }}</span>
-        <div class="t-msg" *ngIf="it.msg">{{ it.msg }}</div>
-      </li>
-    </ul>
+    <table class="table">
+      <tbody>
+        <tr *ngFor="let it of items">
+          <td><span class="label" [ngClass]="pill(it.cls)">{{ it.title }}</span></td>
+          <td>
+            <div *ngIf="it.msg" class="os-muted">{{ it.msg }}</div>
+          </td>
+          <td class="os-dim os-ml-auto" *ngIf="it.when">{{ it.when }}</td>
+          <td *ngIf="!it.when"></td>
+        </tr>
+      </tbody>
+    </table>
   `,
 })
 export class PgTimeline {
   @Input() items: TlItem[] = [];
+  pill(cls: TlItem['cls']): string { return PILL[cls]; }
 }

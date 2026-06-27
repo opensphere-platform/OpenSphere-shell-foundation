@@ -2,8 +2,8 @@
 export type Phase = 'ok' | 'warn' | 'bad' | '';
 export type State = 'loading' | 'ok' | 'empty' | 'noperm' | 'nocrd' | 'error';
 
-// 배지 색 매핑 — 기존 .pill.os-* 팔레트 재사용(신규 warn 클래스 금지).
-export const PILL: Record<Phase, string> = { ok: 'os-green', warn: 'os-yellow', bad: 'os-red', '': '' };
+// 배지 색 매핑 — Clarity .label 변형(label-success/-warning/-danger).
+export const PILL: Record<Phase, string> = { ok: 'label-success', warn: 'label-warning', bad: 'label-danger', '': '' };
 
 export interface Instance {
   name: string;

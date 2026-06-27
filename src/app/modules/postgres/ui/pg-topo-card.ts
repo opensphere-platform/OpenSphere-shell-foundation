@@ -8,14 +8,18 @@ import { Instance } from '../cnpg.types';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="topo-card" [class.primary]="instance.role === 'primary'">
-      <div class="topo-role">{{ instance.role }}</div>
-      <div class="topo-name">{{ instance.name }}</div>
-      <div class="topo-kv">
-        <span>상태</span><span><span class="pill" [class.ok]="instance.ready" [class.bad]="!instance.ready">{{ instance.status }}</span></span>
-        <span>Node</span><span class="mono">{{ instance.node }}</span>
-        <span>재시작</span><span>{{ instance.restarts }}</span>
-        <span>Age</span><span>{{ instance.age }}</span>
+    <div class="card">
+      <div class="card-header">
+        {{ instance.role }}
+        <span class="label" [ngClass]="instance.role === 'primary' ? 'label-info' : ''">{{ instance.name }}</span>
+      </div>
+      <div class="card-block">
+        <dl class="os-kv">
+          <dt>상태</dt><dd><span class="label" [ngClass]="instance.ready ? 'label-success' : 'label-danger'">{{ instance.status }}</span></dd>
+          <dt>Node</dt><dd class="os-mono">{{ instance.node }}</dd>
+          <dt>재시작</dt><dd>{{ instance.restarts }}</dd>
+          <dt>Age</dt><dd>{{ instance.age }}</dd>
+        </dl>
       </div>
     </div>
   `,

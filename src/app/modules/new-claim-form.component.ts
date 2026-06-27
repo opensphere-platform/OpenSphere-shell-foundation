@@ -9,22 +9,22 @@ import { PROV_GROUP, PROV_VER } from './claims.types';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="nc">
-      <div class="nc-row">
-        <label>네임스페이스<input [value]="ns()" (input)="ns.set(val($event))" placeholder="소비 서비스 ns"></label>
-        <label>claim 이름<input [value]="name()" (input)="name.set(val($event))" placeholder="예: helpcenter"></label>
-      </div>
-      <div class="nc-row">
-        <label>{{ kind === 'pg' ? 'Database' : 'Index 이름' }}<input [value]="f1()" (input)="f1.set(val($event))" [placeholder]="kind === 'pg' ? 'logical db' : 'index'"></label>
-        <label>Owner (service id)<input [value]="f2()" (input)="f2.set(val($event))" placeholder="svc_xxx"></label>
-      </div>
-      <div class="nc-act">
-        <button class="rbtn primary" (click)="submit()">선언 생성</button>
-        <button class="rbtn" (click)="yaml.set(toYaml(build()))">YAML 보기</button>
-        <span class="muted">{{ msg() }}</span>
-      </div>
-      <pre class="yaml-prev" *ngIf="yaml()">{{ yaml() }}</pre>
+    <dl class="os-kv">
+      <dt>네임스페이스</dt>
+      <dd><input class="clr-input" [value]="ns()" (input)="ns.set(val($event))" placeholder="소비 서비스 ns"></dd>
+      <dt>claim 이름</dt>
+      <dd><input class="clr-input" [value]="name()" (input)="name.set(val($event))" placeholder="예: helpcenter"></dd>
+      <dt>{{ kind === 'pg' ? 'Database' : 'Index 이름' }}</dt>
+      <dd><input class="clr-input" [value]="f1()" (input)="f1.set(val($event))" [placeholder]="kind === 'pg' ? 'logical db' : 'index'"></dd>
+      <dt>Owner (service id)</dt>
+      <dd><input class="clr-input" [value]="f2()" (input)="f2.set(val($event))" placeholder="svc_xxx"></dd>
+    </dl>
+    <div class="os-actions">
+      <button class="btn btn-sm btn-primary" (click)="submit()">선언 생성</button>
+      <button class="btn btn-sm" (click)="yaml.set(toYaml(build()))">YAML 보기</button>
+      <span class="os-sub">{{ msg() }}</span>
     </div>
+    <pre class="os-yaml" *ngIf="yaml()">{{ yaml() }}</pre>
   `,
 })
 export class NewClaimFormComponent {

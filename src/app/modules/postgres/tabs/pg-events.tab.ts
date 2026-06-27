@@ -10,7 +10,7 @@ import { PgState } from '../ui/pg-state';
   standalone: true,
   imports: [CommonModule, PgTimeline, PgState],
   template: `
-    <p class="muted">클러스터·Pod 관련 K8s Events (최신순, 최대 50). Warning은 빨강, Normal은 녹색.</p>
+    <p class="os-sub">클러스터·Pod 관련 K8s Events (최신순, 최대 50). Warning은 빨강, Normal은 녹색.</p>
     <pg-state [state]="svc.eventState()" hint="이벤트 없음 — 안정적입니다." sub="최근 클러스터 변경/경고가 없습니다(고장 아님)." (retry)="svc.refresh()">
       <pg-timeline [items]="items()"></pg-timeline>
     </pg-state>

@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnInit, signal } from '@angular/core';
+import { ClarityModule } from '@clr/angular';
 import { apiBase } from '../api-base';
 import { PROV_GROUP, PROV_VER, ClaimRow, phaseFromStatus, age } from './claims.types';
 
@@ -8,33 +9,33 @@ import { PROV_GROUP, PROV_VER, ClaimRow, phaseFromStatus, age } from './claims.t
 @Component({
   selector: 'app-claims-list',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ClarityModule],
   template: `
-    <div class="claims-bar">
-      <span class="muted"><code>{{ plural }}.{{ PROV_GROUP }}/{{ PROV_VER }}</code></span>
-      <button class="rbtn" (click)="load()">새로고침</button>
+    <div class="os-title-row">
+      <span class="os-mono os-sub">{{ plural }}.{{ PROV_GROUP }}/{{ PROV_VER }}</span>
+      <button class="btn btn-sm os-ml-auto" (click)="load()">새로고침</button>
     </div>
-    <table class="tbl" *ngIf="state() === 'ok'">
+    <table class="table" *ngIf="state() === 'ok'">
       <thead><tr><th>이름</th><th>네임스페이스</th><th>{{ primaryLabel }}</th><th>상태</th><th>{{ detailLabel }}</th><th>Age</th></tr></thead>
       <tbody>
         <tr *ngFor="let r of rows()">
-          <td class="mono">{{ r.name }}</td>
-          <td class="mono">{{ r.namespace }}</td>
-          <td class="mono">{{ r.primary }}</td>
-          <td><span class="pill" [class.ok]="r.ready">{{ r.phase }}</span></td>
-          <td class="mono">{{ r.detail }}</td>
+          <td class="os-mono">{{ r.name }}</td>
+          <td class="os-mono">{{ r.namespace }}</td>
+          <td class="os-mono">{{ r.primary }}</td>
+          <td><span class="label" [ngClass]="r.ready ? 'label-success' : 'label-warning'">{{ r.phase }}</span></td>
+          <td class="os-mono">{{ r.detail }}</td>
           <td>{{ r.age }}</td>
         </tr>
-        <tr *ngIf="!rows().length"><td colspan="6" class="muted">claim 없음 — 위 폼으로 선언하세요.</td></tr>
+        <tr *ngIf="!rows().length"><td colspan="6" class="os-muted">claim 없음 — 위 폼으로 선언하세요.</td></tr>
       </tbody>
     </table>
-    <div class="claim-deny" *ngIf="state() === 'nocrd'">
-      ⓘ <code>{{ plural }}.{{ PROV_GROUP }}</code> CRD 미설치 — Phase 3 컨트롤러·CRD 배포 후 표시됩니다.
-    </div>
-    <div class="claim-deny" *ngIf="state() === 'noperm'">
-      ⓘ 조회 권한 없음 — <code>rbac-foundation-read.yaml</code>(provisioning.opensphere.io read) 적용 필요.
-    </div>
-    <div class="muted" *ngIf="state() === 'loading'">불러오는 중…</div>
+    <clr-alert *ngIf="state() === 'nocrd'" clrAlertType="info" [clrAlertClosable]="false" [clrAlertLightweight]="true">
+      <clr-alert-item><span class="alert-text"><span class="os-mono">{{ plural }}.{{ PROV_GROUP }}</span> CRD 미설치 — Phase 3 컨트롤러·CRD 배포 후 표시됩니다.</span></clr-alert-item>
+    </clr-alert>
+    <clr-alert *ngIf="state() === 'noperm'" clrAlertType="warning" [clrAlertClosable]="false">
+      <clr-alert-item><span class="alert-text">조회 권한 없음 — <span class="os-mono">rbac-foundation-read.yaml</span>(provisioning.opensphere.io read) 적용 필요.</span></clr-alert-item>
+    </clr-alert>
+    <div class="os-dim" *ngIf="state() === 'loading'"><span class="spinner spinner-sm"></span> 불러오는 중…</div>
   `,
 })
 export class ClaimsListComponent implements OnInit {

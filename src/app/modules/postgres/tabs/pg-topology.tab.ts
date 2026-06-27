@@ -9,22 +9,22 @@ import { PgState } from '../ui/pg-state';
   standalone: true,
   imports: [CommonModule, PgTopoCard, PgState],
   template: `
-    <p class="muted">CNPG 인스턴스 토폴로지 — primary 1 + replica {{ replicaN() }}. rw는 primary로, ro는 replica(없으면 primary)로 라우팅.</p>
+    <p class="os-sub">CNPG 인스턴스 토폴로지 — primary 1 + replica {{ replicaN() }}. rw는 primary로, ro는 replica(없으면 primary)로 라우팅.</p>
     <pg-state [state]="state()" hint="인스턴스 Pod 없음" sub="Cluster가 생성 중이거나 read 권한이 없습니다." (retry)="svc.refresh()">
-      <div class="topo">
+      <div class="os-cardgrid">
         <pg-topo-card *ngFor="let i of svc.instances()" [instance]="i"></pg-topo-card>
       </div>
-      <div class="sec-h">인스턴스 상세</div>
-      <table class="tbl">
+      <div class="os-sech">인스턴스 상세</div>
+      <table class="table">
         <thead><tr><th>Pod</th><th>역할</th><th>상태</th><th>재시작</th><th>Node</th><th>IP</th><th>Age</th></tr></thead>
         <tbody>
           <tr *ngFor="let i of svc.instances()">
-            <td class="mono">{{ i.name }}</td>
+            <td class="os-mono">{{ i.name }}</td>
             <td>{{ i.role }}</td>
-            <td><span class="pill" [class.ok]="i.ready" [class.bad]="!i.ready">{{ i.status }}</span></td>
+            <td><span class="label" [ngClass]="i.ready ? 'label-success' : 'label-danger'">{{ i.status }}</span></td>
             <td>{{ i.restarts }}</td>
-            <td class="mono">{{ i.node }}</td>
-            <td class="mono">{{ i.ip || '—' }}</td>
+            <td class="os-mono">{{ i.node }}</td>
+            <td class="os-mono">{{ i.ip || '—' }}</td>
             <td>{{ i.age }}</td>
           </tr>
         </tbody>

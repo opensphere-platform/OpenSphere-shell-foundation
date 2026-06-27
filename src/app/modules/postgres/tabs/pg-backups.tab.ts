@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
+import { ClarityModule } from '@clr/angular';
 import { apiBase } from '../../../api-base';
 import { CnpgService } from '../cnpg.service';
 import { PILL, phaseClass } from '../cnpg.types';
@@ -8,25 +9,25 @@ import { PgState } from '../ui/pg-state';
 @Component({
   selector: 'pg-backups',
   standalone: true,
-  imports: [CommonModule, PgState],
+  imports: [CommonModule, ClarityModule, PgState],
   template: `
-    <div class="claim-deny" *ngIf="!svc.backupConfigured()">
-      ⓘ <b>백업 미구성</b> — 이 클러스터에 <code>.spec.backup</code>(object store / 볼륨 스냅샷)이 설정되지 않았습니다.
-      백업·스케줄·복원은 object store 구성 후 활성화됩니다. <b>현재는 정상</b>이며 실패가 아닙니다.
-    </div>
+    <clr-alert *ngIf="!svc.backupConfigured()" clrAlertType="info" [clrAlertClosable]="false">
+      <clr-alert-item><span class="alert-text"><b>백업 미구성</b> — 이 클러스터에 <code>.spec.backup</code>(object store / 볼륨 스냅샷)이 설정되지 않았습니다.
+        백업·스케줄·복원은 object store 구성 후 활성화됩니다. <b>현재는 정상</b>이며 실패가 아닙니다.</span></clr-alert-item>
+    </clr-alert>
 
     <ng-container *ngIf="svc.backupConfigured()">
-      <div class="mod-h">
-        <div class="sec-h" style="margin:.4rem 0">백업</div>
-        <button class="rbtn primary" style="margin-left:auto" (click)="trigger()" [disabled]="busy()">지금 백업</button>
+      <div class="os-title-row">
+        <div class="os-sech">백업</div>
+        <button class="btn btn-sm btn-primary os-ml-auto" (click)="trigger()" [disabled]="busy()">지금 백업</button>
       </div>
       <pg-state [state]="svc.backupState()" hint="백업 없음" sub="'지금 백업'으로 on-demand 백업을 만드세요." (retry)="svc.refresh()">
-        <table class="tbl">
+        <table class="table">
           <thead><tr><th>이름</th><th>상태</th><th>method</th><th>시작</th><th>완료</th></tr></thead>
           <tbody>
             <tr *ngFor="let b of svc.backups()">
-              <td class="mono">{{ b.metadata?.name }}</td>
-              <td><span class="pill" [ngClass]="bcls(b)">{{ b.status?.phase || '—' }}</span></td>
+              <td class="os-mono">{{ b.metadata?.name }}</td>
+              <td><span class="label" [ngClass]="bcls(b)">{{ b.status?.phase || '—' }}</span></td>
               <td>{{ b.spec?.method || b.status?.method || '—' }}</td>
               <td>{{ b.status?.startedAt || '—' }}</td>
               <td>{{ b.status?.stoppedAt || '—' }}</td>
@@ -36,20 +37,22 @@ import { PgState } from '../ui/pg-state';
       </pg-state>
     </ng-container>
 
-    <div class="sec-h">스케줄 (ScheduledBackup)</div>
-    <div class="empty" *ngIf="!svc.scheduled().length">스케줄된 백업 없음.</div>
-    <table class="tbl" *ngIf="svc.scheduled().length">
+    <div class="os-sech">스케줄 (ScheduledBackup)</div>
+    <clr-alert *ngIf="!svc.scheduled().length" clrAlertType="info" [clrAlertClosable]="false" [clrAlertLightweight]="true">
+      <clr-alert-item><span class="alert-text">스케줄된 백업 없음.</span></clr-alert-item>
+    </clr-alert>
+    <table class="table" *ngIf="svc.scheduled().length">
       <thead><tr><th>이름</th><th>일정(cron)</th><th>중단</th><th>마지막</th></tr></thead>
       <tbody>
         <tr *ngFor="let s of svc.scheduled()">
-          <td class="mono">{{ s.metadata?.name }}</td>
-          <td class="mono">{{ s.spec?.schedule }}</td>
+          <td class="os-mono">{{ s.metadata?.name }}</td>
+          <td class="os-mono">{{ s.spec?.schedule }}</td>
           <td>{{ s.spec?.suspend ? '⏸' : '▶' }}</td>
           <td>{{ s.status?.lastScheduleTime || '—' }}</td>
         </tr>
       </tbody>
     </table>
-    <p class="muted" *ngIf="msg()">{{ msg() }}</p>
+    <p class="os-sub" *ngIf="msg()">{{ msg() }}</p>
   `,
 })
 export class PgBackupsTab {

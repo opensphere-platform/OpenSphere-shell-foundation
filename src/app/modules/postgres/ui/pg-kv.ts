@@ -7,14 +7,14 @@ import { Component, Input, computed, signal } from '@angular/core';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <input class="cfg-filter" [value]="filter()" (input)="filter.set(val($event))" placeholder="파라미터 필터…" aria-label="파라미터 필터">
-    <table class="cfg">
+    <input class="clr-input os-filter" [value]="filter()" (input)="filter.set(val($event))" placeholder="파라미터 필터…" aria-label="파라미터 필터">
+    <table class="table os-cfg">
       <tbody>
         <tr *ngFor="let k of keys()">
-          <td class="k">{{ k }}</td>
-          <td class="v">{{ data()[k] }}</td>
+          <td class="os-k">{{ k }}</td>
+          <td class="os-v">{{ data()[k] }}</td>
         </tr>
-        <tr *ngIf="!keys().length"><td colspan="2" class="muted">{{ rawCount() ? '일치하는 파라미터 없음' : '설정된 파라미터 없음(CNPG 기본값 사용)' }}</td></tr>
+        <tr *ngIf="!keys().length"><td colspan="2" class="os-muted">{{ rawCount() ? '일치하는 파라미터 없음' : '설정된 파라미터 없음(CNPG 기본값 사용)' }}</td></tr>
       </tbody>
     </table>
   `,

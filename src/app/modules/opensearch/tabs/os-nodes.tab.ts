@@ -9,17 +9,17 @@ import { PgState } from '../../postgres/ui/pg-state';
   standalone: true,
   imports: [CommonModule, OsNodeCard, PgState],
   template: `
-    <p class="muted">OpenSearch 노드 — 역할·heap·cpu·disk. master는 teal 강조. (현재 single-node dev)</p>
+    <p class="os-muted">OpenSearch 노드 — 역할·heap·cpu·disk. master는 teal 강조. (현재 single-node dev)</p>
     <pg-state [state]="svc.nodeState()" hint="노드 없음" (retry)="svc.refresh()">
-      <div class="topo">
+      <div class="os-cardgrid">
         <os-node-card *ngFor="let n of svc.nodes()" [node]="n"></os-node-card>
       </div>
-      <div class="sec-h">노드 상세</div>
-      <table class="tbl">
+      <div class="os-sech">노드 상세</div>
+      <table class="table">
         <thead><tr><th>노드</th><th>역할</th><th>master</th><th>heap%</th><th>ram%</th><th>cpu</th><th>disk%</th><th>load 1m</th><th>version</th></tr></thead>
         <tbody>
           <tr *ngFor="let n of svc.nodes()">
-            <td class="mono">{{ n.name }}</td>
+            <td class="os-mono">{{ n.name }}</td>
             <td>{{ n['node.role'] }}</td>
             <td>{{ n.master === '*' ? '★' : '' }}</td>
             <td>{{ n['heap.percent'] ?? '—' }}</td>
@@ -27,7 +27,7 @@ import { PgState } from '../../postgres/ui/pg-state';
             <td>{{ n.cpu ?? '—' }}</td>
             <td>{{ n['disk.used_percent'] ?? '—' }}</td>
             <td>{{ n['load_1m'] ?? '—' }}</td>
-            <td class="mono">{{ n.version || '—' }}</td>
+            <td class="os-mono">{{ n.version || '—' }}</td>
           </tr>
         </tbody>
       </table>

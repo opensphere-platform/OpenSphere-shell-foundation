@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { OsService } from '../os.service';
-import { fmtBytes } from '../os.types';
+import { fmtBytes, osHealthPhase, PILL } from '../os.types';
 import { PgState } from '../../postgres/ui/pg-state';
 
 @Component({
@@ -9,24 +9,24 @@ import { PgState } from '../../postgres/ui/pg-state';
   standalone: true,
   imports: [CommonModule, PgState],
   template: `
-    <div class="claims-bar">
-      <input class="cfg-filter" [value]="filter()" (input)="filter.set(val($event))" placeholder="인덱스 필터…" aria-label="인덱스 필터" style="margin:0">
-      <span class="muted">{{ rows().length }} / {{ svc.indices().length }} 인덱스</span>
+    <div class="os-filter">
+      <input class="clr-input" [value]="filter()" (input)="filter.set(val($event))" placeholder="인덱스 필터…" aria-label="인덱스 필터">
+      <span class="os-muted">{{ rows().length }} / {{ svc.indices().length }} 인덱스</span>
     </div>
     <pg-state [state]="svc.indexState()" hint="인덱스 없음" sub="앱이 첫 문서를 쓰면 자동 생성됩니다(auto-create-index)." (retry)="svc.refresh()">
-      <table class="tbl">
+      <table class="table">
         <thead><tr><th>인덱스</th><th>health</th><th>status</th><th>docs</th><th>deleted</th><th>샤드(p/r)</th><th>크기</th></tr></thead>
         <tbody>
           <tr *ngFor="let i of rows()">
-            <td class="mono">{{ i.index }}</td>
-            <td><span class="pill" [ngClass]="'os-' + i.health">{{ i.health }}</span></td>
+            <td class="os-mono">{{ i.index }}</td>
+            <td><span class="label" [ngClass]="hcls(i.health)">{{ i.health }}</span></td>
             <td>{{ i.status }}</td>
             <td>{{ i['docs.count'] }}</td>
             <td>{{ i['docs.deleted'] }}</td>
             <td>{{ i.pri }}/{{ i.rep }}</td>
             <td>{{ size(i['store.size']) }}</td>
           </tr>
-          <tr *ngIf="!rows().length"><td colspan="7" class="muted">일치하는 인덱스 없음</td></tr>
+          <tr *ngIf="!rows().length"><td colspan="7" class="os-muted">일치하는 인덱스 없음</td></tr>
         </tbody>
       </table>
     </pg-state>
@@ -41,4 +41,5 @@ export class OsIndicesTab {
   });
   val(e: Event): string { return (e.target as HTMLInputElement).value; }
   size(b: any): string { return fmtBytes(b); }
+  hcls(health: string): string { return PILL[osHealthPhase(health)]; }
 }

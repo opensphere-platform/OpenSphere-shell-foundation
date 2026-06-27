@@ -1,0 +1,121 @@
+/* [OpenSphere] 자체완결 격리(Shadow DOM): Clarity 전체 CSS를 shadow root 안으로 가져온다.
+   문서(셸)의 스타일시트는 shadow 경계를 못 뚫으므로 셸 CSS 영향 0. 자식 컴포넌트는 이 시트의
+   Clarity 클래스 + 아래 os-* 유틸을 수령(자식은 자체 styles 없음). DESIGN-RULES 준수:
+   구조·컴포넌트는 Clarity(clr-vertical-nav·clr-datagrid·clr-tabs·clr-alert·.card·.label·.btn),
+   정체성은 토큰, os-* 는 Clarity 부재 표현(muted/mono/metric/section)만 — 등록 유틸. 인라인 style 0. */
+@import '@clr/ui/clr-ui.min.css';
+
+:host {
+  /* 브랜드/팔레트 (cluster-manager와 동일) */
+  --os-brand-900: #0b1530;
+  --os-brand-700: #16224d;
+  --os-brand-500: #4c6fff;
+  --os-brand-300: #8fa6ff;
+  --os-accent:    #00bfa5;
+  --os-surface:   #f6f7fb;
+  --os-ink:       #1b2438;
+  --os-muted:     #667193;
+  --os-border:    #d4d8e0;
+  --os-bg:        #ffffff;
+  --os-bg-subtle: #fafbfd;
+  --os-text-sec:  #4a5568;
+  --os-success:   #2ecc71;
+  --os-warn:      #e67e22;
+  --os-danger:    #c21d00;
+
+  /* Clarity 토큰 → shadow root 안 nav 다크 테마 + 브랜드 버튼/링크 */
+  --clr-vertical-nav-bg-color: #101a38;
+  --clr-vertical-nav-item-color: #c7d0e8;
+  --clr-vertical-nav-item-active-color: #ffffff;
+  --clr-vertical-nav-item-active-bg-color: rgba(76, 111, 255, 0.22);
+  --clr-vertical-nav-icon-active-color: var(--os-brand-300);
+  --clr-btn-primary-bg-color: var(--os-brand-500);
+  --clr-btn-primary-hover-bg-color: #3a5af0;
+  --clr-link-color: var(--os-brand-500);
+  --clr-link-hover-color: #3a5af0;
+
+  display: block;
+  height: 100%;
+  /* 셸 상속 누수 차단 → Clarity 기본 */
+  line-height: 1.428571429;
+  font-family: Metropolis, 'Avenir Next', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--os-ink);
+}
+
+/* ── 레이아웃: 좌 clr-vertical-nav + 우 콘텐츠 ── */
+.os-shell { display: flex; height: 100%; min-height: 100%; }
+.os-sidebar-nav { flex: 0 0 232px; min-width: 0; height: 100%; overflow-y: auto; }
+.os-content { flex: 1 1 auto; padding: 16px 22px; overflow: auto; min-width: 0; }
+
+/* nav 브랜드 헤더 + 비접이식 밴드 라벨 [예외 #3 — clr-vertical-nav-group은 접이식이라 용도 불일치] */
+.os-brand { padding: 11px 16px 4px; font-size: 1rem; font-weight: 600; color: #fff; background: var(--clr-vertical-nav-bg-color, #101a38); }
+.os-brand .os-brand-sub { display: block; font-size: 0.66rem; font-weight: 400; color: #7fa6b3; padding-bottom: 7px; }
+.os-band-label { display: block; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.07em; color: #5f8593; padding: 10px 16px 3px; background: var(--clr-vertical-nav-bg-color, #101a38); }
+.os-nav-foot { font-size: 0.62rem; color: #5f8593; line-height: 1.45; padding: 14px 16px; background: var(--clr-vertical-nav-bg-color, #101a38); }
+.os-tree-ic { width: 16px; height: 16px; fill: currentColor; flex: 0 0 auto; opacity: 0.85; }
+clr-vertical-nav-group-children, .nav-group-children, .nav-group-content { background: transparent !important; }
+a[clrVerticalNavLink].active, a.nav-link.active {
+  color: var(--clr-vertical-nav-item-active-color, #fff) !important;
+  background: var(--clr-vertical-nav-item-active-bg-color, rgba(76,111,255,0.22)) !important;
+}
+
+/* ── os-* 표현 유틸 [예외 #4 — Clarity 미제공: muted/mono/section/metric/kv] ── */
+.os-h2 { margin: 0; font-weight: 400; color: var(--os-text-sec); }
+.os-title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.os-sub { color: var(--os-muted); font-size: 0.8rem; margin: 0 0 12px; }
+.os-muted { color: var(--os-muted); }
+.os-mono { font-family: 'Courier New', monospace; font-size: 0.78rem; word-break: break-all; }
+.os-dim { color: var(--os-muted); font-size: 0.78rem; }
+.os-sech { font-size: 0.9rem; font-weight: 500; color: var(--os-text-sec); margin: 18px 0 8px; }
+.os-ml-auto { margin-left: auto; }
+.os-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* metric 타일 — Clarity 카드 위 좌측 status 보더. KPI 컴포넌트는 Clarity 부재 */
+.os-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 4px 0 16px; }
+.os-metric { background: var(--os-bg); border: 1px solid var(--os-border); border-left: 3px solid var(--os-border); border-radius: 4px; padding: 12px 16px; }
+.os-metric.os-ok { border-left-color: var(--os-success); }
+.os-metric.os-warn { border-left-color: var(--os-warn); }
+.os-metric.os-bad { border-left-color: var(--os-danger); }
+.os-metric.os-click { cursor: pointer; }
+.os-metric.os-click:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.10); border-color: var(--os-brand-500); }
+.os-metric .os-num { font-size: 1.6rem; font-weight: 300; line-height: 1.1; color: var(--os-ink); word-break: break-all; }
+.os-metric .os-lbl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--os-muted); margin-top: 3px; }
+.os-metric .os-msub { font-size: 0.74rem; color: var(--os-text-sec); margin-top: 3px; }
+
+/* 카드 그리드(Clarity .card 사용 — 배치만) */
+.os-cardgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+
+/* key-value 표현 */
+.os-kv { display: grid; grid-template-columns: 110px 1fr; gap: 4px 10px; font-size: 0.84rem; margin: 0; }
+.os-kv dt { color: var(--os-muted); } .os-kv dd { margin: 0; }
+
+/* metric 행 묶음(plugin 카드 내부) */
+.os-pcm { display: flex; gap: 18px; flex-wrap: wrap; margin: 6px 0; }
+.os-pcm > div { display: flex; flex-direction: column; }
+.os-pcm b { font-size: 1.1rem; font-weight: 500; color: var(--os-ink); }
+.os-pcm span { font-size: 0.6rem; text-transform: uppercase; color: var(--os-muted); }
+
+/* 호스트→plugin 토폴로지(Console Extensions 직역 — Clarity 트리뷰 대신 등록 유틸; 'os-tree' 금지 패밀리 회피) */
+.os-topo { background: var(--os-bg); border: 1px solid var(--os-border); border-radius: 4px; overflow: hidden; margin: 4px 0 12px; font-size: 0.84rem; }
+.os-topo-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid #eef0f3; }
+.os-topo-row.os-topo-host { background: #eef4f4; border-top: 0; }
+.os-topo-row.os-topo-child { padding-left: 34px; }
+.os-topo-meta { margin-left: auto; font-family: 'Courier New', monospace; font-size: 0.68rem; color: var(--os-muted); }
+
+/* config dense 키-값 표(Clarity .table 보강) */
+.os-cfg td.os-k { color: var(--os-text-sec); width: 42%; font-family: 'Courier New', monospace; }
+.os-cfg td.os-v { color: var(--os-ink); font-family: 'Courier New', monospace; word-break: break-all; }
+.os-filter { padding: 4px 10px; border: 1px solid var(--os-border); border-radius: 4px; font-size: 0.8rem; min-width: 240px; max-width: 100%; }
+.os-filter:focus { outline: none; border-color: var(--os-brand-500); }
+
+/* Clarity 데이터 셀 수직중앙(배지 셀 정렬) */
+.datagrid-scrolling-cells, .datagrid-row-sticky { align-items: center; }
+
+/* yaml 미리보기 [예외 — Clarity 코드블록 부재] */
+.os-yaml { margin: 8px 0 0; padding: 12px 14px; background: #0f2230; color: #cfe0e6; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 0.74rem; white-space: pre; overflow: auto; }
+
+@media (max-width: 760px) { .os-sidebar-nav { flex-basis: 168px; } .os-metrics { grid-template-columns: 1fr 1fr; } .os-cardgrid { grid-template-columns: 1fr; } }
