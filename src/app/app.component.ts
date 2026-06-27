@@ -1,21 +1,19 @@
 import { CommonModule } from '@angular/common';
-import { Component, ViewEncapsulation, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewEncapsulation, inject } from '@angular/core';
 import { PostgresComponent } from './modules/postgres/postgres.component';
 import { OpenSearchComponent } from './modules/opensearch/opensearch.component';
+import { FoundationOverviewComponent } from './foundation/overview.component';
+import { FoundationAdminComponent } from './foundation/plugins-admin.component';
+import { FoundationRegistryService } from './registry/foundation-registry.service';
 import { ViewRouter } from './view-router';
 
-// Foundation subShell = 호스트(§2.7). 좌측 트리에 귀속 plugin 모듈, 본문에 선택 모듈 마운트.
-// 모듈(PostgreSQL·OpenSearch)은 foundation shell에 귀속된 plugin(host.mountChild 자체 구현 = 컴포넌트 마운트).
-interface Mod { id: 'postgres' | 'opensearch'; name: string; icon: string; }
-const MODULES: Mod[] = [
-  { id: 'postgres', name: 'PostgreSQL', icon: 'db' },
-  { id: 'opensearch', name: 'OpenSearch', icon: 'search' },
-];
+// Foundation subShell = plugin 호스팅 shell(§2.7). 좌 nav = SHELL(Overview·Plugins관리) + HOSTING PLUGIN(registry 파생).
+// 본문에 overview/admin/모듈 라우팅. 호스팅 plugin 폴러 라이프사이클을 이 shell(FoundationRegistryService)이 소유.
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, PostgresComponent, OpenSearchComponent],
+  imports: [CommonModule, PostgresComponent, OpenSearchComponent, FoundationOverviewComponent, FoundationAdminComponent],
   encapsulation: ViewEncapsulation.ShadowDom,
   styles: [`
     :host { display:block; height:100%; color:#1f2733;
@@ -37,6 +35,7 @@ const MODULES: Mod[] = [
     .rbtn { margin-left:auto; border:1px solid #ccd2d8; background:#fff; border-radius:6px; padding:.3rem .7rem; cursor:pointer; font-size:.8rem; }
     .tag { font-size:.58rem; font-weight:700; padding:.08rem .4rem; border-radius:4px; text-transform:uppercase; color:#fff; }
     .tag-plugin { background:#3b5bdb; }
+    .tag-shell { background:#0d6e6e; }
     .muted { color:#7a828f; font-size:.84rem; margin:.2rem 0 1rem; }
     .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; }
     .card { background:#fff; border-radius:10px; padding:1rem 1.2rem; box-shadow:0 3px 12px rgba(20,30,60,.06); }
@@ -113,25 +112,48 @@ const MODULES: Mod[] = [
     <div class="fnd">
       <aside class="nav">
         <div class="nav-h">Foundation</div>
-        <div class="nav-d">플랫폼 백킹서비스</div>
-        <div class="nav-g">모듈 · Plugins</div>
-        <a class="nav-i" *ngFor="let m of modules" [class.on]="vr.module() === m.id"
-           role="button" tabindex="0" (click)="vr.setModule(m.id)" (keydown.enter)="vr.setModule(m.id)">
-          <span class="ni-ico">
-            <svg *ngIf="m.icon === 'db'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
-            <svg *ngIf="m.icon === 'search'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-          </span>{{ m.name }}
+        <div class="nav-d">플랫폼 백킹서비스 shell</div>
+
+        <div class="nav-g">SHELL</div>
+        <a class="nav-i" [class.on]="vr.module() === 'overview'" role="button" tabindex="0"
+           (click)="vr.setModule('overview')" (keydown.enter)="vr.setModule('overview')">
+          <span class="ni-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg></span>Overview
         </a>
-        <div class="nav-foot">§2.7 — 각 모듈은 foundation shell에 귀속된 plugin (hostRef=foundation)</div>
+        <a class="nav-i" [class.on]="vr.module() === 'plugins'" role="button" tabindex="0"
+           (click)="vr.setModule('plugins')" (keydown.enter)="vr.setModule('plugins')">
+          <span class="ni-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h9"/><circle cx="17" cy="6" r="2.3"/><path d="M4 12h4"/><circle cx="12" cy="12" r="2.3"/><path d="M16 12h4"/><path d="M4 18h9"/><circle cx="17" cy="18" r="2.3"/></svg></span>Plugins 관리
+        </a>
+
+        <div class="nav-g">HOSTING PLUGIN</div>
+        <a class="nav-i" *ngFor="let p of reg.enabledPlugins()" [class.on]="vr.module() === p.id"
+           role="button" tabindex="0" (click)="vr.setModule(p.id)" (keydown.enter)="vr.setModule(p.id)">
+          <span class="ni-ico">
+            <svg *ngIf="p.icon === 'db'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+            <svg *ngIf="p.icon === 'search'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          </span>{{ p.name }}
+        </a>
+
+        <div class="nav-foot">§2.7 — plugin은 foundation shell에 귀속 (hostRef=foundation). 위 목록은 레지스트리의 파생(활성 plugin만 노출).</div>
       </aside>
       <main class="body">
-        <app-postgres *ngIf="vr.module() === 'postgres'"></app-postgres>
-        <app-opensearch *ngIf="vr.module() === 'opensearch'"></app-opensearch>
+        <app-foundation-overview *ngIf="vr.module() === 'overview'"></app-foundation-overview>
+        <app-foundation-admin *ngIf="vr.module() === 'plugins'"></app-foundation-admin>
+        <app-postgres *ngIf="vr.module() === 'postgres' && reg.isEnabled('postgres')"></app-postgres>
+        <app-opensearch *ngIf="vr.module() === 'opensearch' && reg.isEnabled('opensearch')"></app-opensearch>
+        <div class="empty" *ngIf="disabledModule()">이 plugin은 비활성 상태입니다 — <b>Plugins 관리</b>에서 활성화하세요.</div>
       </main>
     </div>
   `,
 })
-export class AppComponent {
-  readonly modules = MODULES;
+export class AppComponent implements OnInit, OnDestroy {
   readonly vr = inject(ViewRouter);
+  readonly reg = inject(FoundationRegistryService);
+
+  ngOnInit(): void { this.reg.start(); }      // shell이 호스팅 plugin 모니터링 시작(폴러 소유)
+  ngOnDestroy(): void { this.reg.stop(); }
+
+  disabledModule(): boolean {
+    const m = this.vr.module();
+    return (m === 'postgres' || m === 'opensearch') && !this.reg.isEnabled(m);
+  }
 }

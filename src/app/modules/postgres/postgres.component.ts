@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, computed, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { CnpgService } from './cnpg.service';
 import { PILL } from './cnpg.types';
 import { ViewRouter } from '../../view-router';
@@ -54,7 +54,7 @@ const TABS: { id: Tab; label: string }[] = [
     <pg-claims *ngIf="tab() === 'claims'"></pg-claims>
   `,
 })
-export class PostgresComponent implements OnInit, OnDestroy {
+export class PostgresComponent {
   readonly svc = inject(CnpgService);
   readonly vr = inject(ViewRouter);
   readonly tabs = TABS;
@@ -63,9 +63,7 @@ export class PostgresComponent implements OnInit, OnDestroy {
     return this.tabs.some((x) => x.id === t) ? (t as Tab) : 'overview';
   });
 
-  ngOnInit(): void { this.svc.start(); }
-  ngOnDestroy(): void { this.svc.stop(); }
-
+  // 폴러 라이프사이클은 shell(FoundationRegistryService)이 소유 — 콘솔은 구독만(start/stop 안 함).
   pillCls(): string { return PILL[this.svc.phaseCls()]; }
 
   badge(id: Tab): string {

@@ -8,7 +8,7 @@ const PARAM = 'fview';
 
 @Injectable({ providedIn: 'root' })
 export class ViewRouter {
-  readonly module = signal<string>('postgres');
+  readonly module = signal<string>('overview');
   readonly tab = signal<string>('overview');
 
   constructor() {
@@ -19,8 +19,8 @@ export class ViewRouter {
   private read(): void {
     let v = '';
     try { v = new URLSearchParams(location.search).get(PARAM) || ''; } catch { /* noop */ }
-    const [m, t] = (v || 'postgres.overview').split('.');
-    this.module.set(m || 'postgres');
+    const [m, t] = (v || 'overview').split('.');
+    this.module.set(m || 'overview');
     this.tab.set(t || 'overview');
   }
 
@@ -40,7 +40,8 @@ export class ViewRouter {
   private write(push: boolean): void {
     try {
       const u = new URL(location.href);
-      u.searchParams.set(PARAM, `${this.module()}.${this.tab()}`);
+      const hasTabs = this.module() === 'postgres' || this.module() === 'opensearch';
+      u.searchParams.set(PARAM, hasTabs ? `${this.module()}.${this.tab()}` : this.module());
       const target = u.pathname + u.search + u.hash;
       if (push) { history.pushState(history.state, '', target); }
       else { history.replaceState(history.state, '', target); }

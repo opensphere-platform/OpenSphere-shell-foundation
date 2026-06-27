@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, computed, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { OsService } from './os.service';
 import { PILL } from './os.types';
 import { ViewRouter } from '../../view-router';
@@ -54,7 +54,7 @@ const TABS: { id: Tab; label: string }[] = [
     <os-claims *ngIf="tab() === 'claims'"></os-claims>
   `,
 })
-export class OpenSearchComponent implements OnInit, OnDestroy {
+export class OpenSearchComponent {
   readonly svc = inject(OsService);
   readonly vr = inject(ViewRouter);
   readonly tabs = TABS;
@@ -63,9 +63,7 @@ export class OpenSearchComponent implements OnInit, OnDestroy {
     return this.tabs.some((x) => x.id === t) ? (t as Tab) : 'overview';
   });
 
-  ngOnInit(): void { this.svc.start(); }
-  ngOnDestroy(): void { this.svc.stop(); }
-
+  // 폴러 라이프사이클은 shell(FoundationRegistryService)이 소유 — 콘솔은 구독만.
   pillCls(): string { return PILL[this.svc.statusPhase()]; }
 
   badge(id: Tab): string {
