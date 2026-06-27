@@ -12,7 +12,7 @@ spec:
   description: "Foundation — OpenSphere subShell (SDK 표준 골격)"
   image:
     repository: localhost:5000/foundation
-    digest: v11
+    digest: v13
   nav:
     band: "운영 Operate"
     label: "Foundation"

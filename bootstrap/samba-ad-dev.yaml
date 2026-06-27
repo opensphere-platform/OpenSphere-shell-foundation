@@ -1,0 +1,79 @@
+# Foundation 모듈: Samba AD DC — workspace/사원 디렉터리(Active Directory). Keycloak이 LDAP(389)로 federation.
+# nowsci/samba-domain(Fmstrat) — stdout 로깅 + HOSTIP를 downward API(pod IP)로 주입해 K8s 친화. dev 단일노드, privileged.
+# 첫 기동 시 도메인 자동 프로비저닝. ⚠️ pod IP 변경 시 DNS 자기등록 — 단일 장수 pod 운용(dev 수용).
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: samba-data
+  namespace: opensphere-foundation
+  labels: { opensphere.io/foundation-module: samba-ad }
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: standard
+  resources: { requests: { storage: 3Gi } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opensphere-samba
+  namespace: opensphere-foundation
+  labels: { opensphere.io/foundation-module: samba-ad }
+spec:
+  selector: { app: opensphere-samba }
+  ports:
+    - { name: ldap, port: 389, targetPort: 389, protocol: TCP }
+    - { name: ldaps, port: 636, targetPort: 636, protocol: TCP }
+    - { name: kerberos, port: 88, targetPort: 88, protocol: TCP }
+    - { name: dns-tcp, port: 53, targetPort: 53, protocol: TCP }
+    - { name: dns-udp, port: 53, targetPort: 53, protocol: UDP }
+    - { name: smb, port: 445, targetPort: 445, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opensphere-samba
+  namespace: opensphere-foundation
+  labels: { opensphere.io/foundation-module: samba-ad }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: opensphere-samba } }
+  template:
+    metadata: { labels: { app: opensphere-samba } }
+    spec:
+      hostname: dc1
+      containers:
+        - name: samba
+          image: nowsci/samba-domain:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          env:
+            - { name: DOMAIN, value: OPENSPHERE.LOCAL }
+            - { name: DOMAINPASS, value: "OpenSphere2026!" }   # dev — prod override(첫 기동 후 제거 가능)
+            - { name: HOSTIP, valueFrom: { fieldRef: { fieldPath: status.podIP } } }   # K8s: pod IP를 DC IP로
+            - { name: DNSFORWARDER, value: "8.8.8.8" }
+            - { name: NOCOMPLEXITY, value: "true" }
+            - { name: INSECURELDAP, value: "true" }   # 평문 LDAP 389(Keycloak federation, 내부 전용)
+            - { name: JOIN, value: "false" }
+          ports:
+            - { name: ldap, containerPort: 389 }
+            - { name: ldaps, containerPort: 636 }
+            - { name: kerberos, containerPort: 88 }
+            - { name: dns, containerPort: 53 }
+            - { name: smb, containerPort: 445 }
+          readinessProbe:
+            tcpSocket: { port: 389 }
+            initialDelaySeconds: 25
+            periodSeconds: 10
+            failureThreshold: 30
+          resources:
+            requests: { cpu: "150m", memory: "384Mi" }
+            limits: { memory: "768Mi" }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/samba, subPath: lib }
+            - { name: data, mountPath: /etc/samba/external, subPath: etc-external }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: samba-data }

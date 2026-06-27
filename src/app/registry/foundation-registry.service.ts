@@ -4,6 +4,7 @@ import { HostedPlugin, PluginHealth } from './hosted-plugin';
 import { CnpgService } from '../modules/postgres/cnpg.service';
 import { OsService } from '../modules/opensearch/os.service';
 import { RsService } from '../modules/rustfs/rs.service';
+import { KcService, SambaService } from '../modules/identity/identity.services';
 import { PILL, Phase } from '../modules/postgres/cnpg.types';
 
 const DISABLED_KEY = 'fnd.disabled';
@@ -16,6 +17,8 @@ export class FoundationRegistryService {
   private cnpg = inject(CnpgService);
   private os = inject(OsService);
   private rs = inject(RsService);
+  private kc = inject(KcService);
+  private samba = inject(SambaService);
 
   readonly all: HostedPlugin[] = FOUNDATION_PLUGINS;
 
@@ -41,9 +44,23 @@ export class FoundationRegistryService {
 
   // health 어댑터 — 두 이질 서비스를 PluginHealth로 통일. registry가 가리킨 곳에서 읽어 답한다.
   health(p: HostedPlugin): PluginHealth {
-    if (p.healthRef === 'cnpg') { return this.pgHealth(); }
-    if (p.healthRef === 'os') { return this.osHealth(); }
-    return this.rsHealth();
+    switch (p.healthRef) {
+      case 'cnpg': return this.pgHealth();
+      case 'os': return this.osHealth();
+      case 'rustfs': return this.rsHealth();
+      case 'keycloak': return this.wlHealth(this.kc, [{ val: 'PG', lab: 'Database' }, { val: ':8080', lab: 'HTTP' }]);
+      default: return this.wlHealth(this.samba, [{ val: this.samba.domain, lab: 'Realm' }, { val: ':389', lab: 'LDAP' }]);
+    }
+  }
+
+  // Deployment 워크로드(Keycloak·Samba) 공통 health — WorkloadHealth signal 소비.
+  private wlHealth(svc: KcService | SambaService, extra: { val: string | number; lab: string }[]): PluginHealth {
+    const ph = svc.phaseCls();
+    const st = svc.state();
+    return {
+      phase: ph, pill: PILL[ph], state: st, ready: svc.ready(), label: this.healthLabel(ph, st),
+      metrics: [{ val: `${svc.readyN()}/${svc.totalN()}`, lab: 'Replicas Ready' }, ...extra, { val: svc.restarts(), lab: 'Restarts' }],
+    };
   }
 
   private pgHealth(): PluginHealth {
@@ -112,8 +129,8 @@ export class FoundationRegistryService {
   });
 
   // 폴러 라이프사이클 = shell 소유. foundation subShell 마운트/언마운트에 묶임(app.component).
-  start(): void { this.cnpg.start(); this.os.start(); this.rs.start(); }
-  stop(): void { this.cnpg.stop(); this.os.stop(); this.rs.stop(); }
+  start(): void { this.cnpg.start(); this.os.start(); this.rs.start(); this.kc.start(); this.samba.start(); }
+  stop(): void { this.cnpg.stop(); this.os.stop(); this.rs.stop(); this.kc.stop(); this.samba.stop(); }
 }
 
 function shorten(s: string): string { return s ? s.replace('opensphere-pg-', '#') : '—'; }

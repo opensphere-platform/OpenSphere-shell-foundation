@@ -25,4 +25,18 @@ export const FOUNDATION_PLUGINS: HostedPlugin[] = [
     consumePoint: 'opensphere-rustfs.opensphere-foundation.svc:9000',
     healthRef: 'rustfs', view: { module: 'rustfs' },
   },
+  {
+    id: 'keycloak', name: 'Keycloak', icon: 'key', kind: 'plugin', hostRef: 'foundation',
+    capability: 'identity.iam.workspace', capabilityLabel: '신원/SSO (IAM)',
+    desc: 'workspace/사원 IAM·SSO capability · Keycloak. Foundation PostgreSQL 소비 · Samba-AD LDAP federation. (Kanidm 콘솔과 무관)',
+    consumePoint: 'opensphere-keycloak.opensphere-foundation.svc:8080',
+    healthRef: 'keycloak', view: { module: 'keycloak' },
+  },
+  {
+    id: 'samba', name: 'Samba-AD', icon: 'users', kind: 'plugin', hostRef: 'foundation',
+    capability: 'identity.directory.ad', capabilityLabel: '디렉터리 (AD/LDAP)',
+    desc: 'workspace/사원 디렉터리 capability · Samba Active Directory DC. Keycloak이 LDAP(389)로 federation.',
+    consumePoint: 'opensphere-samba.opensphere-foundation.svc:389',
+    healthRef: 'samba', view: { module: 'samba' },
+  },
 ];

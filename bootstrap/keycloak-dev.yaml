@@ -1,0 +1,69 @@
+# Foundation 모듈: Keycloak — workspace/사원 IAM (dev). DB는 Foundation PostgreSQL 소비(백킹서비스 소비 모델).
+# Kanidm과 무관(Kanidm=콘솔관리자 별개 영역). keycloak DB는 CNPG Database CR로 선언형 발급(owner=appuser).
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: keycloak
+  namespace: opensphere-foundation
+  labels: { opensphere.io/foundation-module: keycloak }
+spec:
+  cluster: { name: opensphere-pg }
+  name: keycloak
+  owner: appuser          # 기존 initdb role 재사용(전용 role/password mint 불요 — Phase 3 컨트롤러 전까지)
+  ensure: present
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opensphere-keycloak
+  namespace: opensphere-foundation
+  labels: { opensphere.io/foundation-module: keycloak }
+spec:
+  selector: { app: opensphere-keycloak }
+  ports:
+    - { name: http, port: 8080, targetPort: 8080 }
+    - { name: mgmt, port: 9000, targetPort: 9000 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opensphere-keycloak
+  namespace: opensphere-foundation
+  labels: { opensphere.io/foundation-module: keycloak }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: opensphere-keycloak } }
+  template:
+    metadata: { labels: { app: opensphere-keycloak } }
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.0
+          args: ["start-dev"]
+          env:
+            - { name: KC_DB, value: postgres }
+            - { name: KC_DB_URL, value: "jdbc:postgresql://opensphere-pg-rw.opensphere-foundation.svc:5432/keycloak" }
+            - { name: KC_DB_USERNAME, valueFrom: { secretKeyRef: { name: opensphere-pg-app, key: username } } }
+            - { name: KC_DB_PASSWORD, valueFrom: { secretKeyRef: { name: opensphere-pg-app, key: password } } }
+            - { name: KC_BOOTSTRAP_ADMIN_USERNAME, value: admin }
+            - { name: KC_BOOTSTRAP_ADMIN_PASSWORD, value: admin }   # dev only — prod override
+            - { name: KC_HOSTNAME_STRICT, value: "false" }
+            - { name: KC_HTTP_ENABLED, value: "true" }
+            - { name: KC_HEALTH_ENABLED, value: "true" }
+            - { name: KC_PROXY_HEADERS, value: xforwarded }
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: mgmt, containerPort: 9000 }
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 9000 }
+            initialDelaySeconds: 25
+            periodSeconds: 10
+            failureThreshold: 36
+          livenessProbe:
+            httpGet: { path: /health/live, port: 9000 }
+            initialDelaySeconds: 90
+            periodSeconds: 20
+          resources:
+            requests: { cpu: "250m", memory: "768Mi" }
+            limits: { memory: "2Gi" }   # KC26 start-dev augmentation 단계가 메모리 집약 — 1Gi는 OOM

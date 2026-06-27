@@ -4,6 +4,8 @@ import { ClarityModule } from '@clr/angular';
 import { PostgresComponent } from './modules/postgres/postgres.component';
 import { OpenSearchComponent } from './modules/opensearch/opensearch.component';
 import { RustfsComponent } from './modules/rustfs/rustfs.component';
+import { KeycloakComponent } from './modules/identity/keycloak.component';
+import { SambaComponent } from './modules/identity/samba.component';
 import { FoundationOverviewComponent } from './foundation/overview.component';
 import { FoundationAdminComponent } from './foundation/plugins-admin.component';
 import { FoundationRegistryService } from './registry/foundation-registry.service';
@@ -14,7 +16,7 @@ import { ViewRouter } from './view-router';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, ClarityModule, PostgresComponent, OpenSearchComponent, RustfsComponent, FoundationOverviewComponent, FoundationAdminComponent],
+  imports: [CommonModule, ClarityModule, PostgresComponent, OpenSearchComponent, RustfsComponent, KeycloakComponent, SambaComponent, FoundationOverviewComponent, FoundationAdminComponent],
   encapsulation: ViewEncapsulation.ShadowDom,
   styleUrls: ['./app.component.css'],
   template: `
@@ -38,6 +40,8 @@ import { ViewRouter } from './view-router';
           <svg *ngIf="p.icon === 'db'" viewBox="0 0 24 24" class="os-tree-ic" fill="none" stroke="currentColor" stroke-width="1.6" clrVerticalNavIcon><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
           <svg *ngIf="p.icon === 'search'" viewBox="0 0 24 24" class="os-tree-ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" clrVerticalNavIcon><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
           <svg *ngIf="p.icon === 'storage'" viewBox="0 0 24 24" class="os-tree-ic" fill="none" stroke="currentColor" stroke-width="1.6" clrVerticalNavIcon><rect x="3" y="4.5" width="18" height="6" rx="1"/><rect x="3" y="13" width="18" height="6" rx="1"/><circle cx="7" cy="7.5" r="0.9" fill="currentColor" stroke="none"/><circle cx="7" cy="16" r="0.9" fill="currentColor" stroke="none"/></svg>
+          <svg *ngIf="p.icon === 'key'" viewBox="0 0 24 24" class="os-tree-ic" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" clrVerticalNavIcon><circle cx="7.5" cy="15.5" r="3.5"/><path d="M10 13l8-8"/><path d="M15.5 5.5h3v3"/><path d="M14 9l2 2"/></svg>
+          <svg *ngIf="p.icon === 'users'" viewBox="0 0 24 24" class="os-tree-ic" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" clrVerticalNavIcon><circle cx="9" cy="8" r="3"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><circle cx="17" cy="9" r="2.2"/><path d="M16 14.2c2.8.2 4.5 2 4.5 4.8"/></svg>
           {{ p.name }}
         </a>
 
@@ -50,6 +54,8 @@ import { ViewRouter } from './view-router';
         <app-postgres *ngIf="vr.module() === 'postgres' && reg.isEnabled('postgres')"></app-postgres>
         <app-opensearch *ngIf="vr.module() === 'opensearch' && reg.isEnabled('opensearch')"></app-opensearch>
         <app-rustfs *ngIf="vr.module() === 'rustfs' && reg.isEnabled('rustfs')"></app-rustfs>
+        <app-keycloak *ngIf="vr.module() === 'keycloak' && reg.isEnabled('keycloak')"></app-keycloak>
+        <app-samba *ngIf="vr.module() === 'samba' && reg.isEnabled('samba')"></app-samba>
         <clr-alert *ngIf="disabledModule()" clrAlertType="warning" [clrAlertClosable]="false">
           <clr-alert-item><span class="alert-text">이 plugin은 비활성 상태입니다 — Plugins 관리에서 활성화하세요.</span></clr-alert-item>
         </clr-alert>
@@ -66,6 +72,6 @@ export class AppComponent implements OnInit, OnDestroy {
 
   disabledModule(): boolean {
     const m = this.vr.module();
-    return (m === 'postgres' || m === 'opensearch' || m === 'rustfs') && !this.reg.isEnabled(m);
+    return ['postgres', 'opensearch', 'rustfs', 'keycloak', 'samba'].includes(m) && !this.reg.isEnabled(m);
   }
 }
