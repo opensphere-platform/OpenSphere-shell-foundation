@@ -1,0 +1,37 @@
+# Foundation 모듈: OpenSearch — opensearch-k8s-operator 단일노드 공유 클러스터 (dev).
+# operator: helm install opensearch-operator opensearch-operator/opensearch-operator -n opensearch-operator-system (cert-manager 필요)
+# ⚠️ JVM heap 명시 pin(-Xms512m -Xmx512m) — 미설정 시 컨테이너 메모리 초과 OOM(가장 빈번한 dev 실패).
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+metadata:
+  name: opensphere-search
+  namespace: opensphere-foundation
+  labels:
+    opensphere.io/foundation-module: opensearch
+spec:
+  general:
+    serviceName: opensphere-search
+    version: "2.17.0"
+    setVMMaxMapCount: true
+  dashboards:
+    enable: false
+  nodePools:
+    - component: nodes
+      replicas: 1
+      diskSize: "5Gi"
+      jvm: "-Xms512m -Xmx512m"
+      roles:
+        - "cluster_manager"
+        - "data"
+        - "ingest"
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
+        limits:
+          memory: "2Gi"
+      persistence:
+        pvc:
+          storageClass: "standard"
+          accessModes:
+            - ReadWriteOnce

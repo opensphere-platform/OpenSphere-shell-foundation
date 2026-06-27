@@ -1,0 +1,31 @@
+# Foundation 모듈: PostgreSQL — CloudNativePG 단일노드 공유 인스턴스 (dev).
+# operator: helm install cnpg cnpg/cloudnative-pg -n cnpg-system
+# CNPG가 app DB/user + connection Secret(opensphere-pg-app) 자동 생성. imageName 생략 = operator 기본 PG 이미지.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: opensphere-pg
+  namespace: opensphere-foundation
+  labels:
+    opensphere.io/foundation-module: postgres
+spec:
+  instances: 1
+  primaryUpdateStrategy: unsupervised
+  storage:
+    size: 5Gi
+    storageClass: standard
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: "128MB"
+  bootstrap:
+    initdb:
+      database: appdb
+      owner: appuser
