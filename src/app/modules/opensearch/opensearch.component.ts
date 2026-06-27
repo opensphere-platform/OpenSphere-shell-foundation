@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject } from '@angular/core';
 import { OsService } from './os.service';
 import { PILL } from './os.types';
+import { ViewRouter } from '../../view-router';
 import { OsOverviewTab } from './tabs/os-overview.tab';
 import { OsNodesTab } from './tabs/os-nodes.tab';
 import { OsIndicesTab } from './tabs/os-indices.tab';
@@ -38,13 +39,13 @@ const TABS: { id: Tab; label: string }[] = [
     <p class="muted">공용 검색/인덱스 capability · OpenSearch (single-node dev) · {{ svc.endpoint }}<span *ngIf="svc.lastSync()"> · {{ svc.lastSync() }}</span></p>
 
     <div class="tabs" role="tablist">
-      <button class="tab" *ngFor="let t of tabs" [class.on]="tab() === t.id" (click)="tab.set(t.id)"
+      <button class="tab" *ngFor="let t of tabs" [class.on]="tab() === t.id" (click)="vr.setTab(t.id)"
               role="tab" [attr.aria-selected]="tab() === t.id">
         {{ t.label }}<span class="badge-mod" *ngIf="badge(t.id)">{{ badge(t.id) }}</span>
       </button>
     </div>
 
-    <os-overview *ngIf="tab() === 'overview'" (jump)="tab.set($any($event))"></os-overview>
+    <os-overview *ngIf="tab() === 'overview'" (jump)="vr.setTab($event)"></os-overview>
     <os-nodes *ngIf="tab() === 'nodes'"></os-nodes>
     <os-indices *ngIf="tab() === 'indices'"></os-indices>
     <os-shards *ngIf="tab() === 'shards'"></os-shards>
@@ -55,8 +56,12 @@ const TABS: { id: Tab; label: string }[] = [
 })
 export class OpenSearchComponent implements OnInit, OnDestroy {
   readonly svc = inject(OsService);
+  readonly vr = inject(ViewRouter);
   readonly tabs = TABS;
-  readonly tab = signal<Tab>('overview');
+  readonly tab = computed<Tab>(() => {
+    const t = this.vr.tab();
+    return this.tabs.some((x) => x.id === t) ? (t as Tab) : 'overview';
+  });
 
   ngOnInit(): void { this.svc.start(); }
   ngOnDestroy(): void { this.svc.stop(); }

@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, ViewEncapsulation, signal } from '@angular/core';
+import { Component, ViewEncapsulation, inject } from '@angular/core';
 import { PostgresComponent } from './modules/postgres/postgres.component';
 import { OpenSearchComponent } from './modules/opensearch/opensearch.component';
+import { ViewRouter } from './view-router';
 
 // Foundation subShell = 호스트(§2.7). 좌측 트리에 귀속 plugin 모듈, 본문에 선택 모듈 마운트.
 // 모듈(PostgreSQL·OpenSearch)은 foundation shell에 귀속된 plugin(host.mountChild 자체 구현 = 컴포넌트 마운트).
@@ -114,8 +115,8 @@ const MODULES: Mod[] = [
         <div class="nav-h">Foundation</div>
         <div class="nav-d">플랫폼 백킹서비스</div>
         <div class="nav-g">모듈 · Plugins</div>
-        <a class="nav-i" *ngFor="let m of modules" [class.on]="sel() === m.id"
-           role="button" tabindex="0" (click)="sel.set(m.id)" (keydown.enter)="sel.set(m.id)">
+        <a class="nav-i" *ngFor="let m of modules" [class.on]="vr.module() === m.id"
+           role="button" tabindex="0" (click)="vr.setModule(m.id)" (keydown.enter)="vr.setModule(m.id)">
           <span class="ni-ico">
             <svg *ngIf="m.icon === 'db'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
             <svg *ngIf="m.icon === 'search'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
@@ -124,13 +125,13 @@ const MODULES: Mod[] = [
         <div class="nav-foot">§2.7 — 각 모듈은 foundation shell에 귀속된 plugin (hostRef=foundation)</div>
       </aside>
       <main class="body">
-        <app-postgres *ngIf="sel() === 'postgres'"></app-postgres>
-        <app-opensearch *ngIf="sel() === 'opensearch'"></app-opensearch>
+        <app-postgres *ngIf="vr.module() === 'postgres'"></app-postgres>
+        <app-opensearch *ngIf="vr.module() === 'opensearch'"></app-opensearch>
       </main>
     </div>
   `,
 })
 export class AppComponent {
   readonly modules = MODULES;
-  readonly sel = signal<'postgres' | 'opensearch'>('postgres');
+  readonly vr = inject(ViewRouter);
 }

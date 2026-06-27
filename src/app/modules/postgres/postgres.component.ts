@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject } from '@angular/core';
 import { CnpgService } from './cnpg.service';
 import { PILL } from './cnpg.types';
+import { ViewRouter } from '../../view-router';
 import { PgOverviewTab } from './tabs/pg-overview.tab';
 import { PgTopologyTab } from './tabs/pg-topology.tab';
 import { PgConfigTab } from './tabs/pg-config.tab';
@@ -38,13 +39,13 @@ const TABS: { id: Tab; label: string }[] = [
     <p class="muted">공용 관계형 DB capability · CloudNativePG · {{ svc.name }} · ns {{ svc.ns }}<span *ngIf="svc.lastSync()"> · {{ svc.lastSync() }}</span></p>
 
     <div class="tabs" role="tablist">
-      <button class="tab" *ngFor="let t of tabs" [class.on]="tab() === t.id" (click)="tab.set(t.id)"
+      <button class="tab" *ngFor="let t of tabs" [class.on]="tab() === t.id" (click)="vr.setTab(t.id)"
               role="tab" [attr.aria-selected]="tab() === t.id">
         {{ t.label }}<span class="badge-mod" *ngIf="badge(t.id)">{{ badge(t.id) }}</span>
       </button>
     </div>
 
-    <pg-overview *ngIf="tab() === 'overview'" (jump)="tab.set($any($event))"></pg-overview>
+    <pg-overview *ngIf="tab() === 'overview'" (jump)="vr.setTab($event)"></pg-overview>
     <pg-topology *ngIf="tab() === 'topology'"></pg-topology>
     <pg-config *ngIf="tab() === 'config'"></pg-config>
     <pg-databases *ngIf="tab() === 'databases'"></pg-databases>
@@ -55,8 +56,12 @@ const TABS: { id: Tab; label: string }[] = [
 })
 export class PostgresComponent implements OnInit, OnDestroy {
   readonly svc = inject(CnpgService);
+  readonly vr = inject(ViewRouter);
   readonly tabs = TABS;
-  readonly tab = signal<Tab>('overview');
+  readonly tab = computed<Tab>(() => {
+    const t = this.vr.tab();
+    return this.tabs.some((x) => x.id === t) ? (t as Tab) : 'overview';
+  });
 
   ngOnInit(): void { this.svc.start(); }
   ngOnDestroy(): void { this.svc.stop(); }
