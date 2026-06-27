@@ -1,0 +1,17 @@
+# Phase 3 라이브 검증용 샘플 — Help Center 서비스가 전용 DB를 선언으로 요청.
+# 컨트롤러: managed.roles[svc_helpcenter] SSA → Database CR(helpcenter, owner=svc_helpcenter, ext=pg_trgm) SSA
+#           → password Secret mint → connection Secret 작성 → status.phase=Ready.
+apiVersion: provisioning.opensphere.io/v1alpha1
+kind: PostgresClaim
+metadata:
+  name: helpcenter
+  namespace: default            # 소비 서비스의 ns
+spec:
+  database: helpcenter
+  owner: svc_helpcenter         # = DB owner role (= service id)
+  privileges: owner             # v1alpha1: owner만 완전 선언형 (readwrite/readonly는 후속)
+  clusterRef: opensphere-pg     # 공유 CNPG Cluster (ns opensphere-foundation)
+  extensions:
+    - { name: pg_trgm }         # CNPG Database CR이 선언형 CREATE EXTENSION
+  connectionSecret:
+    format: keys+uri

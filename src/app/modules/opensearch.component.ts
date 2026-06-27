@@ -1,18 +1,25 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
 import { apiBase, FND_NS } from '../api-base';
+import { ClaimsListComponent } from './claims-list.component';
 
 // Foundation 호스팅 plugin 모듈 — OpenSearch 관리 표면(§2.7: foundation shell에 귀속).
 // 데이터=server.js /api/opensearch 읽기 프록시(_cluster/health·_cat/indices·_cat/nodes).
 @Component({
   selector: 'app-opensearch',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ClaimsListComponent],
   template: `
     <div class="mod-h">
       <h2>OpenSearch <span class="tag tag-plugin">plugin</span></h2>
-      <button class="rbtn" (click)="load()">새로고침</button>
+      <button class="rbtn" (click)="load()" *ngIf="view() === 'overview'">새로고침</button>
     </div>
+    <div class="tabs">
+      <button class="tab" [class.on]="view() === 'overview'" (click)="view.set('overview')">Overview</button>
+      <button class="tab" [class.on]="view() === 'claims'" (click)="view.set('claims')">Claims</button>
+    </div>
+
+    <ng-container *ngIf="view() === 'overview'">
     <p class="muted">공용 검색/인덱스 capability · single-node (dev) · ns {{ ns }}</p>
 
     <div class="cards">
@@ -64,10 +71,18 @@ import { apiBase, FND_NS } from '../api-base';
       </tbody>
     </table>
     <p class="muted">앱별 인덱스는 <code>OpenSearchIndexClaim</code> 선언으로 발급 예정 (Phase 3). Help Center 종합검색의 백본.</p>
+    </ng-container>
+
+    <ng-container *ngIf="view() === 'claims'">
+      <div class="claim-deny">ⓘ OpenSearch write-path는 <b>operator 승격 후 활성</b>됩니다. 현 plain single-node엔 선언형 인덱스 CRD가 없어(ADR-005), MVP는 CRD·목록·Accept-stub만. 인덱스는 앱이 클라이언트로 lazy-create(auto-create-index ON).</div>
+      <div class="sec-h">OpenSearchIndexClaims</div>
+      <app-claims-list kind="os" plural="opensearchindexclaims" primaryLabel="인덱스" detailLabel="endpoint"></app-claims-list>
+    </ng-container>
   `,
 })
 export class OpenSearchComponent implements OnInit {
   readonly ns = FND_NS;
+  readonly view = signal<'overview' | 'claims'>('overview');
   readonly health = signal<any>(null);
   readonly indices = signal<any[]>([]);
   readonly nodes = signal<any[]>([]);

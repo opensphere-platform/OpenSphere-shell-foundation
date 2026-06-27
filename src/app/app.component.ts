@@ -52,6 +52,21 @@ const MODULES: Mod[] = [
     .pill.os-yellow { background:#fff3bf; color:#9a7500; }
     .pill.bad, .pill.os-red { background:#ffe3e3; color:#c0392b; }
     code { background:#f1f3f6; padding:.08rem .35rem; border-radius:4px; font-size:.8rem; }
+    /* ── Phase 3 Claims UI ── */
+    .tabs { display:flex; gap:.3rem; border-bottom:1px solid #dde2e7; margin:.2rem 0 1rem; }
+    .tab { border:none; background:none; padding:.45rem .9rem; cursor:pointer; font-size:.86rem; color:#6b7480; border-bottom:2px solid transparent; margin-bottom:-1px; }
+    .tab.on { color:#0d6e6e; border-bottom-color:#0d6e6e; font-weight:600; }
+    .claims-bar { display:flex; align-items:center; gap:.6rem; margin-bottom:.5rem; }
+    .claims-bar .rbtn { margin-left:auto; }
+    .claim-deny { background:#fff8e6; border:1px solid #ffe08a; border-radius:8px; padding:.7rem .9rem; font-size:.84rem; color:#6a5400; line-height:1.5; }
+    .claim-deny .muted { color:#8a7a3a; }
+    .yaml-prev { background:#0f2230; color:#cfe0e6; border-radius:8px; padding:.8rem 1rem; font-size:.78rem; overflow-x:auto; margin-top:.6rem; white-space:pre; }
+    .nc { background:#fff; border-radius:10px; padding:1rem 1.2rem; box-shadow:0 3px 12px rgba(20,30,60,.06); margin-bottom:.8rem; }
+    .nc-row { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:.7rem; }
+    .nc-row label { display:flex; flex-direction:column; font-size:.74rem; color:#6b7480; gap:.25rem; flex:1; min-width:180px; }
+    .nc-row input { border:1px solid #ccd2d8; border-radius:6px; padding:.4rem .55rem; font-size:.86rem; font-family:monospace; }
+    .nc-act { display:flex; align-items:center; gap:.6rem; }
+    .rbtn.primary { background:#0d6e6e; color:#fff; border-color:#0d6e6e; }
     @media (max-width:760px){ .nav{ width:160px; } .cards{ grid-template-columns:1fr; } }
   `],
   template: `

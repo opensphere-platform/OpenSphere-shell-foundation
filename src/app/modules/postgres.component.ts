@@ -1,18 +1,26 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
 import { apiBase, FND_NS } from '../api-base';
+import { ClaimsListComponent } from './claims-list.component';
+import { NewClaimFormComponent } from './new-claim-form.component';
 
 // Foundation 호스팅 plugin 모듈 — PostgreSQL(CloudNativePG) 관리 표면(§2.7: foundation shell에 귀속).
 // 데이터=server.js /api/k8s 프록시(CNPG Cluster CR + pods). 읽기 전용 운영 표면(쓰기·DB생성은 PostgresClaim, Phase 3).
 @Component({
   selector: 'app-postgres',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ClaimsListComponent, NewClaimFormComponent],
   template: `
     <div class="mod-h">
       <h2>PostgreSQL <span class="tag tag-plugin">plugin</span></h2>
-      <button class="rbtn" (click)="load()">새로고침</button>
+      <button class="rbtn" (click)="load()" *ngIf="view() === 'overview'">새로고침</button>
     </div>
+    <div class="tabs">
+      <button class="tab" [class.on]="view() === 'overview'" (click)="view.set('overview')">Overview</button>
+      <button class="tab" [class.on]="view() === 'claims'" (click)="view.set('claims')">Claims</button>
+    </div>
+
+    <ng-container *ngIf="view() === 'overview'">
     <p class="muted">공용 관계형 DB capability · CloudNativePG · ns {{ ns }}</p>
 
     <div class="cards">
@@ -51,10 +59,20 @@ import { apiBase, FND_NS } from '../api-base';
     </table>
     <p class="muted" *ngIf="loaded() && !cluster()">ⓘ 상태·Primary는 Pod에서 도출. CNPG Cluster CR 상세(image·backup·storage)는 SA에 <code>postgresql.cnpg.io</code> read 부여 시 표시 (rbac-foundation-read.yaml).</p>
     <p class="muted">앱별 DB는 <code>PostgresClaim</code> 선언으로 발급됩니다 (Phase 3 — 선언형 write-path, execInPod 금지).</p>
+    </ng-container>
+
+    <ng-container *ngIf="view() === 'claims'">
+      <p class="muted">PostgresClaim — 선언만 하면 전용 DB·role·연결 Secret 발급 (provisioning.opensphere.io/v1alpha1). CNPG managed-roles + Database CR로 operator가 선언형 수행(execInPod 0).</p>
+      <div class="sec-h">New Claim</div>
+      <app-new-claim-form kind="pg" (created)="pgList.load()"></app-new-claim-form>
+      <div class="sec-h">PostgresClaims</div>
+      <app-claims-list #pgList kind="pg" plural="postgresclaims" primaryLabel="DB / owner"></app-claims-list>
+    </ng-container>
   `,
 })
 export class PostgresComponent implements OnInit {
   readonly ns = FND_NS;
+  readonly view = signal<'overview' | 'claims'>('overview');
   readonly cluster = signal<any>(null);
   readonly pods = signal<any[]>([]);
   readonly loaded = signal(false);
