@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, ViewEncapsulation, signal } from '@angular/core';
 import { PostgresComponent } from './modules/postgres/postgres.component';
-import { OpenSearchComponent } from './modules/opensearch.component';
+import { OpenSearchComponent } from './modules/opensearch/opensearch.component';
 
 // Foundation subShell = 호스트(§2.7). 좌측 트리에 귀속 plugin 모듈, 본문에 선택 모듈 마운트.
 // 모듈(PostgreSQL·OpenSearch)은 foundation shell에 귀속된 plugin(host.mountChild 자체 구현 = 컴포넌트 마운트).
