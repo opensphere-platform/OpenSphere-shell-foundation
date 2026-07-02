@@ -1,11 +1,12 @@
 import { Injectable, signal } from '@angular/core';
 
-// Foundation 콘솔의 딥링크 주소 — mainShell은 pathname(/p/foundation)만 매칭하므로 하위경로 위임이 안 됨.
-// → subShell이 foundation 전용 쿼리 파라미터 ?fview=<module>.<tab> 를 소유해 각 메뉴/탭에 개별 주소를 부여.
-// 예: /p/foundation?fview=postgres.config · /p/foundation?fview=opensearch.indices
-// 북마크·공유·새로고침 위치유지·뒤로가기(popstate) 지원. 다른 subShell과 충돌 안 하도록 'fview'로 네임스페이스.
-const PARAM = 'fview';
-
+// Foundation 딥링크 — 플랫폼 표준(shell-template 원본)과 동일: **경로 세그먼트 + pushState/popstate**.
+// 콘솔 pluginHostMatcher가 `/p/foundation` 아래 임의 서브패스를 전부 위임하므로, 서브패스가 바뀌어도
+// id(foundation)가 그대로면 재마운트되지 않는다. 주소 형태:
+//   · 모듈:      /p/foundation/<module>            (예: /p/foundation/postgres)
+//   · 모듈+탭:   /p/foundation/<module>/<tab>       (예: /p/foundation/postgres/config)
+//   · overview:  /p/foundation                      (fragment 없음)
+// (구 `?fview=<module>.<tab>` 쿼리 방식 폐기 — D-14. select()/syncUrl() 한 곳만 URL을 건드린다.)
 @Injectable({ providedIn: 'root' })
 export class ViewRouter {
   readonly module = signal<string>('overview');
@@ -16,35 +17,41 @@ export class ViewRouter {
     try { window.addEventListener('popstate', () => this.read()); } catch { /* noop */ }
   }
 
+  /** URL 경로 → module/tab 복원(북마크·새로고침·뒤로가기). 'foundation' 세그먼트 뒤를 취한다. */
   private read(): void {
-    let v = '';
-    try { v = new URLSearchParams(location.search).get(PARAM) || ''; } catch { /* noop */ }
-    const [m, t] = (v || 'overview').split('.');
-    this.module.set(m || 'overview');
-    this.tab.set(t || 'overview');
+    try {
+      const parts = location.pathname.split('/').filter(Boolean);
+      const i = parts.indexOf('foundation');
+      const m = i >= 0 ? (parts[i + 1] ?? '') : '';
+      const t = i >= 0 ? (parts[i + 2] ?? '') : '';
+      this.module.set(m || 'overview');
+      this.tab.set(t || 'overview');
+    } catch { /* noop */ }
   }
 
   setModule(m: string): void {
     if (this.module() === m) { return; }
     this.module.set(m);
     this.tab.set('overview');
-    this.write(true);
+    this.write();
   }
 
   setTab(t: string): void {
     if (this.tab() === t) { return; }
     this.tab.set(t);
-    this.write(true);
+    this.write();
   }
 
-  private write(push: boolean): void {
+  /** 경로 세그먼트로 pushState 갱신 — 콘솔 라우터 재평가돼도 id 동일이라 재마운트 없음. */
+  private write(): void {
     try {
-      const u = new URL(location.href);
-      const hasTabs = this.module() === 'postgres' || this.module() === 'opensearch';
-      u.searchParams.set(PARAM, hasTabs ? `${this.module()}.${this.tab()}` : this.module());
-      const target = u.pathname + u.search + u.hash;
-      if (push) { history.pushState(history.state, '', target); }
-      else { history.replaceState(history.state, '', target); }
+      const m = this.module();
+      const hasTabs = m === 'postgres' || m === 'opensearch';
+      const t = this.tab();
+      let next = '/p/foundation';
+      if (m && m !== 'overview') next += hasTabs && t && t !== 'overview' ? `/${m}/${t}` : `/${m}`;
+      const target = next + location.search + location.hash;
+      if (location.pathname !== next) history.pushState(history.state, '', target);
     } catch { /* noop */ }
   }
 }

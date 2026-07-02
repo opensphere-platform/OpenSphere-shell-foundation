@@ -6,29 +6,20 @@
 @import '@clr/ui/clr-ui.min.css';
 
 :host {
-  /* 브랜드/팔레트 (cluster-manager와 동일) */
-  --os-brand-900: #0b1530;
-  --os-brand-700: #16224d;
+  /* 라이트 디자인 토큰(os-* 유틸이 소비). 크롬(내비·breadcrumb·레이아웃)은 app.component.ts 인라인 styles가 소유. */
   --os-brand-500: #4c6fff;
   --os-brand-300: #8fa6ff;
   --os-accent:    #00bfa5;
   --os-surface:   #f6f7fb;
-  --os-ink:       #1b2438;
+  --os-ink:       #161616;
   --os-muted:     #667193;
-  --os-border:    #d4d8e0;
+  --os-border:    #e0e0e0;
   --os-bg:        #ffffff;
   --os-bg-subtle: #fafbfd;
-  --os-text-sec:  #4a5568;
+  --os-text-sec:  #525252;
   --os-success:   #2ecc71;
   --os-warn:      #e67e22;
   --os-danger:    #c21d00;
-
-  /* Clarity 토큰 → shadow root 안 nav 다크 테마 + 브랜드 버튼/링크 */
-  --clr-vertical-nav-bg-color: #101a38;
-  --clr-vertical-nav-item-color: #c7d0e8;
-  --clr-vertical-nav-item-active-color: #ffffff;
-  --clr-vertical-nav-item-active-bg-color: rgba(76, 111, 255, 0.22);
-  --clr-vertical-nav-icon-active-color: var(--os-brand-300);
   --clr-btn-primary-bg-color: var(--os-brand-500);
   --clr-btn-primary-hover-bg-color: #3a5af0;
   --clr-link-color: var(--os-brand-500);
@@ -36,9 +27,9 @@
 
   display: block;
   height: 100%;
-  /* 셸 상속 누수 차단 → Clarity 기본 */
+  /* 셸 상속 누수 차단 → Clarity 기본 타이포 고정(shell-template와 동일 폰트 스택) */
   line-height: 1.428571429;
-  font-family: Metropolis, 'Avenir Next', 'Helvetica Neue', Arial, sans-serif;
+  font-family: "IBM Plex Sans", "IBM Plex Sans KR", Metropolis, 'Avenir Next', 'Helvetica Neue', Arial, sans-serif;
   font-size: 0.875rem;
   font-weight: 400;
   letter-spacing: normal;
@@ -46,25 +37,8 @@
   color: var(--os-ink);
 }
 
-/* ── 레이아웃: 좌 clr-vertical-nav + 우 콘텐츠 ── */
-.os-shell { display: flex; height: 100%; min-height: 100%; }
-.os-sidebar-nav { flex: 0 0 232px; min-width: 0; height: 100%; overflow-y: auto; }
-.os-content { flex: 1 1 auto; padding: 16px 22px; overflow: auto; min-width: 0; }
-
-/* nav 브랜드 헤더 + 비접이식 밴드 라벨 [예외 #3 — clr-vertical-nav-group은 접이식이라 용도 불일치] */
-.os-brand { padding: 11px 16px 4px; font-size: 1rem; font-weight: 600; color: #fff; background: var(--clr-vertical-nav-bg-color, #101a38); }
-.os-brand .os-brand-sub { display: block; font-size: 0.66rem; font-weight: 400; color: #7fa6b3; padding-bottom: 7px; }
-.os-band-label { display: block; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.07em; color: #5f8593; padding: 10px 16px 3px; background: var(--clr-vertical-nav-bg-color, #101a38); }
-.os-nav-foot { font-size: 0.62rem; color: #5f8593; line-height: 1.45; padding: 14px 16px; background: var(--clr-vertical-nav-bg-color, #101a38); }
-.os-tree-ic { width: 16px; height: 16px; fill: currentColor; flex: 0 0 auto; opacity: 0.85; }
-clr-vertical-nav-group-children, .nav-group-children, .nav-group-content { background: transparent !important; }
-a[clrVerticalNavLink].active, a.nav-link.active {
-  color: var(--clr-vertical-nav-item-active-color, #fff) !important;
-  background: var(--clr-vertical-nav-item-active-bg-color, rgba(76,111,255,0.22)) !important;
-}
-
 /* ── os-* 표현 유틸 [예외 #4 — Clarity 미제공: muted/mono/section/metric/kv] ── */
-.os-h2 { margin: 0; font-weight: 400; color: var(--os-text-sec); }
+.os-h2 { margin: 0; font-size: 1.15rem; font-weight: 400; color: var(--os-text-sec); }
 .os-title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .os-sub { color: var(--os-muted); font-size: 0.8rem; margin: 0 0 12px; }
 .os-muted { color: var(--os-muted); }
