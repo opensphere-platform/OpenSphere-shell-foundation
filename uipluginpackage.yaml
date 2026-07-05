@@ -1,5 +1,6 @@
 # Foundation — OpenSphere subShell (SDK 표준 빈 골격). _skeleton에서 인스턴스화.
-# 로컬: image=localhost:5000/foundation:dev (태그 pull). manifest.sha256는 서명 핀 — 서명 시 자동 갱신(빈 골격은 미서명).
+# manifest.sha256는 서명 핀 — 서명 시 자동 갱신.
+# 감사 시정 S1(2026-07-06): image.digest는 sha256 필수(태그 금지, CRD pattern + controller InvalidDigest 이중 강제).
 apiVersion: plugins.opensphere.io/v1alpha1
 kind: UIPluginPackage
 metadata:
@@ -11,8 +12,8 @@ spec:
   version: 0.1.0
   description: "Foundation — OpenSphere subShell (SDK 표준 골격)"
   image:
-    repository: localhost:5000/foundation
-    digest: v13
+    repository: ghcr.io/opensphere-platform/foundation
+    digest: sha256:46284782a12a5e270a02d04ab7503e3e205b0f6fede3e4b7e350c8ad2775286d  # v68
   nav:
     band: "운영 Operate"
     label: "Foundation"

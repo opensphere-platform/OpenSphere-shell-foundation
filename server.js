@@ -9,6 +9,8 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer, WebSocket } = require('ws');
 const COOKIE = 'osng_token'; // 브라우저 WS는 커스텀 헤더를 못 실음 → 신원 토큰을 HttpOnly 쿠키로 전달
+// ⚠️ 'bearer' 쿠키는 콘솔 id_token이 아님(Kanidm UI 세션 등 별개 토큰, iss/aud 없음) — 읽지 말 것.
+//    신원 전달 정본 = 셸 전역 __OS_AUTH__.token() → x-os-id-token 헤더(콘솔 auth.service.ts 계약, AI Hub 동일).
 function tokenFromCookie(cookieHeader) {
   if (!cookieHeader) return null;
   for (const part of cookieHeader.split(';')) {
@@ -28,9 +30,12 @@ const tok = () => fs.readFileSync(`${SA}/token`, 'utf8').trim();
 // ── 쓰기 인가: 호출자 토큰을 검증 → Impersonate-User (SA 광범위 write 금지) ──
 // Kanidm 콘솔 id_token(ES256) 전용 — cutover 완료, 레거시 Keycloak RS256 dual-accept 경로는 제거됨.
 const { createPublicKey, verify: cryptoVerify } = require('crypto');
-// Kanidm 콘솔 IdP — split-horizon: 토큰 iss는 브라우저값(localhost:8444), JWKS는 in-cluster svc.
-const KANIDM_ISS = process.env.KANIDM_ISS || 'https://localhost:8444/oauth2/openid/opensphere-console';
-const KANIDM_JWKS_URL = process.env.KANIDM_JWKS_URL || 'https://kanidm.opensphere-console-auth.svc:8443/oauth2/openid/opensphere-console/public_key.jwk';
+// Kanidm 콘솔 IdP — split-horizon: 토큰 iss는 브라우저값(auth.console...), JWKS는 in-cluster svc.
+// ⚠️ JWKS는 반드시 kanidm-core(진짜 kanidmd)에서 — 'kanidm' svc는 BFF(opensphere-auth)를 가리켜 다른 키를 반환한다.
+//    인증서 SAN에 kanidm-core명이 없어 SNI(servername)를 SAN에 있는 이름으로 맞춘다(opensphere-auth 배포와 동일 트릭).
+const KANIDM_ISS = process.env.KANIDM_ISS || 'https://auth.console.opensphere.dev/oauth2/openid/opensphere-console';
+const KANIDM_JWKS_URL = process.env.KANIDM_JWKS_URL || 'https://kanidm-core.opensphere-console-auth.svc:8443/oauth2/openid/opensphere-console/public_key.jwk';
+const KANIDM_SNI = process.env.KANIDM_SNI || 'kanidm.opensphere-console-auth.svc';
 const KANIDM_AZP = process.env.KANIDM_AZP || 'opensphere-console';
 const KANIDM_CA_PATH = process.env.KANIDM_CA_PATH || '/etc/kanidm-ca/ca.crt';
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -41,7 +46,8 @@ function _kanidmGetJwks(force) {
   return new Promise((resolve, reject) => {
     if (!force && _kjwks && (Date.now() - _kjwksAt) < KJWKS_TTL) return resolve(_kjwks);
     const u = new URL(KANIDM_JWKS_URL);
-    const opts = { hostname: u.hostname, port: u.port || 443, path: u.pathname + u.search, method: 'GET' };
+    // servername: SNI + 호스트명 검증 모두 이 값 기준(Node tls) — kanidm-core로 접속하되 SAN에 있는 이름으로 정합.
+    const opts = { hostname: u.hostname, port: u.port || 443, path: u.pathname + u.search, method: 'GET', servername: KANIDM_SNI };
     try { opts.ca = fs.readFileSync(KANIDM_CA_PATH); } catch (e) { console.error('[auth] kanidm CA read failed: ' + e); }
     const rq = https.request(opts, (resp) => {
       const ch = []; resp.on('data', (c) => ch.push(c));
@@ -61,7 +67,14 @@ async function verifyToken(idToken) {
   if (header.alg !== 'ES256') throw { code: 401, msg: 'unexpected alg' };
   let jwk = (await _kanidmGetJwks()).find((k) => k.kid === header.kid);
   if (!jwk) jwk = (await _kanidmGetJwks(true)).find((k) => k.kid === header.kid); // 키 롤오버 재시도
-  if (!jwk) throw { code: 401, msg: 'unknown kid (kanidm)' };
+  if (!jwk) {
+    try {
+      const avail = (await _kanidmGetJwks()).map((k) => k.kid).join(',');
+      const cc = b64urlJson(parts[1]);
+      console.log(`[auth-diag] unknown-kid tokenKid=${header.kid} jwksKids=[${avail}] iss=${cc.iss} aud=${JSON.stringify(cc.aud)} azp=${cc.azp}`);
+    } catch (_) { /* noop */ }
+    throw { code: 401, msg: 'unknown kid (kanidm)' };
+  }
   const pub = createPublicKey({ key: jwk, format: 'jwk' });
   // ECDSA P-256: JWS 서명은 raw r||s(IEEE-P1363)이며 DER이 아님 → dsaEncoding 명시 필수.
   const ok = cryptoVerify('SHA256', Buffer.from(`${parts[0]}.${parts[1]}`), { key: pub, dsaEncoding: 'ieee-p1363' }, sig);
@@ -114,15 +127,29 @@ async function nodes() {
 // foundation 백엔드 → 콘솔 audit bus(/api/admin/events) → 셸 단일 인박스.
 // 시작/노드 경고를 콘솔 인박스에 발행 = subShell이 콘솔 알림 core와 '유기적' 작동.
 // best-effort: 발행 실패해도 foundation 본 기능엔 영향 없음. (manifest 권한 불요 — 백엔드 in-cluster 호출)
+// 감사 시정 S2(2026-07-06): 발행 입구는 X-Shell-Token(=SHELL_SERVICE_TOKEN, dupa-events-token Secret,
+//   controller podEnv가 주입) fail-closed — 헤더 배선 + 실패 침묵 금지(1회 경고 로그, 이후 억제).
 const CONTROLLER = process.env.OSP_CONTROLLER || 'http://dupa-registry-controller.opensphere-system.svc.cluster.local:8080';
+const SHELL_TOKEN = process.env.SHELL_SERVICE_TOKEN || '';
+let _notifyWarned = false;
+function warnNotifyOnce(msg) {
+  if (_notifyWarned) return;
+  _notifyWarned = true;
+  console.warn(`[notify] 콘솔 이벤트 발행 실패 — ${msg} (X-Shell-Token/dupa-events-token 배선 확인; 이후 동일 경고 억제)`);
+}
 async function publishNotify(ev) {
   try {
-    await fetch(`${CONTROLLER}/api/admin/events`, {
+    const res = await fetch(`${CONTROLLER}/api/admin/events`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-opensphere-source': 'foundation' },
+      headers: {
+        'content-type': 'application/json',
+        'x-opensphere-source': 'foundation',
+        ...(SHELL_TOKEN ? { 'x-shell-token': SHELL_TOKEN } : {}),
+      },
       body: JSON.stringify({ source: 'foundation', ...ev }),
     });
-  } catch (e) { /* 콘솔 알림은 best-effort */ }
+    if (!res.ok) warnNotifyOnce(`http=${res.status}${SHELL_TOKEN ? '' : ' (SHELL_SERVICE_TOKEN env 부재)'}`);
+  } catch (e) { warnNotifyOnce(String((e && (e.code || e.message)) || e)); }
 }
 const _notifiedNodes = new Set();
 async function nodeHealthPublish() {
@@ -171,14 +198,20 @@ async function k8sProxy(req, res, rawUrl) {
   if (segs.includes('serviceaccounts') && last === 'token') return jsonRes(res, 403, { error: 'token subresource blocked by policy' });
 
   const isWrite = WRITE_METHODS.has(req.method);
-  const idToken = req.headers['x-os-id-token']; // 셸이 실어 보낸 콘솔 IdP 토큰
+  const idToken = req.headers['x-os-id-token']; // 셸이 실어 보낸 콘솔 IdP id_token(__OS_AUTH__ 브리지)
   // 헤더는 새로 구성 — 클라이언트의 Impersonate-*/Authorization은 절대 전달하지 않음(위조 차단)
   const headers = { Authorization: `Bearer ${tok()}`, Accept: 'application/json' };
   let actor = null;
 
   if (isWrite) {
     try { actor = await verifyToken(idToken); }
-    catch (e) { return jsonRes(res, e.code || 401, { error: e.msg || 'unauthorized' }); }
+    catch (e) {
+      const cookieNames = (req.headers.cookie || '').split(';').map((c) => c.trim().split('=')[0]).filter(Boolean).join(',');
+      console.log(`[auth-fail] write path=${pathOnly} hdrToken=${!!req.headers['x-os-id-token']} cookieToken=${!!tokenFromCookie(req.headers.cookie)} cookies=[${cookieNames}] err=${e && (e.msg || e.message || e)}`);
+      // e.code가 숫자가 아니면(예: TLS 오류 'DEPTH_ZERO_SELF_SIGNED_CERT') writeHead 크래시 → 502로 안전 매핑.
+      const status = (typeof e.code === 'number') ? e.code : 502;
+      return jsonRes(res, status, { error: e.msg || e.message || 'unauthorized' });
+    }
     headers['Impersonate-User'] = actor.username;
     const ct = req.headers['content-type'];
     if (ct) headers['Content-Type'] = ct;
@@ -189,9 +222,26 @@ async function k8sProxy(req, res, rawUrl) {
 
   const body = isWrite ? await readBody(req) : undefined;
   // 업스트림은 검증된 디코드 경로 + 원형 쿼리로 재구성(원시 sub 그대로 전달 금지)
-  const r = await fetch(`${APISERVER}${pathOnly}${rawQuery}`, { method: req.method, headers, body });
+  // 쓰기에 한해 사용자 그룹도 임퍼소네이션 → 그룹 기반 RBAC(예: opensphere-console-admins) 적용.
+  // 그룹 정규화 = 콘솔 auth.service.ts와 동일 규칙: 선행 '/' 제거, '@도메인' 접미사 제거, uuid형 제외
+  // (Kanidm 토큰 그룹은 'name@domain' 형태 — raw 그대로 보내면 RBAC Group명과 불일치).
+  // 읽기는 기존 동작(무토큰=SA, 토큰=user-only) 유지해 회귀 방지. system: 그룹은 특권상승 방지 위해 제외.
+  const fetchHeaders = new Headers(headers);
+  const sentGroups = [];
+  if (isWrite && actor) {
+    for (const raw of (actor.groups || [])) {
+      if (typeof raw !== 'string' || !raw) continue;
+      const g = raw.replace(/^\//, '').replace(/@.*$/, '');
+      // 제외: 빈값·system:·uuid형·Kanidm 내부 그룹(idm_*, SA가 임퍼소네이션 못 하고 앱 RBAC과 무관).
+      if (!g || g.startsWith('system:') || g.startsWith('idm_') || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/.test(g)) continue;
+      fetchHeaders.append('Impersonate-Group', g);
+      sentGroups.push(g);
+    }
+  }
+  const r = await fetch(`${APISERVER}${pathOnly}${rawQuery}`, { method: req.method, headers: fetchHeaders, body });
   const text = await r.text();
-  if (isWrite) console.log(`[audit] user=${actor && actor.username} verb=${req.method} path=${pathOnly} status=${r.status} ${new Date().toISOString()}`);
+  if (isWrite) console.log(`[audit] user=${actor && actor.username} groups=[${sentGroups.join(',')}] verb=${req.method} path=${pathOnly} status=${r.status} ${new Date().toISOString()}`);
+  if (isWrite && r.status >= 400) { console.log(`[audit-body] status=${r.status} sentGroupHdr=${JSON.stringify(fetchHeaders.get('Impersonate-Group'))} body=${text.slice(0, 400)}`); }
   res.writeHead(r.status, { 'content-type': r.headers.get('content-type') || 'application/json', 'cache-control': 'no-store' });
   res.end(text);
 }
@@ -217,6 +267,27 @@ async function opensearchProxy(req, res, rawUrl) {
   } catch (e) { jsonRes(res, 502, { error: 'opensearch unreachable: ' + String(e) }); }
 }
 
+// ── Foundation 모듈: Prometheus(kube-prometheus-stack) 읽기 프록시 ──
+// /api/prometheus/<질의경로> → kps-prometheus.monitoring.svc:9090 (읽기 전용, query/query_range/targets만 허용).
+async function prometheusProxy(req, res, rawUrl) {
+  const PROM = process.env.PROMETHEUS_URL || 'http://kps-prometheus.monitoring.svc:9090';
+  if (req.method !== 'GET' && req.method !== 'HEAD') return jsonRes(res, 405, { error: 'read-only proxy' });
+  let path;
+  try { path = decodeURIComponent(rawUrl.slice('/api/prometheus'.length).split('?')[0]); }
+  catch { return jsonRes(res, 400, { error: 'bad path' }); }
+  // 화이트리스트: 즉석 질의/타깃 상태만(관리 API·설정 리로드 등 차단).
+  const okPath = /^\/api\/v1\/(query|query_range|targets)$/.test(path);
+  if (!okPath) return jsonRes(res, 403, { error: 'only query/query_range/targets allowed' });
+  const qIdx = rawUrl.indexOf('?');
+  const rawQuery = qIdx >= 0 ? rawUrl.slice(qIdx) : '';
+  try {
+    const r = await fetch(`${PROM}${path}${rawQuery}`, { headers: { Accept: 'application/json' } });
+    const text = await r.text();
+    res.writeHead(r.status, { 'content-type': r.headers.get('content-type') || 'application/json', 'cache-control': 'no-store' });
+    res.end(text);
+  } catch (e) { jsonRes(res, 502, { error: 'prometheus unreachable: ' + String(e) }); }
+}
+
 const server = http.createServer(async (req, res) => {
   const p = new URL(req.url, `http://${req.headers.host}`).pathname;
   try {
@@ -235,6 +306,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (p.startsWith('/api/k8s/')) return k8sProxy(req, res, req.url);
     if (p.startsWith('/api/opensearch')) return opensearchProxy(req, res, req.url);
+    if (p.startsWith('/api/prometheus')) return prometheusProxy(req, res, req.url);
     if (p === '/api/nodes') {
       const list = await nodes();
       res.writeHead(200, { 'content-type': 'application/json' });

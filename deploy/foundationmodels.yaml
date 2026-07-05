@@ -1,0 +1,58 @@
+# Foundation 내부 모듈(엔진) 수명주기 정본 — FoundationModel CR (감사 시정 S4, 2026-07-06).
+# "메뉴=실재의 투영"(§3.3): UI의 Enable/Disable은 이 CR의 spec.desiredState를 PATCH하고,
+# UI 표시는 CR에서 hydrate한다. CR 부재 = 미등록(비노출). localStorage 소프트 토글(fnd.disabled) 폐지.
+# CRD(foundation.opensphere.io/v1alpha1, Cluster-scope)의 desiredState enum = Installed | Disabled.
+# metadata.name = subShell 내부 plugin id(FOUNDATION_PLUGINS와 1:1), spec.model = 소속 capability 도메인.
+---
+# 쓰기 RBAC — 콘솔 admin 그룹(임퍼소네이션, subshell-write-auth 계약)의 desiredState 전이 허용.
+# 관례: foundation-velero-manage-admins / foundation-storageclass-apply-admins와 동일 패턴(리소스별 최소권한).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: foundation-models-manage }
+rules:
+  - apiGroups: ["foundation.opensphere.io"]
+    resources: [foundationmodels]
+    # delete 미포함(최소권한) — 등록 해지는 이 yaml에서 항목 제거 후 kubectl 선언 경로로.
+    verbs: [get, list, watch, create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: foundation-models-manage-admins }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: foundation-models-manage }
+subjects:
+  - { kind: Group, name: opensphere-console-admins, apiGroup: rbac.authorization.k8s.io }
+---
+apiVersion: foundation.opensphere.io/v1alpha1
+kind: FoundationModel
+metadata:
+  name: postgres
+  labels: { opensphere.io/foundation-plugin: postgres }
+spec: { model: data, desiredState: Installed }
+---
+apiVersion: foundation.opensphere.io/v1alpha1
+kind: FoundationModel
+metadata:
+  name: opensearch
+  labels: { opensphere.io/foundation-plugin: opensearch }
+spec: { model: data, desiredState: Installed }
+---
+apiVersion: foundation.opensphere.io/v1alpha1
+kind: FoundationModel
+metadata:
+  name: rustfs
+  labels: { opensphere.io/foundation-plugin: rustfs }
+spec: { model: data, desiredState: Installed }
+---
+apiVersion: foundation.opensphere.io/v1alpha1
+kind: FoundationModel
+metadata:
+  name: keycloak
+  labels: { opensphere.io/foundation-plugin: keycloak }
+spec: { model: identity, desiredState: Installed }
+---
+apiVersion: foundation.opensphere.io/v1alpha1
+kind: FoundationModel
+metadata:
+  name: samba
+  labels: { opensphere.io/foundation-plugin: samba }
+spec: { model: identity, desiredState: Installed }
