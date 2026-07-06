@@ -73,6 +73,38 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
       </div>
     </section>
 
+    <!-- BSS/FSS 개념 정의 -->
+    <div class="os-sech">BSS / FSS 정의</div>
+    <section class="stack-defs">
+      <article class="stack-def stack-def--bss" (click)="go('bss')" role="button" tabindex="0" (keydown.enter)="go('bss')">
+        <div class="stack-def-h">
+          <span class="label label-info">BSS</span>
+          <h3>Basic Service Stack</h3>
+        </div>
+        <p>
+          클러스터 어디서든 쓰는 범용 k8s 기반 서비스입니다. Foundation은 BSS를 소유하지 않고,
+          필요한 의존성을 선언하고 소비합니다.
+        </p>
+        <div class="stack-members">
+          <span *ngFor="let m of bssMembers" class="stack-chip">{{ m }}</span>
+        </div>
+      </article>
+
+      <article class="stack-def stack-def--fss" (click)="go('engines')" role="button" tabindex="0" (keydown.enter)="go('engines')">
+        <div class="stack-def-h">
+          <span class="label label-success">FSS</span>
+          <h3>Foundation Service Stack</h3>
+        </div>
+        <p>
+          OpenSphere 구성을 위해 Foundation이 준비하고 운영하는 전용 엔진입니다. capability 모듈과
+          설치 파이프라인을 만들며, BSS 멤버와 겹치지 않습니다.
+        </p>
+        <div class="stack-members">
+          <span *ngFor="let m of fssMembers" class="stack-chip">{{ m }}</span>
+        </div>
+      </article>
+    </section>
+
     <!-- Capability 6-도메인 현황 -->
     <div class="os-sech">Capability 도메인</div>
     <div class="ov-domains">
@@ -123,6 +155,8 @@ export class FoundationOverviewComponent {
   readonly s = this.reg.summary;
   readonly iApps = Apps24;
   readonly iHome = Home24;
+  readonly bssMembers = ['kube-prometheus-stack', 'ingress-nginx', 'cert-manager', 'StorageClass', 'Velero'];
+  readonly fssMembers = ['OpenTelemetry Collector', 'CloudNativePG', 'OpenSearch', 'Crossplane', 'Grafana Tempo', 'Grafana Loki', 'Grafana'];
 
   ngOnInit(): void { this.engines.start(); this.conn.start(); }
 

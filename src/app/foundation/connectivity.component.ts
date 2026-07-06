@@ -103,6 +103,16 @@ const LOGO_BASE = 'https://cdn.statically.io/gh/openplatform-labs/images@main/lo
 
     <ng-container *ngIf="!isDetailTab()">
     <div class="os-title-row"><h2 class="os-h2">BSS <span class="label label-info">Basic Service Stack · Host 연결</span></h2></div>
+    <section class="stack-inline">
+      <div>
+        <span class="stack-kicker">Concept</span>
+        <strong>클러스터 공용 기반 서비스</strong>
+        <p>BSS는 특정 OpenSphere 구성요소 전용이 아니라, 여러 워크로드와 subShell이 함께 소비할 수 있는 host 제공 서비스다.</p>
+      </div>
+      <div class="stack-members">
+        <span *ngFor="let m of bssMembers" class="stack-chip">{{ m }}</span>
+      </div>
+    </section>
     <p class="os-sub">
       Foundation은 Basic Service Stack(클러스터 <strong>어디서든 쓰는 범용 k8s 서비스</strong>)의 자원을 소유하지 않고 <strong>요구만 선언</strong>한다(§1.2).
       BSS 멤버는 FSS(Foundation Service Stack) 멤버가 될 수 없다 — OpenSphere 구성 전용 엔진(OTel Collector·CloudNativePG·Velero·Crossplane)은
@@ -161,6 +171,7 @@ export class FoundationConnectivityComponent {
   readonly IMPL_LABEL = IMPL_LABEL;
   readonly IMPL_PILL = IMPL_PILL;
   readonly failed = signal<Set<string>>(new Set());
+  readonly bssMembers = ['kube-prometheus-stack', 'ingress-nginx', 'cert-manager', 'StorageClass', 'Velero'];
 
   ngOnInit(): void { this.svc.start(); }
 

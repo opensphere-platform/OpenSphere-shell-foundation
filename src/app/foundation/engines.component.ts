@@ -44,6 +44,16 @@ const LOGO_BASE = 'https://cdn.statically.io/gh/openplatform-labs/images@main/lo
 
     <ng-container *ngIf="!isDetailTab()">
     <div class="os-title-row"><h2 class="os-h2">FSS 엔진 <span class="label label-info">Foundation Service Stack(FSS)</span></h2></div>
+    <section class="stack-inline">
+      <div>
+        <span class="stack-kicker">Concept</span>
+        <strong>OpenSphere 구성 전용 엔진</strong>
+        <p>FSS는 Foundation capability와 설치 파이프라인을 만들기 위한 전용 엔진이다. 범용 host 서비스인 BSS와 멤버를 공유하지 않는다.</p>
+      </div>
+      <div class="stack-members">
+        <span *ngFor="let m of fssMembers" class="stack-chip">{{ m }}</span>
+      </div>
+    </section>
     <p class="os-sub">
       OpenSphere <strong>구성 전용</strong> 엔진 카탈로그 — 범용 k8s 서비스(Basic Service Stack, <a class="vl-link" (click)="goBss()">BSS</a>)와
       달리, 이 엔진들은 Foundation의 capability 모듈(data·observability)과 설치 파이프라인을 만드는 데만 쓰인다.
@@ -94,6 +104,7 @@ export class FoundationEnginesComponent {
   readonly IMPL_LABEL = IMPL_LABEL;
   readonly IMPL_PILL = IMPL_PILL;
   readonly failed = signal<Set<string>>(new Set());
+  readonly fssMembers = ['OpenTelemetry Collector', 'CloudNativePG', 'OpenSearch', 'Crossplane', 'Grafana Tempo', 'Grafana Loki', 'Grafana'];
 
   ngOnInit(): void { this.svc.start(); }
 
