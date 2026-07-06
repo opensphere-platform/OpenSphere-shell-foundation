@@ -4,7 +4,7 @@
 #   소유하고 GET /operand/manifests로 내민다. control-plane은 engines.samba=enabled면 그 선언을 fetch해
 #   라벨 스탬프 후 SSA apply(buildIdentityBundle). 이 파일엔 keycloak operand만 남는다.
 #   엔진별 설치옵션: FoundationModel.spec.parameters.engines.{keycloak|samba} = enabled|disabled.
-#   Syncope(IGA)·OPA·SCIM-GW는 D-7(정직: 미배포).
+#   Syncope(IGA + SCIM 2.0 endpoint/connector)·OPA는 D-7(정직: 미배포).
 # INV-2(JIT 금지): realm은 registrationAllowed:false + identityProviders 없음(first-broker-login 자동생성 경로 부재). G-JIT가 강제(소스+realm 스캔).
 # 사용자 프로비저닝 권위=Syncope(D-7)이므로 슬라이스엔 사용자/시크릿을 심지 않는다(OIDC issuer 라이브 + discovery/JWKS로 실증).
 # 클라이언트는 public+PKCE(S256), redirectUris/webOrigins는 와일드카드 호스트 금지(D-7 실 소비자 온보딩 시 확정 — 현재 placeholder).

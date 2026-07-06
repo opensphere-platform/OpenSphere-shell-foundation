@@ -47,9 +47,8 @@ const ROADMAP_GROUPS: NavGroup[] = [
   ] },
 ];
 
-// Identity 그룹은 Keycloak/Samba-AD(live, registry 파생)에 Syncope(로드맵)를 얹은 혼합 그룹 —
-// FS-구축계획서 §3.2: identity 엔진 후보 = Keycloak·Syncope·Samba AD·OPA·SCIM-GW, Syncope는
-// ADR-FND-002(IGA 단일권위·JIT 금지, Accepted)까지 확정됐지만 "미구현 스텁"이라 여기 로드맵으로 노출(2026-07-04).
+// Identity 그룹은 Keycloak/Samba-AD(live, registry 파생)에 Syncope(로드맵)를 얹은 혼합 그룹.
+// ADR-FND-002: IGA 단일권위는 Syncope. 별도 SCIM gateway는 멤버가 아니라 Syncope 내장 SCIM 2.0 또는 얇은 connector로 수렴한다.
 const IDENTITY_ROADMAP: NavChild[] = [{ id: 'syncope', name: 'Syncope (IGA)', planned: true }];
 
 // 로드맵 모듈 id → placeholder 페이지에 넘길 메타(이름/로고/모노그램/도메인 eyebrow).
@@ -60,7 +59,7 @@ const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; d
   stalwart: { name: 'Stalwart (JMAP)', logo: 'stalwart', mono: 'S', domain: 'Comm' },
   novu: { name: 'Novu', logo: 'novu', mono: 'N', domain: 'Comm' },
   mattermost: { name: 'Mattermost', logo: 'mattermost', mono: 'M', domain: 'Comm' },
-  syncope: { name: 'Apache Syncope', logo: 'syncope', mono: 'SY', domain: 'Identity(IGA)' },
+  syncope: { name: 'Apache Syncope', logo: 'apache-2', mono: 'SY', domain: 'Identity(IGA + SCIM)' },
 };
 
 // Foundation subShell — plugin 호스팅 shell(§2.7). 크롬(2단 내비·breadcrumb·라우팅)은 SDK 정본

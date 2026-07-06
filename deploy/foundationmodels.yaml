@@ -61,7 +61,7 @@ metadata:
 spec:
   model: identity
   description:
-    summary: "사원(workforce) 신원 모듈 — Keycloak(OIDC IAM/SSO) + Samba-AD(디렉터리 DC, LDAP 389). Keycloak이 Samba LDAP를 federation해 사원 로그인을 제공. Syncope(IGA)·SCIM-GW는 D-7."
+    summary: "사원(workforce) 신원 모듈 — Keycloak(OIDC IAM/SSO) + Samba-AD(디렉터리 DC, LDAP 389). Keycloak이 Samba LDAP를 federation해 사원 로그인을 제공. Syncope(IGA 단일권위 + SCIM 2.0 endpoint/connector)는 D-7."
   catalog:
     authority: registry
     install: optional

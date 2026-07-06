@@ -116,7 +116,7 @@ func identityReady(ctx context.Context, r *modelReconciler, fm *unstructured.Uns
 }
 
 // observeIdentity — keycloak_up/samba_up=readyReplicas(실신호, 엔진별). 디스크립터 메트릭(oidc_login_success_ratio·
-// scim_sync_lag_s)은 실 로그인/SCIM 데이터가 없으므로 정직하게 n/a(D-7 observability·SCIM-GW 연동). 위조 0.
+// scim_sync_lag_s)은 실 로그인/SCIM 데이터가 없으므로 정직하게 n/a(D-7 observability·Syncope SCIM 연동). 위조 0.
 func observeIdentity(ctx context.Context, r *modelReconciler, fm *unstructured.Unstructured, ready bool) ([]interface{}, map[string]interface{}) {
 	engineUp := func(id, dep string, enabled bool) map[string]interface{} {
 		m := map[string]interface{}{"id": id, "unit": "bool", "source": "Deployment.status.readyReplicas"}
@@ -134,7 +134,7 @@ func observeIdentity(ctx context.Context, r *modelReconciler, fm *unstructured.U
 	kc := engineUp("keycloak_up", keycloakName, engineEnabled(fm, "keycloak"))
 	sm := engineUp("samba_up", sambaName, engineEnabled(fm, "samba"))
 	login := map[string]interface{}{"id": "oidc_login_success_ratio", "unit": "ratio", "value": "n/a", "healthy": false, "source": "observability(D-7)", "note": "실 로그인 데이터 없음(D-7 연동)"}
-	scim := map[string]interface{}{"id": "scim_sync_lag_s", "unit": "s", "value": "n/a", "healthy": false, "source": "SCIM-GW(D-7)", "note": "SCIM-GW 미배포(D-7)"}
+	scim := map[string]interface{}{"id": "scim_sync_lag_s", "unit": "s", "value": "n/a", "healthy": false, "source": "Syncope SCIM(D-7)", "note": "Syncope SCIM endpoint/connector 미구현(D-7)"}
 	return []interface{}{kc, sm, login, scim}, nil
 }
 

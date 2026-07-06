@@ -11,7 +11,7 @@ import { OpenSearchEngineComponent } from './opensearch-engine.component';
 
 const REAL_DETAIL_TABS = new Set(['otel', 'cnpg', 'crossplane', 'opensearch']);
 const PLACEHOLDER_TABS = new Set([
-  'syncope', 'opa', 'scim-gw',
+  'syncope', 'opa',
   'psmdb', 'valkey',
   'litellm', 'langfuse', 'embed',
   'stalwart', 'novu', 'mattermost',
@@ -183,8 +183,8 @@ export class FoundationEnginesComponent {
     {
       id: 'syncope', name: 'Apache Syncope', provider: 'syncope.apache.org', version: '', logo: 'apache-2', mono: 'SY', detail: true,
       category: 'identity', impl: 'stub', liveKey: '',
-      role: 'IGA 단일 권위. ADR-FND-002의 JIT 금지와 SCIM 동기화 경계를 담당할 예정.',
-      wiring: '아직 미구현 — 로드맵 placeholder에서 범위만 확인한다.',
+      role: 'IGA 단일 권위. 별도 SCIM gateway 권위를 두지 않고 Syncope 중심의 SCIM 2.0 endpoint/connector로 수렴한다.',
+      wiring: 'D-12 결정: Syncope 내장 SCIM 2.0 확장을 우선 검토하고, 필요 시 얇은 connector만 둔다.',
     },
     {
       id: 'samba', name: 'Samba AD', provider: 'samba.org', version: 'AD DC', logo: 'samba-server', mono: 'AD', detail: true, module: 'samba',
@@ -197,12 +197,6 @@ export class FoundationEnginesComponent {
       category: 'identity', impl: 'stub', liveKey: '',
       role: '정책 평가 엔진 후보. identity와 authorization 경계의 정책 결정을 담당할 예정.',
       wiring: '아직 착수 전 — 정책 bundle과 admission 연동 설계가 필요하다.',
-    },
-    {
-      id: 'scim-gw', name: 'SCIM Gateway', provider: 'OpenSphere', version: '', logo: '', mono: 'SC', detail: true,
-      category: 'identity', impl: 'stub', liveKey: '',
-      role: '외부/내부 신원 동기화를 위한 SCIM facade 후보.',
-      wiring: 'Syncope 구현과 함께 SCIM contract를 제공한다.',
     },
     {
       id: 'cnpg', name: 'CloudNativePG', provider: 'cloudnative-pg', version: 'PG 17', logo: 'postgresql', mono: 'PG', detail: true,
