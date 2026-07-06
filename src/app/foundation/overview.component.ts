@@ -59,7 +59,7 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
           <strong>capability 모듈</strong>을 설치·운영하고, 다른 subShell이 소비할 백킹서비스를 호스팅합니다.
         </p>
         <div class="ov-hero-actions">
-          <button class="btn btn-primary" (click)="go('plugins')">모듈 설치·관리</button>
+          <button class="btn btn-primary" (click)="go('engines')">FSS 엔진 설치</button>
         </div>
       </div>
       <div class="ov-hero-stat">
@@ -102,10 +102,10 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
     <!-- 시작하기 -->
     <div class="os-sech">시작하기</div>
     <div class="ov-jump">
-      <div class="ov-jump-card" (click)="go('plugins')">
+      <div class="ov-jump-card" (click)="go('engines')">
         <os-cicon [icon]="iApps" [size]="24"/>
-        <h3>모듈 설치·관리</h3>
-        <p>capability 모듈을 등록·활성화하고 수명주기(설치·업데이트)를 관리합니다.</p>
+        <h3>FSS 엔진 설치</h3>
+        <p>Foundation Service Stack 엔진을 설치 선언하고 상태를 확인합니다.</p>
       </div>
       <div class="ov-jump-card ov-jump-card--muted">
         <os-cicon [icon]="iHome" [size]="24"/>

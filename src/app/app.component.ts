@@ -5,7 +5,6 @@ import { PostgresComponent } from './modules/postgres/postgres.component';
 import { RustfsComponent } from './modules/rustfs/rustfs.component';
 import { KeycloakComponent } from './modules/identity/keycloak.component';
 import { FoundationOverviewComponent } from './foundation/overview.component';
-import { FoundationAdminComponent } from './foundation/plugins-admin.component';
 import { FoundationConnectivityComponent } from './foundation/connectivity.component';
 import { FoundationEnginesComponent } from './foundation/engines.component';
 import { PlaceholderModuleComponent } from './foundation/placeholder-module.component';
@@ -15,7 +14,6 @@ import { ViewRouter } from './view-router';
 import { CarbonIcon } from './carbon-icon';
 import { HostedPlugin } from './registry/hosted-plugin';
 import Home16 from '@carbon/icons/es/home/16';
-import Apps16 from '@carbon/icons/es/apps/16';
 import Db2Database16 from '@carbon/icons/es/db2--database/16';
 import UserMultiple16 from '@carbon/icons/es/user--multiple/16';
 import Search16 from '@carbon/icons/es/search/16';
@@ -29,7 +27,7 @@ import Chat16 from '@carbon/icons/es/chat/16';
 // 좌 내비 아이콘 키 → Carbon 16px 디스크립터(os-cicon). AI Hub/shell-template/shell-base와 동일 방식
 // (@carbon/icons SVG 디스크립터 + CarbonIcon 렌더러. cds-icon 웹컴포넌트가 아니라 크래시와 무관).
 const ICON: Record<string, any> = {
-  overview: Home16, plugins: Apps16, bss: Network416, engines: Cube16,
+  overview: Home16, bss: Network416, engines: Cube16,
   data: Db2Database16, db: Db2Database16, search: Search16, storage: ObjectStorage16,
   identity: UserMultiple16, users: UserMultiple16, key: Password16,
   ai: MachineLearningModel16, comm: Chat16,
@@ -75,7 +73,7 @@ const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; d
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, ClarityModule, CarbonIcon, PostgresComponent, RustfsComponent, KeycloakComponent, FoundationOverviewComponent, FoundationAdminComponent, FoundationConnectivityComponent, FoundationEnginesComponent, PlaceholderModuleComponent, PluginOutletComponent],
+  imports: [CommonModule, ClarityModule, CarbonIcon, PostgresComponent, RustfsComponent, KeycloakComponent, FoundationOverviewComponent, FoundationConnectivityComponent, FoundationEnginesComponent, PlaceholderModuleComponent, PluginOutletComponent],
   encapsulation: ViewEncapsulation.ShadowDom,
   styleUrls: ['./app.component.css'],
   styles: [`
@@ -118,9 +116,6 @@ const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; d
         <a clrVerticalNavLink [class.active]="vr.module() === 'overview'" (click)="go('overview')" (keydown.enter)="go('overview')">
           <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['overview']" [size]="16" />Overview
         </a>
-        <a clrVerticalNavLink [class.active]="vr.module() === 'plugins'" (click)="go('plugins')" (keydown.enter)="go('plugins')">
-          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['plugins']" [size]="16" />Plugins 관리
-        </a>
         <a clrVerticalNavLink [class.active]="vr.module() === 'bss'" (click)="go('bss')" (keydown.enter)="go('bss')">
           <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['bss']" [size]="16" />BSS (Host 연결)
         </a>
@@ -150,7 +145,6 @@ const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; d
         </nav>
 
         <app-foundation-overview *ngIf="vr.module() === 'overview'"></app-foundation-overview>
-        <app-foundation-admin *ngIf="vr.module() === 'plugins'"></app-foundation-admin>
         <app-foundation-connectivity *ngIf="vr.module() === 'bss'"></app-foundation-connectivity>
         <app-foundation-engines *ngIf="vr.module() === 'engines'"></app-foundation-engines>
         <app-plugin-outlet *ngIf="activePlugin() as p" [plugin]="p"></app-plugin-outlet>
@@ -160,7 +154,7 @@ const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; d
         <app-placeholder-module *ngIf="roadmapMeta() as rm" [name]="rm.name" [logo]="rm.logo" [mono]="rm.mono"
           [eyebrow]="'Foundation · ' + rm.domain"></app-placeholder-module>
         <clr-alert *ngIf="disabledModule()" clrAlertType="warning" [clrAlertClosable]="false">
-          <clr-alert-item><span class="alert-text">이 plugin은 비활성 상태입니다 — Plugins 관리에서 활성화하세요.</span></clr-alert-item>
+          <clr-alert-item><span class="alert-text">이 plugin은 비활성 상태입니다. FSS 엔진 카탈로그에서 설치 상태를 확인하세요.</span></clr-alert-item>
         </clr-alert>
       </section>
     </div>
@@ -191,6 +185,9 @@ export class AppComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.reg.start();
+    if (this.vr.module() === 'plugins') {
+      this.vr.setModule('engines');
+    }
   }
   ngOnDestroy(): void { this.reg.stop(); }
 
@@ -225,7 +222,6 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private label(id: string): string {
     if (id === 'overview') return 'Overview';
-    if (id === 'plugins') return 'Plugins 관리';
     if (id === 'bss') return 'BSS (Host 연결)';
     if (id === 'engines') return 'FSS 엔진';
     const rm = ROADMAP_META[id];
