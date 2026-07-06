@@ -135,15 +135,20 @@ pg-metric { display: block; height: 100%; }
 .ov-domain-foot--planned { color: var(--os-muted); font-size: 0.76rem; font-style: italic; }
 .ov-domain-opnote { display: block; margin-top: 3px; font-style: normal; color: var(--os-brand-500); }
 
-.ov-jump { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.ov-jump-card { display: flex; flex-direction: column; gap: 6px; min-height: 8.5rem; padding: 16px; background: #fff; border: 1px solid var(--os-border); border-radius: 6px; cursor: pointer; transition: box-shadow 0.12s; }
-.ov-jump-card:hover { box-shadow: 0 2px 10px rgba(15,23,42,0.08); }
-.ov-jump-card os-cicon { color: var(--os-brand-500); }
-.ov-jump-card h3 { margin: 4px 0 0; font-size: 1rem; font-weight: 600; color: var(--os-ink); }
-.ov-jump-card p { margin: 0; font-size: 0.82rem; color: var(--os-text-sec); line-height: 1.45; }
-.ov-jump-card--muted { cursor: default; background: #fafbfd; }
-.ov-jump-card--muted:hover { box-shadow: none; }
-.ov-jump-card--muted os-cicon { color: var(--os-muted); }
+.ov-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.ov-step { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; gap: 4px 10px; min-height: 7.5rem; padding: 14px 16px; text-align: left; background: #fff; border: 1px solid var(--os-border); border-radius: 6px; color: var(--os-ink); cursor: pointer; transition: box-shadow 0.12s, border-color 0.12s; }
+.ov-step:hover { border-color: var(--os-brand-500); box-shadow: 0 2px 10px rgba(15,23,42,0.08); }
+.ov-step-n { display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: #eef1ff; color: var(--os-brand-500); font-size: 0.78rem; font-weight: 700; }
+.ov-step-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ov-step-copy b { font-size: 0.9rem; font-weight: 600; }
+.ov-step-copy span { font-size: 0.76rem; color: var(--os-text-sec); line-height: 1.45; }
+.ov-step-action { grid-column: 2; align-self: end; font-size: 0.72rem; font-weight: 600; color: var(--os-brand-500); }
+.ov-registry { display: grid; background: #fff; border: 1px solid var(--os-border); border-radius: 6px; overflow: hidden; }
+.ov-reg-row { display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(8rem, 1fr) 6rem 7rem minmax(13rem, 1.6fr) 6rem; align-items: center; gap: 10px; min-height: 2.75rem; padding: 9px 12px; border-top: 1px solid #eef0f3; font-size: 0.78rem; }
+.ov-reg-row:first-child { border-top: 0; }
+.ov-reg-head { min-height: 2.25rem; background: #f4f4f4; color: var(--os-text-sec); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
+.ov-reg-name { font-weight: 600; color: var(--os-ink); }
+.ov-reg-actions { justify-self: end; }
 
 .stack-defs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .stack-def { background: #fff; border: 1px solid var(--os-border); border-radius: 6px; padding: 16px 18px; cursor: pointer; transition: box-shadow 0.12s, border-color 0.12s; }
@@ -160,9 +165,10 @@ pg-metric { display: block; height: 100%; }
 .stack-members { display: flex; flex-wrap: wrap; gap: 7px; }
 .stack-chip { display: inline-flex; align-items: center; min-height: 1.35rem; padding: 0 0.45rem; border: 1px solid #d8deef; border-radius: 999px; background: #f7f9ff; color: var(--os-text-sec); font-size: 0.72rem; line-height: 1; white-space: nowrap; }
 
-@media (max-width: 900px) { .ov-hero { grid-template-columns: 1fr; } .ov-domains, .ov-jump { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 1100px) { .ov-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ov-reg-row { grid-template-columns: minmax(8rem, 1fr) minmax(8rem, 1fr) 6rem 7rem 6rem; } .ov-reg-row .os-mono, .ov-reg-head span:nth-child(5) { display: none; } }
+@media (max-width: 900px) { .ov-hero { grid-template-columns: 1fr; } .ov-domains { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 760px) { .stack-defs, .stack-inline { grid-template-columns: 1fr; } }
-@media (max-width: 620px) { .ov-domains, .ov-jump { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .ov-domains, .ov-steps { grid-template-columns: 1fr; } .ov-reg-row { grid-template-columns: 1fr; align-items: start; } .ov-reg-head { display: none; } .ov-reg-actions { justify-self: start; } }
 
 /* ── Host 연결(Connectivity) 카탈로그 — ArtifactHub식 로고 카드 ── */
 .hc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; }
