@@ -22,11 +22,30 @@ interface EngineCard {
   category: string; role: string; impl: Impl; liveKey: string; wiring: string; detail?: boolean;
 }
 
+interface MemberAction {
+  label: string;
+  module?: string;
+  tab?: string;
+}
+
+interface FssMemberCard {
+  id: string;
+  name: string;
+  osPdnn: string;
+  purpose: string;
+  engines: string;
+  contract: string;
+  perspectives: string;
+  status: string;
+  statusPill: string;
+  actions: MemberAction[];
+}
+
 const LOGO_BASE = 'https://cdn.statically.io/gh/openplatform-labs/images@main/logos';
 
-// FSS 엔진 카탈로그 — FSS 정의 자체가 아니라 FS capability 모듈을 구현·조달하는 운영 표면이다.
+// FSS 멤버 카탈로그 — 정본 멤버 6개(identity/data/ai/comm/observability/backup)를 1차 카드로 둔다.
 // 정본(_DOCS_/Foundation/FS-구축계획서-2026-07-02.md §3.2): FS 모듈은 identity/data/ai/comm/observability/backup.
-// 이 화면의 제품 카드(OTel/CNPG/OpenSearch/Crossplane 등)는 §3.2의 "엔진 후보"와 HYBRID-WRAP 조달 방식을 보여준다.
+// OTel/CNPG/OpenSearch/Crossplane 등은 멤버가 아니라 §3.2의 "엔진 후보"와 HYBRID-WRAP 조달 수단이다.
 // ※ tempo/loki/grafana는 착수 전 로드맵 카드 — PlaceholderModuleComponent로 로고/제목만 표시(2026-07-04).
 @Component({
   selector: 'app-foundation-engines',
@@ -38,15 +57,15 @@ const LOGO_BASE = 'https://cdn.statically.io/gh/openplatform-labs/images@main/lo
     <app-crossplane *ngIf="vr.tab() === 'crossplane'"></app-crossplane>
     <app-opensearch-engine *ngIf="vr.tab() === 'opensearch'"></app-opensearch-engine>
     <app-placeholder-module *ngIf="placeholderCard() as pc" [name]="pc.name" [logo]="pc.logo" [mono]="pc.mono"
-      eyebrow="Foundation · 관측" backLabel="FSS 엔진" (back)="vr.setTab('overview')"></app-placeholder-module>
+      [eyebrow]="'Foundation · ' + pc.category" backLabel="FSS 멤버" (back)="vr.setTab('overview')"></app-placeholder-module>
 
     <ng-container *ngIf="!isDetailTab()">
-    <div class="os-title-row"><h2 class="os-h2">FSS 엔진 <span class="label label-info">FS 구현·조달 표면</span></h2></div>
+    <div class="os-title-row"><h2 class="os-h2">FSS 멤버 <span class="label label-info">FS 구축계획서 §3.2 정본</span></h2></div>
     <section class="stack-inline">
       <div>
         <span class="stack-kicker">Concept</span>
-        <strong>Foundation capability 구현 엔진</strong>
-        <p>FS의 정본 멤버는 6개 capability 모듈이다. 이 화면은 그 모듈을 구현하기 위한 엔진 후보와 설치 상태를 다룬다.</p>
+        <strong>Foundation Service Stack module catalog</strong>
+        <p>이 화면의 1차 멤버는 계획서의 6개 capability 모듈이다. 제품·operator는 각 멤버의 구현 엔진 후보로 배치한다.</p>
       </div>
       <div class="stack-members">
         <span *ngFor="let m of fssMembers" class="stack-chip">{{ m }}</span>
@@ -55,33 +74,31 @@ const LOGO_BASE = 'https://cdn.statically.io/gh/openplatform-labs/images@main/lo
     <p class="os-sub">
       Foundation Service Stack의 정본 정의는 사용자(사원·고객) 관리와 시스템 운영 관리이며,
       정본 모듈은 identity·data·ai·comm·observability·backup이다(FS 구축계획서 §3.1~§3.2).
-      이 카탈로그는 그 모듈을 위한 operator-of-operators/HYBRID-WRAP 엔진 설치 화면이다.
+      이 카탈로그는 그 모듈을 먼저 배치하고, 각 모듈 안에서 HYBRID-WRAP 엔진 후보와 관리 진입점을 연결한다.
     </p>
 
-    <div class="hc-grid">
-      <div class="hc-card" *ngFor="let c of cards"
-           [class.hc-clickable]="c.detail" (click)="c.detail && open(c)"
-           [attr.role]="c.detail ? 'button' : null" [attr.tabindex]="c.detail ? 0 : null"
-           (keydown.enter)="c.detail && open(c)">
+    <div class="hc-grid fss-grid">
+      <div class="hc-card fss-card" *ngFor="let c of memberCards">
         <div class="hc-head">
-          <div class="hc-logo">
-            <img *ngIf="c.logo && !failed().has(c.id)" [src]="logoUrl(c.logo)" [alt]="c.name" loading="lazy" (error)="markFailed(c.id)" />
-            <span *ngIf="!c.logo || failed().has(c.id)" class="hc-mono">{{ c.mono }}</span>
-          </div>
+          <div class="hc-logo"><span class="hc-mono">{{ c.name.slice(0, 1).toUpperCase() }}</span></div>
           <div class="hc-idblock">
-            <div class="hc-name">{{ c.name }}<span *ngIf="c.detail" class="hc-open">관리 →</span></div>
-            <div class="hc-provider">{{ c.provider }}<span *ngIf="c.version"> · {{ c.version }}</span></div>
+            <div class="hc-name">{{ c.name }}</div>
+            <div class="hc-provider">{{ c.osPdnn }} · {{ c.purpose }}</div>
           </div>
         </div>
 
-        <p class="hc-role">{{ c.role }}</p>
-        <div class="hc-wiring"><span class="hc-wiring-k">연결</span><span>{{ c.wiring }}</span></div>
+        <p class="hc-role">{{ c.engines }}</p>
+        <div class="fss-kv">
+          <span>계약</span><b>{{ c.contract }}</b>
+          <span>Perspective</span><b>{{ c.perspectives }}</b>
+        </div>
+        <div class="hc-wiring"><span class="hc-wiring-k">상태</span><span>{{ c.status }}</span></div>
 
         <div class="hc-foot">
-          <span class="hc-cat"><span class="hc-cat-dot"></span>{{ c.category }}</span>
+          <span class="hc-cat"><span class="hc-cat-dot"></span>{{ c.id }}</span>
           <span class="hc-badges">
-            <span class="label" [ngClass]="IMPL_PILL[c.impl]">{{ IMPL_LABEL[c.impl] }}</span>
-            <span *ngIf="c.liveKey" class="label" [ngClass]="livePill(c.liveKey)">{{ liveLabel(c.liveKey) }}</span>
+            <span class="label" [ngClass]="c.statusPill">{{ c.osPdnn }}</span>
+            <button class="btn btn-sm" type="button" *ngFor="let a of c.actions" (click)="openAction(a)">{{ a.label }}</button>
           </span>
         </div>
       </div>
@@ -107,11 +124,15 @@ export class FoundationEnginesComponent {
   ngOnInit(): void { this.svc.start(); }
 
   open(c: EngineCard): void { this.vr.setTab(c.id); }
+  openAction(a: MemberAction): void {
+    if (a.module) { this.vr.setModule(a.module); }
+    if (a.tab) { this.vr.setTab(a.tab); }
+  }
   goBss(): void { this.vr.setModule('bss'); }
   isDetailTab(): boolean { return DETAIL_TABS.has(this.vr.tab()); }
   /** 착수 전 3개(tempo/loki/grafana) 전용 — placeholder 페이지에 넘길 카드(없으면 undefined). */
   placeholderCard(): EngineCard | undefined {
-    return PLACEHOLDER_TABS.has(this.vr.tab()) ? this.cards.find((c) => c.id === this.vr.tab()) : undefined;
+    return PLACEHOLDER_TABS.has(this.vr.tab()) ? this.engineCandidates.find((c) => c.id === this.vr.tab()) : undefined;
   }
   logoUrl(name: string): string { return `${LOGO_BASE}/${name}.svg`; }
   markFailed(id: string): void { this.failed.update((s) => new Set(s).add(id)); }
@@ -128,7 +149,82 @@ export class FoundationEnginesComponent {
     return { loading: '확인 중…', ok: 'Live', empty: 'Live', nocrd: '미설치', noperm: '권한 없음', error: '조회 실패' }[s];
   }
 
-  readonly cards: EngineCard[] = [
+  readonly memberCards: FssMemberCard[] = [
+    {
+      id: 'identity',
+      name: 'identity',
+      osPdnn: 'OS-2101',
+      purpose: '사원·고객 신원 관리',
+      engines: 'Keycloak Operator+config-cli · Syncope · Samba AD · OPA · SCIM-GW',
+      contract: 'OIDC · SCIM',
+      perspectives: '3 User · 7 Workspace · 8 Customer · 4 Developer',
+      status: 'Keycloak workforce realm과 Samba AD는 실구현, Syncope IGA와 customer realm은 후속 결정/구현 대상.',
+      statusPill: 'label-success',
+      actions: [{ label: 'Keycloak', module: 'keycloak' }, { label: 'Samba-AD', module: 'samba' }, { label: 'Syncope', module: 'syncope' }],
+    },
+    {
+      id: 'data',
+      name: 'data',
+      osPdnn: 'OS-2201',
+      purpose: '사용자 서비스 데이터 평면',
+      engines: 'CloudNativePG(1차) · Percona PSMDB · Valkey · RustFS(Helm→SSA) · OpenSearch operator',
+      contract: 'PgClaim · BucketClaim · CacheClaim · IndexClaim',
+      perspectives: '4 Developer · 5 AI · 7 Workspace · 10 WebSite',
+      status: 'CNPG hybrid-wrap과 OpenSearch shared endpoint가 관리 경로에 연결됨. RustFS와 추가 데이터 엔진은 후속 확장.',
+      statusPill: 'label-info',
+      actions: [{ label: 'CNPG', tab: 'cnpg' }, { label: 'OpenSearch', tab: 'opensearch' }, { label: 'RustFS', module: 'rustfs' }],
+    },
+    {
+      id: 'ai',
+      name: 'ai',
+      osPdnn: 'OS-2301',
+      purpose: '추론 라우팅·임베딩·벡터 RAG substrate',
+      engines: 'LiteLLM · Langfuse(ClickHouse 미결) · Novu 연계 · Embed',
+      contract: 'LLMRoute · VectorRetrieval',
+      perspectives: '5 AI Level',
+      status: '코드 스캐폴드와 vectorretrievalclaims CRD 일부가 존재. 실제 provider/ingestion 연결은 후속.',
+      statusPill: 'label-warning',
+      actions: [{ label: 'LiteLLM', module: 'litellm' }, { label: 'Langfuse', module: 'langfuse' }, { label: 'Embed', module: 'embed' }],
+    },
+    {
+      id: 'comm',
+      name: 'comm',
+      osPdnn: 'OS-2401',
+      purpose: '메일·알림·협업 백본',
+      engines: 'Stalwart(JMAP) · Novu · Mattermost(협업/ChatOps)',
+      contract: 'Novu · JMAP · Chat',
+      perspectives: '7 Workspace',
+      status: 'README/descriptor 수준. Stalwart, Novu, Mattermost 구현은 후속 plugin/module 단계.',
+      statusPill: 'label-warning',
+      actions: [{ label: 'Stalwart', module: 'stalwart' }, { label: 'Novu', module: 'novu' }, { label: 'Mattermost', module: 'mattermost' }],
+    },
+    {
+      id: 'observability',
+      name: 'observability',
+      osPdnn: 'OS-2501',
+      purpose: '시스템 운영 관측',
+      engines: 'OTel · Prometheus · Tempo · Loki · Grafana Operator(operator-of-operators)',
+      contract: 'OTLP · ServiceMonitor',
+      perspectives: '1 기반 · 전 perspective',
+      status: 'OTel Collector는 실구현, Prometheus는 BSS 위임. Tempo/Loki/Grafana는 착수 전 로드맵.',
+      statusPill: 'label-info',
+      actions: [{ label: 'OTel', tab: 'otel' }, { label: 'Tempo', tab: 'tempo' }, { label: 'Loki', tab: 'loki' }, { label: 'Grafana', tab: 'grafana' }],
+    },
+    {
+      id: 'backup',
+      name: 'backup',
+      osPdnn: 'OS-2601',
+      purpose: '시스템 운영 백업(pre-upgrade 게이트)',
+      engines: 'Velero 계열 · .ptm',
+      contract: 'BackupPolicy · Run · Restore',
+      perspectives: 'INV-3 전 upgrade',
+      status: 'CRD와 reconciler 뼈대가 있고, 현재 Velero host 연결 관리 화면으로 상태를 확인한다.',
+      statusPill: 'label-info',
+      actions: [{ label: 'Velero', module: 'bss', tab: 'velero' }],
+    },
+  ];
+
+  readonly engineCandidates: EngineCard[] = [
     {
       id: 'otel', name: 'OpenTelemetry Collector', provider: 'opentelemetry.io (CNCF)', version: 'v0.111.0', logo: 'opentelemetry-non-typo', mono: 'O', detail: true,
       category: '관측', impl: 'real', liveKey: 'otel',
@@ -150,7 +246,7 @@ export class FoundationEnginesComponent {
     {
       id: 'crossplane', name: 'Crossplane', provider: 'crossplane.io (CNCF)', version: 'v2.3.3', logo: 'crossplane-non-typo', mono: 'X', detail: true,
       category: '전달', impl: 'real', liveKey: 'crossplane',
-      role: 'FSS 엔진들을 선언형 API로 설치·관리하는 OpenSphere 자체 delivery 엔진(방향 전환, 2026-07-03).',
+      role: 'FSS 구현 엔진 후보들을 선언형 API로 설치·관리하는 OpenSphere 자체 delivery 엔진(방향 전환, 2026-07-03).',
       wiring: '카드를 클릭하면 provider·관리 중인 Release 목록을 볼 수 있다.',
     },
     {
