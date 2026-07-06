@@ -40,6 +40,7 @@ export class EnginesService {
       // OTel Collector는 자체 CRD가 없어 실제 Deployment 존재로 직접 확인.
       this.probe('otel', 'apis/apps/v1/namespaces/opensphere-otel-collector/deployments/otel-collector-opentelemetry-collector'),
       this.probe('cnpg', 'apis/apiextensions.k8s.io/v1/customresourcedefinitions/clusters.postgresql.cnpg.io'),
+      this.probe('argocd', 'apis/apps/v1/namespaces/argocd/deployments/argocd-server'),
       this.probe('crossplane', 'apis/apiextensions.k8s.io/v1/customresourcedefinitions/compositions.apiextensions.crossplane.io'),
       this.probe('opensearch', 'apis/apps/v1/namespaces/opensphere-foundation/statefulsets/opensphere-search'),
     ]);

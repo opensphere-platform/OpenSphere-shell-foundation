@@ -16,7 +16,7 @@ const PLACEHOLDER_TABS = new Set([
   'litellm', 'langfuse', 'embed',
   'stalwart', 'novu', 'mattermost',
   'tempo', 'loki', 'grafana-operator',
-  'ptm',
+  'ptm', 'argocd',
 ]);
 const DETAIL_TABS = new Set([...REAL_DETAIL_TABS, ...PLACEHOLDER_TABS]);
 
@@ -142,7 +142,7 @@ export class FoundationEnginesComponent {
     { id: 'comm', title: 'Communication', summary: '메일, 알림, 협업, ChatOps로 이어지는 커뮤니케이션 백본.' },
     { id: 'observability', title: 'Observability', summary: '메트릭·로그·트레이스 수집, 저장, 조회, 대시보드 계층.' },
     { id: 'backup', title: 'Backup / Recovery', summary: '백업 정책, 실행, 복구와 pre-upgrade gate를 담당하는 계층.' },
-    { id: 'delivery', title: 'Delivery / HYBRID-WRAP', summary: 'FSS 엔진 후보를 선언형 API와 operator-of-operators 방식으로 설치·관리.' },
+    { id: 'delivery', title: 'Delivery / GitOps & Adapter', summary: 'GitOps/ArgoCD를 기본 전달 경로로 두고, Crossplane은 선택 가능한 provisioning adapter로 둔다.' },
   ];
 
   ngOnInit(): void { this.svc.start(); }
@@ -313,9 +313,15 @@ export class FoundationEnginesComponent {
       wiring: 'BackupPolicy/Run/Restore contract와 함께 구체화한다.',
     },
     {
+      id: 'argocd', name: 'Argo CD / ApplicationSet', provider: 'argo-cd.readthedocs.io', version: 'GitOps', logo: 'argocd', mono: 'CD', detail: true,
+      category: 'delivery', impl: 'phase1', liveKey: 'argocd',
+      role: 'ADR-005R1의 기본 write-path. Git repository의 desired state를 cluster 상태로 sync하는 GitOps 전달 엔진.',
+      wiring: 'OpenSphere는 Claim/manifest를 Git에 남기고, Argo CD/ApplicationSet이 target cluster에 동기화한다.',
+    },
+    {
       id: 'crossplane', name: 'Crossplane', provider: 'crossplane.io (CNCF)', version: 'v2.3.3', logo: 'crossplane-non-typo', mono: 'X', detail: true,
       category: 'delivery', impl: 'real', liveKey: 'crossplane',
-      role: 'FSS 엔진 후보들을 선언형 API로 설치·관리하는 HYBRID-WRAP delivery 엔진.',
+      role: 'GitOps/operator와 병렬로 선택 가능한 provisioning adapter. 외부 managed 리소스나 Provider가 강한 영역에서 사용한다.',
       wiring: '카드를 클릭하면 provider·관리 중인 Release 목록을 볼 수 있다.',
     },
   ];
