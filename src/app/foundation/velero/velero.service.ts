@@ -1,5 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { apiBase, writeHeaders } from '../../api-base';
+import { apiBase, writeHeaders, tokenExpired, isAuthFail } from '../../api-base';
 import { State } from '../../modules/postgres/cnpg.types';
 
 // Velero 설치·상태 단일 데이터 진입점. Host 연결 카탈로그의 Velero 카드 클릭 시 열리는 전용 페이지가 소비.
@@ -76,6 +76,7 @@ export class VeleroService {
   readonly saveBusy = signal(false);
   readonly saveMsg = signal<string>('');
   readonly saveErr = signal<string>('');
+  readonly sessionExpired = signal(false);   // 콘솔 15분 토큰 만료 — 새로고침(SSO 재발급) 유도
 
   // Prometheus(kube-prometheus-stack) 연계 — 백업/복원 이력 지표. 설치 후에만 의미 있음(스크레이프 대상 존재).
   readonly metricsState = signal<State>('loading');
@@ -397,10 +398,11 @@ export class VeleroService {
    *  자격증명은 values.credentials.secretContents.cloud로 전달 → 별도 Secret 쓰기 RBAC 불필요. */
   async saveBackupTarget(t: BackupTarget): Promise<void> {
     if (this.saveBusy()) { return; }
+    if (tokenExpired()) { this.sessionExpired.set(true); this.saveErr.set('세션이 만료되었습니다 (콘솔 로그인 15분 · 자동 갱신 없음).'); return; }
     if (!t.endpoint || !t.bucket || !t.accessKey || !t.secretKey) {
       this.saveErr.set('엔드포인트·버킷·Access Key·Secret Key는 필수입니다.'); return;
     }
-    this.saveBusy.set(true); this.saveMsg.set(''); this.saveErr.set('');
+    this.saveBusy.set(true); this.saveMsg.set(''); this.saveErr.set(''); this.sessionExpired.set(false);
     const cloud = `[default]\naws_access_key_id=${t.accessKey}\naws_secret_access_key=${t.secretKey}\n`;
     const patch = {
       spec: { forProvider: { values: {
@@ -420,6 +422,7 @@ export class VeleroService {
         headers: { ...writeHeaders(), 'content-type': 'application/merge-patch+json' },
         body: JSON.stringify(patch),
       });
+      if (isAuthFail(r.status)) { this.sessionExpired.set(true); this.saveErr.set('세션이 만료되었습니다 (콘솔 로그인 15분 · 자동 갱신 없음).'); return; }
       if (r.status === 403) { this.saveErr.set('권한 없음 — Release 수정 권한(releases.helm.crossplane.io)이 필요합니다.'); return; }
       if (!r.ok) { this.saveErr.set(`저장 실패 (HTTP ${r.status})`); return; }
       this.saveMsg.set('저장됨 — provider-helm이 자격증명·저장위치(BSL)·node-agent를 적용합니다(최대 1~2분). 상태는 자동 갱신됩니다.');
@@ -429,5 +432,5 @@ export class VeleroService {
     } catch { this.saveErr.set('네트워크 오류'); }
     finally { this.saveBusy.set(false); }
   }
-  clearSaveMsg(): void { this.saveMsg.set(''); this.saveErr.set(''); }
+  clearSaveMsg(): void { this.saveMsg.set(''); this.saveErr.set(''); this.sessionExpired.set(false); }
 }

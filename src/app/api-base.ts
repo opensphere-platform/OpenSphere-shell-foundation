@@ -36,3 +36,19 @@ export function writeHeaders(): Record<string, string> {
   if (t) h['x-os-id-token'] = t;
   return h;
 }
+
+/** 콘솔 세션(15분 id_token, 자동 갱신 수단 없음) 만료 여부. 쓰기 전 선차단·안내에 사용.
+ *  디코드 불가면 false(서버 검증에 위임 — 선차단하지 않음). 복구 = 페이지 새로고침(SSO 재발급). */
+export function tokenExpired(): boolean {
+  const t = idToken();
+  if (!t) return true;
+  try {
+    const p = JSON.parse(atob(t.split('.')[1]));
+    return (Number(p.exp) - Math.floor(Date.now() / 1000)) <= 5;
+  } catch { return false; }
+}
+
+/** 응답이 인증 실패(만료/무토큰)인지 — status 401 또는 본문 신호. */
+export function isAuthFail(status: number, body?: string): boolean {
+  return status === 401 || /token expired|token missing|unauthorized/i.test(String(body || ''));
+}

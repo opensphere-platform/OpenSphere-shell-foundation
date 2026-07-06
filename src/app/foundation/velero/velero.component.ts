@@ -150,7 +150,10 @@ const LOGO = 'https://cdn.statically.io/gh/openplatform-labs/images@main/logos/v
         </div>
         <div class="vl-note vl-note--danger" *ngIf="svc.saveErr()">
           <os-cicon [icon]="iMisuse" [size]="20" />
-          <div><p>{{ svc.saveErr() }} <a class="vl-link" (click)="svc.clearSaveMsg()">닫기</a></p></div>
+          <div><p>{{ svc.saveErr() }}
+            <a class="vl-link" *ngIf="svc.sessionExpired()" (click)="reload()">새로고침</a>
+            <a class="vl-link" (click)="svc.clearSaveMsg()">닫기</a></p>
+            <p class="vl-dim" *ngIf="svc.sessionExpired()">새로고침하면 다시 로그인됩니다(입력값은 다시 넣어야 합니다).</p></div>
         </div>
       </div>
     </section>
@@ -252,6 +255,7 @@ export class VeleroComponent {
 
   back(): void { this.vr.setTab('overview'); }
   onSelect(e: Event): void { this.svc.selectChart((e.target as HTMLSelectElement).value); }
+  reload(): void { window.location.reload(); }   // 세션 만료 복구 — SSO 재발급
 
   phasePill(): string {
     if (this.svc.installed()) { return this.svc.ready() ? 'label-success' : 'label-warning'; }
