@@ -7,8 +7,9 @@ import { OtelComponent } from './otel/otel.component';
 import { CnpgOperatorComponent } from './cnpgoperator/cnpgoperator.component';
 import { CrossplaneComponent } from './crossplane/crossplane.component';
 import { PlaceholderModuleComponent } from './placeholder-module.component';
+import { OpenSearchEngineComponent } from './opensearch-engine.component';
 
-const REAL_DETAIL_TABS = new Set(['otel', 'cnpg', 'crossplane']);
+const REAL_DETAIL_TABS = new Set(['otel', 'cnpg', 'crossplane', 'opensearch']);
 const PLACEHOLDER_TABS = new Set(['tempo', 'loki', 'grafana']);
 const DETAIL_TABS = new Set([...REAL_DETAIL_TABS, ...PLACEHOLDER_TABS]);
 
@@ -32,11 +33,12 @@ const LOGO_BASE = 'https://cdn.statically.io/gh/openplatform-labs/images@main/lo
 @Component({
   selector: 'app-foundation-engines',
   standalone: true,
-  imports: [CommonModule, ClarityModule, OtelComponent, CnpgOperatorComponent, CrossplaneComponent, PlaceholderModuleComponent],
+  imports: [CommonModule, ClarityModule, OtelComponent, CnpgOperatorComponent, CrossplaneComponent, OpenSearchEngineComponent, PlaceholderModuleComponent],
   template: `
     <app-otel *ngIf="vr.tab() === 'otel'"></app-otel>
     <app-cnpgoperator *ngIf="vr.tab() === 'cnpg'"></app-cnpgoperator>
     <app-crossplane *ngIf="vr.tab() === 'crossplane'"></app-crossplane>
+    <app-opensearch-engine *ngIf="vr.tab() === 'opensearch'"></app-opensearch-engine>
     <app-placeholder-module *ngIf="placeholderCard() as pc" [name]="pc.name" [logo]="pc.logo" [mono]="pc.mono"
       eyebrow="Foundation · 관측" backLabel="FSS 엔진" (back)="vr.setTab('overview')"></app-placeholder-module>
 
@@ -129,6 +131,12 @@ export class FoundationEnginesComponent {
       category: 'data', impl: 'real', liveKey: 'cnpg',
       role: 'PostgreSQL 데이터베이스를 운영·관리하는 operator. FSS data 모듈이 이 위에서 PostgreSQL capability를 제공한다.',
       wiring: '카드를 클릭하면 전용 페이지에서 버전 선택·설치·상태·관리 Cluster 목록을 볼 수 있다.',
+    },
+    {
+      id: 'opensearch', name: 'OpenSearch', provider: 'opensearch.org', version: '2.17.0', logo: 'opensearch', mono: 'OS', detail: true,
+      category: 'data', impl: 'phase1', liveKey: 'opensearch',
+      role: 'Shared search and index engine for manuals, OAA retrieval, catalog search, logs, and future vector/search workloads.',
+      wiring: 'Open this card first to declare FoundationModel/data parameters.engines.opensearch, then reconcile the shared endpoint.',
     },
     {
       id: 'crossplane', name: 'Crossplane', provider: 'crossplane.io (CNCF)', version: 'v2.3.3', logo: 'crossplane-non-typo', mono: 'X', detail: true,

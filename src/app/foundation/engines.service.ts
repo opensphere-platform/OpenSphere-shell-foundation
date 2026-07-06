@@ -44,6 +44,7 @@ export class EnginesService {
       this.probe('otel', 'apis/apps/v1/namespaces/opensphere-otel-collector/deployments/otel-collector-opentelemetry-collector'),
       this.probe('cnpg', 'apis/apiextensions.k8s.io/v1/customresourcedefinitions/clusters.postgresql.cnpg.io'),
       this.probe('crossplane', 'apis/apiextensions.k8s.io/v1/customresourcedefinitions/compositions.apiextensions.crossplane.io'),
+      this.probe('opensearch', 'apis/apps/v1/namespaces/opensphere-foundation/statefulsets/opensphere-search'),
     ]);
     this.busy.set(false);
     try { this.lastSync.set(new Date().toLocaleTimeString()); } catch { /* noop */ }

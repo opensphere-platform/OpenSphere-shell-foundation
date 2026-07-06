@@ -14,6 +14,12 @@ export interface HostedPlugin {
   consumePoint: string;           // 백킹서비스 소비 엔드포인트(이 plugin이 '제공하는 것')
   healthRef: 'cnpg' | 'os' | 'rustfs' | 'keycloak' | 'samba'; // ⬅ probe() 대체. 어느 서비스가 이 plugin의 health 진실인가
   view: { module: string };       // ViewRouter.setModule 대상(메뉴=등록의 파생)
+  activation?: {
+    packageId: string;
+    element: string;
+    installModule?: string;
+    installTab?: string;
+  };
 }
 
 // 두 데이터 서비스(CnpgService/OsService)의 이질적 signal을 통일한 health 투영.

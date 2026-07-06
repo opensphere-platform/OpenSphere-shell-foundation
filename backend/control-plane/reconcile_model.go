@@ -247,6 +247,7 @@ func readSample(fm *unstructured.Unstructured) (float64, time.Time, bool) {
 func bundleKinds() []schema.GroupVersionKind {
 	return []schema.GroupVersionKind{
 		depGVK,
+		statefulSetGVK,
 		{Group: "", Version: "v1", Kind: "Service"},
 		{Group: "", Version: "v1", Kind: "ConfigMap"},
 		{Group: "", Version: "v1", Kind: "ServiceAccount"},

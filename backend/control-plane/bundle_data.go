@@ -187,13 +187,13 @@ func buildDataBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructure
 
 	storage := map[string]interface{}{"size": o.storageSize, "storageClass": o.storageClass}
 	spec := map[string]interface{}{
-		"instances":            o.instances,
-		"imageName":            o.image,
-		"storage":              storage,
+		"instances":             o.instances,
+		"imageName":             o.image,
+		"storage":               storage,
 		"enableSuperuserAccess": o.superuser,
-		"bootstrap":            map[string]interface{}{"initdb": map[string]interface{}{"database": "appdb", "owner": "appuser"}},
-		"postgresql":           map[string]interface{}{"parameters": o.pgParams},
-		"monitoring":           map[string]interface{}{"enablePodMonitor": o.monitoring},
+		"bootstrap":             map[string]interface{}{"initdb": map[string]interface{}{"database": "appdb", "owner": "appuser"}},
+		"postgresql":            map[string]interface{}{"parameters": o.pgParams},
+		"monitoring":            map[string]interface{}{"enablePodMonitor": o.monitoring},
 	}
 	if o.walSize != "" {
 		spec["walStorage"] = map[string]interface{}{"size": o.walSize, "storageClass": o.storageClass}
@@ -258,6 +258,13 @@ func buildDataBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructure
 		stampLabels(db, "data", owner)
 		objs = append(objs, db)
 	}
+	if engineEnabled(fm, "opensearch") {
+		osObjs, err := buildOpenSearchBundle(cfg, fm)
+		if err != nil {
+			return nil, err
+		}
+		objs = append(objs, osObjs...)
+	}
 	return objs, nil
 }
 
@@ -278,13 +285,22 @@ func dataReady(ctx context.Context, r *modelReconciler, fm *unstructured.Unstruc
 	if inst <= 0 {
 		inst = 1
 	}
-	return rdy >= inst
+	ready := rdy >= inst
+	if engineEnabled(fm, "opensearch") {
+		ready = ready && opensearchReady(ctx, r, fm)
+	}
+	return ready
 }
 
 // dataGone — Cluster CR 소멸(NotFound) 확인(회수 완료 판정). 설치 NS 기준.
 func dataGone(ctx context.Context, r *modelReconciler, fm *unstructured.Unstructured) bool {
 	_, err := r.getPGCluster(ctx, pgNS(fm, r.cfg))
-	return apierrors.IsNotFound(err)
+	pgGone := apierrors.IsNotFound(err)
+	osGone := true
+	if engineEnabled(fm, "opensearch") {
+		osGone = opensearchGone(ctx, r, fm)
+	}
+	return pgGone && osGone
 }
 
 // observeData — 전부 Cluster.status/spec 실측(위조 0). 옵션 적용 결과를 라이브로 노출.
@@ -345,7 +361,7 @@ func observeData(ctx context.Context, r *modelReconciler, fm *unstructured.Unstr
 	}
 	rtt := mk("connection_rtt_ms", "ms", "n/a", false, "PgClaim→Binding probe(P6)")
 	rtt["note"] = "PgClaim 연결 시 측정"
-	return []interface{}{
+	observed := []interface{}{
 		up,
 		mk("pg_namespace", "", pgNS(fm, r.cfg), true, "spec.parameters.namespace"),
 		mk("pg_topology", "", topo, inst >= 1, "Cluster.spec.instances"),
@@ -362,7 +378,9 @@ func observeData(ctx context.Context, r *modelReconciler, fm *unstructured.Unstr
 		mk("pg_extensions", "", extVal, true, "spec.parameters.extensions→Database CR"),
 		mk("bind_ready_ratio", "ratio", ratioVal, healthyRatio, "readyInstances/spec.instances"),
 		rtt,
-	}, nil
+	}
+	observed = append(observed, observeOpenSearch(ctx, r, fm)...)
+	return observed, nil
 }
 
 func boolStr(b bool) string {

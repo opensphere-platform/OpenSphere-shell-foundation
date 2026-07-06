@@ -201,6 +201,7 @@ var bundles = map[string]bundleSpec{
 		gone:       dataGone,
 		nsOf:       dataNS,       // 설치옵션 NS
 		endpointFM: dataEndpoint, // 설치 NS의 -rw 서비스
+		engines:    []string{"opensearch"},
 		probeFM:    dataProbe,
 	},
 }

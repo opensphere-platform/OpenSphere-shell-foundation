@@ -31,6 +31,7 @@ type config struct {
 	sambaImage          string // (deprecated 2026-07-06) samba operand는 plugin이 소유 — 미사용, arg 호환 위해 잔존
 	sambaPluginSvc      string // samba operand 선언 제공 plugin svc(self-contained) — GET /operand/manifests
 	pgImage             string
+	opensearchImage     string
 	defaultStorageClass string // HostRequirements 기본값(§1.2) — Basic StorageClass 이름의 단일 선언점
 }
 
@@ -52,6 +53,7 @@ func main() {
 	flag.StringVar(&cfg.pgImage, "pg-image", "ghcr.io/cloudnative-pg/postgresql:17", "data PostgreSQL operand 이미지(CloudNativePG Cluster) — image-source: ghcr-mirror(missing, upstream org)")
 	// HostRequirements(§1.2 "Basic은 요구만 선언") 기본값 — 클러스터 실측 StorageClass 이름(rancher.io/local-path 기반 "standard").
 	flag.StringVar(&cfg.defaultStorageClass, "default-storage-class", "standard", "PVC가 참조할 Basic StorageClass 기본값(FoundationModel.spec.parameters.hostRequirements.storageClass로 모델별 override 가능)")
+	flag.StringVar(&cfg.opensearchImage, "opensearch-image", "ghcr.io/opensphere-platform/mirror/opensearch:2.17.0", "data OpenSearch operand image(GHCR mirror, origin=opensearchproject/opensearch:2.17.0)")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New())

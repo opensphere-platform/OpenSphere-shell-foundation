@@ -17,6 +17,7 @@ export const FOUNDATION_PLUGINS: HostedPlugin[] = [
     desc: '공용 검색·인덱스 capability · OpenSearch. Help Center 종합검색의 백본.',
     consumePoint: 'opensphere-search.opensphere-foundation.svc:9200',
     healthRef: 'os', view: { module: 'opensearch' },
+    activation: { packageId: 'opensearch', element: 'osp-opensearch', installModule: 'engines', installTab: 'opensearch' },
   },
   {
     id: 'rustfs', name: 'RustFS', icon: 'storage', kind: 'plugin', hostRef: 'foundation',
@@ -40,5 +41,6 @@ export const FOUNDATION_PLUGINS: HostedPlugin[] = [
     desc: 'workspace/사원 디렉터리 capability · Samba AD DC(identity 번들, engines.samba 설치옵션). Keycloak이 LDAP(389)로 federation.',
     consumePoint: 'foundation-identity-samba.opensphere-foundation.svc:389',
     healthRef: 'samba', view: { module: 'samba' },
+    activation: { packageId: 'samba-ad', element: 'osp-samba-ad' },
   },
 ];

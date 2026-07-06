@@ -2,18 +2,18 @@ import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, ViewEncapsulation, computed, inject, signal } from '@angular/core';
 import { ClarityModule } from '@clr/angular';
 import { PostgresComponent } from './modules/postgres/postgres.component';
-import { OpenSearchComponent } from './modules/opensearch/opensearch.component';
 import { RustfsComponent } from './modules/rustfs/rustfs.component';
 import { KeycloakComponent } from './modules/identity/keycloak.component';
-import { SambaComponent } from './modules/identity/samba.component';
 import { FoundationOverviewComponent } from './foundation/overview.component';
 import { FoundationAdminComponent } from './foundation/plugins-admin.component';
 import { FoundationConnectivityComponent } from './foundation/connectivity.component';
 import { FoundationEnginesComponent } from './foundation/engines.component';
 import { PlaceholderModuleComponent } from './foundation/placeholder-module.component';
+import { PluginOutletComponent } from './foundation/plugin-outlet.component';
 import { FoundationRegistryService } from './registry/foundation-registry.service';
 import { ViewRouter } from './view-router';
 import { CarbonIcon } from './carbon-icon';
+import { HostedPlugin } from './registry/hosted-plugin';
 import Home16 from '@carbon/icons/es/home/16';
 import Apps16 from '@carbon/icons/es/apps/16';
 import Db2Database16 from '@carbon/icons/es/db2--database/16';
@@ -75,7 +75,7 @@ const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; d
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, ClarityModule, CarbonIcon, PostgresComponent, OpenSearchComponent, RustfsComponent, KeycloakComponent, SambaComponent, FoundationOverviewComponent, FoundationAdminComponent, FoundationConnectivityComponent, FoundationEnginesComponent, PlaceholderModuleComponent],
+  imports: [CommonModule, ClarityModule, CarbonIcon, PostgresComponent, RustfsComponent, KeycloakComponent, FoundationOverviewComponent, FoundationAdminComponent, FoundationConnectivityComponent, FoundationEnginesComponent, PlaceholderModuleComponent, PluginOutletComponent],
   encapsulation: ViewEncapsulation.ShadowDom,
   styleUrls: ['./app.component.css'],
   styles: [`
@@ -153,11 +153,10 @@ const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; d
         <app-foundation-admin *ngIf="vr.module() === 'plugins'"></app-foundation-admin>
         <app-foundation-connectivity *ngIf="vr.module() === 'bss'"></app-foundation-connectivity>
         <app-foundation-engines *ngIf="vr.module() === 'engines'"></app-foundation-engines>
+        <app-plugin-outlet *ngIf="activePlugin() as p" [plugin]="p"></app-plugin-outlet>
         <app-postgres *ngIf="vr.module() === 'postgres' && reg.isEnabled('postgres')"></app-postgres>
-        <app-opensearch *ngIf="vr.module() === 'opensearch' && reg.isEnabled('opensearch')"></app-opensearch>
         <app-rustfs *ngIf="vr.module() === 'rustfs' && reg.isEnabled('rustfs')"></app-rustfs>
         <app-keycloak *ngIf="vr.module() === 'keycloak' && reg.isEnabled('keycloak')"></app-keycloak>
-        <app-samba *ngIf="vr.module() === 'samba' && reg.isEnabled('samba')"></app-samba>
         <app-placeholder-module *ngIf="roadmapMeta() as rm" [name]="rm.name" [logo]="rm.logo" [mono]="rm.mono"
           [eyebrow]="'Foundation · ' + rm.domain"></app-placeholder-module>
         <clr-alert *ngIf="disabledModule()" clrAlertType="warning" [clrAlertClosable]="false">
@@ -190,10 +189,29 @@ export class AppComponent implements OnInit, OnDestroy {
   isOpen(id: string): boolean { return !!this.openState()[id]; }
   setOpen(id: string, v: boolean): void { this.openState.update((m) => ({ ...m, [id]: v })); }
 
-  ngOnInit(): void { this.reg.start(); }
+  ngOnInit(): void {
+    this.reg.start();
+  }
   ngOnDestroy(): void { this.reg.stop(); }
 
-  go(id: string): void { this.vr.setModule(id); }
+  go(id: string): void {
+    if (id === 'opensearch' && this.reg.modelOf('opensearch') !== 'Installed') {
+      this.openOpenSearchInstaller();
+      return;
+    }
+    this.vr.setModule(id);
+  }
+
+  activePlugin(): HostedPlugin | undefined {
+    const id = this.vr.module();
+    const p = this.reg.all.find((x) => x.id === id && !!x.activation);
+    return p && this.reg.isEnabled(p.id) ? p : undefined;
+  }
+
+  private openOpenSearchInstaller(): void {
+    this.vr.setModule('engines');
+    this.vr.setTab('opensearch');
+  }
 
   disabledModule(): boolean {
     const m = this.vr.module();

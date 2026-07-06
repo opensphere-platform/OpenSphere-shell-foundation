@@ -49,8 +49,8 @@ spec:
   parameters:
     engines:
       postgres: enabled
-      opensearch: enabled
-      rustfs: enabled
+      opensearch: disabled
+      rustfs: disabled
 ---
 # ── identity 모듈 자기기술(FoundationModuleDescriptor) — "모듈이 자기 자신을 설명한다"(FS-구축계획서 §9.4) ──
 # 감사(2026-07-06) F1 갭의 첫 착수: descriptor CR을 클러스터에 선언(현재 UI는 개수·이름 관찰, 후속: registry hydrate).
