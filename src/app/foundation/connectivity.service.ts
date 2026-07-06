@@ -2,10 +2,10 @@ import { Injectable, signal } from '@angular/core';
 import { apiBase, FND_NS } from '../api-base';
 import { State } from '../modules/postgres/cnpg.types';
 
-// Basic Service Stack(BSS) ↔ Foundation 연결의 실측 상태. §1.1(3-스택 소비 계약) 기준.
-// BSS = 클러스터 어디서든 쓰는 범용 k8s 서비스(kube-prometheus-stack·ingress-nginx·cert-manager·StorageClass·Velero).
-// Velero는 클러스터의 아무 네임스페이스나 백업 대상으로 삼는 워크로드 무관 범용 DR 도구라 BSS(2026-07-04 재확정, 사용자).
-// OTel Collector/CloudNativePG/Crossplane은 Foundation 자신의 구성에 특정 배선된 FSS 엔진이라 여기 없다 — engines.service.ts 참조.
+// Basic Service Stack(BSS) ↔ Foundation 연결의 실측 상태.
+// 정본(_DOCS_/Foundation/FS-구축계획서-2026-07-02.md §1.1): BSS = k8s에서 범용 제공하는 클러스터 공유 인프라.
+// 현 클러스터 정본 실체는 kube-prometheus-stack(ns monitoring), storage(local-path), ingress다.
+// cert-manager/Velero는 여기서 함께 관측하는 host 연결 운영 의존성이다.
 // "코드에 구현됐는가"(정적, file:line 근거)와 "지금 이 클러스터에 대응 인프라가 실재하는가"(라이브 k8s 조회)를
 // 분리해 각각 정직하게 보여준다 — 둘을 섞어 "설치된 것처럼" 오인시키지 않는다(§9.3 사고 재발 방지).
 @Injectable({ providedIn: 'root' })
@@ -55,8 +55,7 @@ export class ConnectivityService {
       this.probe('certmanager', 'apis/apiextensions.k8s.io/v1/customresourcedefinitions/clusterissuers.cert-manager.io'),
       this.probe('storage', 'apis/storage.k8s.io/v1/storageclasses/standard'),
       this.probe('velero', 'apis/apiextensions.k8s.io/v1/customresourcedefinitions/backups.velero.io'),
-      // otel/cnpg/crossplane은 FSS 엔진 카탈로그(engines.service.ts)로 이관됨(2026-07-04) —
-      // "범용 k8s 서비스=BSS, OpenSphere 구성 전용=FSS" 기준, 이 3개는 BSS가 아니다.
+      // otel/cnpg/crossplane은 FS 모듈 구현 엔진이므로 engines.service.ts에서 관측한다.
     ]);
     this.busy.set(false);
     try { this.lastSync.set(new Date().toLocaleTimeString()); } catch { /* noop */ }

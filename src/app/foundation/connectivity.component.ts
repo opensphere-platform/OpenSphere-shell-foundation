@@ -34,11 +34,11 @@ interface DepCard {
 
 const LOGO_BASE = 'https://cdn.statically.io/gh/openplatform-labs/images@main/logos';
 
-// Host 연결(Basic Service Stack, BSS) 카탈로그 — 관리자 화면. **BSS = 클러스터 어디서든 쓰는 범용 k8s 서비스**
-// (kube-prometheus-stack·ingress-nginx·cert-manager·StorageClass·Velero — Velero는 워크로드 무관 범용 DR 도구라
-// BSS로 재확정, 2026-07-04). OpenSphere 구성 전용 엔진(OTel Collector·CloudNativePG·Crossplane)은 BSS가 아니라
-// FSS 엔진이다 — BSS 멤버는 FSS 멤버가 될 수 없다(양립 불가). 그 3개는 별도 카탈로그 → engines.component.ts(/p/foundation/engines).
-// Foundation은 이 BSS 자원을 소유하지 않고 요구만 선언(§1.2)한다. 각 카드는 (a)Foundation 쪽 배선이 코드에
+// Host 연결(Basic Service Stack, BSS) 카탈로그 — 관리자 화면.
+// 정본(_DOCS_/Foundation/FS-구축계획서-2026-07-02.md §1.1): BSS = k8s에서 범용 제공하는 클러스터 공유 인프라.
+// 현 클러스터 정본 실체는 kube-prometheus-stack(ns monitoring), storage(local-path), ingress다.
+// cert-manager/Velero는 이 화면에서 함께 다루는 host 연결 운영 의존성이다.
+// Foundation은 BSS 자원을 소유하지 않고 요구만 선언(§1.2)한다. 각 카드는 (a)Foundation 쪽 배선이 코드에
 // 있는지(impl), (b)지금 이 클러스터에 그 컴포넌트가 실재하는지(live)를 함께 보여준다.
 @Component({
   selector: 'app-foundation-connectivity',
@@ -106,17 +106,17 @@ const LOGO_BASE = 'https://cdn.statically.io/gh/openplatform-labs/images@main/lo
     <section class="stack-inline">
       <div>
         <span class="stack-kicker">Concept</span>
-        <strong>클러스터 공용 기반 서비스</strong>
-        <p>BSS는 특정 OpenSphere 구성요소 전용이 아니라, 여러 워크로드와 subShell이 함께 소비할 수 있는 host 제공 서비스다.</p>
+        <strong>클러스터 공유 인프라</strong>
+        <p>BSS는 k8s에서 범용 제공하는 클러스터 공유 인프라다. 소비자는 특정 subShell이 아니라 클러스터 전체다.</p>
       </div>
       <div class="stack-members">
         <span *ngFor="let m of bssMembers" class="stack-chip">{{ m }}</span>
       </div>
     </section>
     <p class="os-sub">
-      Foundation은 Basic Service Stack(클러스터 <strong>어디서든 쓰는 범용 k8s 서비스</strong>)의 자원을 소유하지 않고 <strong>요구만 선언</strong>한다(§1.2).
-      BSS 멤버는 FSS(Foundation Service Stack) 멤버가 될 수 없다 — OpenSphere 구성 전용 엔진(OTel Collector·CloudNativePG·Velero·Crossplane)은
-      여기가 아니라 <a class="vl-link" (click)="goEngines()">FSS 엔진 카탈로그</a>에 있다.
+      Foundation은 Basic Service Stack의 자원을 소유하지 않고 <strong>요구만 선언</strong>한다(FS 구축계획서 §1.2).
+      아래 카드는 정본 BSS 실체와 host 연결 운영 의존성을 함께 보여준다. OpenSphere capability 구현 엔진은
+      <a class="vl-link" (click)="goEngines()">FSS 엔진 카탈로그</a>에서 별도로 다룬다.
     </p>
 
     <div class="os-metrics os-metrics--tight">
@@ -126,7 +126,7 @@ const LOGO_BASE = 'https://cdn.statically.io/gh/openplatform-labs/images@main/lo
       <pg-metric label="활성 모듈" [value]="svc.modelCount()" [status]="svc.modelCount()?'ok':''" sub="FoundationModel CR" [clickable]="true" (go)="vr.setTab('m-models')"></pg-metric>
     </div>
 
-    <div class="os-sech">Basic Service Stack 의존성 <span class="os-dim">— host가 제공, Foundation은 요구만 선언·소비</span></div>
+    <div class="os-sech">Basic Service Stack / Host 연결 <span class="os-dim">— host가 제공, Foundation은 요구만 선언·소비</span></div>
     <div class="hc-grid">
       <div class="hc-card" *ngFor="let c of allCards"
            [class.hc-clickable]="c.detail" (click)="c.detail && open(c)"
@@ -171,7 +171,7 @@ export class FoundationConnectivityComponent {
   readonly IMPL_LABEL = IMPL_LABEL;
   readonly IMPL_PILL = IMPL_PILL;
   readonly failed = signal<Set<string>>(new Set());
-  readonly bssMembers = ['kube-prometheus-stack', 'ingress-nginx', 'cert-manager', 'StorageClass', 'Velero'];
+  readonly bssMembers = ['kube-prometheus-stack', 'storage(local-path)', 'ingress'];
 
   ngOnInit(): void { this.svc.start(); }
 

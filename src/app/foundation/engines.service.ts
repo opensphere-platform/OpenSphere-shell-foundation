@@ -2,12 +2,9 @@ import { Injectable, signal } from '@angular/core';
 import { apiBase } from '../api-base';
 import { State } from '../modules/postgres/cnpg.types';
 
-// FSS 엔진 카탈로그의 라이브 상태. BSS(connectivity.service.ts)와 분리된 이유(2026-07-04, 사용자 확정):
-// "범용 k8s 서비스면 BSS, OpenSphere 구성 전용이면 FSS" — OTel Collector(Foundation 모듈 전용 게이트웨이)·
-// CloudNativePG(Foundation data 전용 operator)·Crossplane(OpenSphere 자체 설치 엔진)은 클러스터의 아무 워크로드나
-// 범용으로 쓰는 게 아니라 OpenSphere 자신의 구성을 위해서만 존재한다. 따라서 BSS 멤버가 될 수 없고(양립 불가),
-// FSS 소속 엔진 카탈로그로 분리한다. ※ Velero는 워크로드 무관 범용 DR 도구라 BSS로 재확정(2026-07-04)
-// → connectivity.service.ts로 이동, 여기 없음.
+// FSS 엔진 카탈로그의 라이브 상태.
+// 정본(_DOCS_/Foundation/FS-구축계획서-2026-07-02.md §3.2): FS 멤버는 identity/data/ai/comm/observability/backup.
+// 이 service는 정본 멤버 자체가 아니라 그 모듈을 구현·조달하는 엔진 후보의 live 상태를 조회한다.
 @Injectable({ providedIn: 'root' })
 export class EnginesService {
   readonly live = signal<Record<string, State>>({});

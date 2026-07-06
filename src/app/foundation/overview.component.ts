@@ -31,9 +31,8 @@ interface DomainCard {
 
 // FS 구축계획서(§3.2 모듈 카탈로그, 정본: _DOCS_/Foundation/FS-구축계획서-2026-07-02.md) 기준 계획 제품명.
 // 아직 capability 서비스(FOUNDATION_PLUGINS)로 등록되지 않은 4개 도메인도 정확한 제품명을 명시한다.
-// liveKey가 있으면 실제 카탈로그(BSS=ConnectivityService 또는 FSS=EnginesService)의 실측 상태를 그대로 반영(하드코딩 금지).
-// OTel Collector는 Foundation 전용 배선이라 FSS(EnginesService), Velero는 워크로드 무관 범용 DR 도구라
-// BSS(ConnectivityService)로 재확정(2026-07-04, 사용자) — 판정 기준: "범용 k8s 서비스=BSS, OpenSphere 구성 전용=FSS".
+// liveKey가 있으면 실제 카탈로그(BSS host 연결 또는 FS 구현 엔진)의 실측 상태를 그대로 반영한다(하드코딩 금지).
+// FS 정본 멤버는 제품명이 아니라 identity/data/ai/comm/observability/backup capability 모듈이다.
 const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: string; linkTab?: string; linkModule?: 'bss' | 'engines' }> = {
   ai: { modules: 'LiteLLM · Langfuse · Embed' },
   comm: { modules: 'Stalwart(JMAP) · Novu · Mattermost' },
@@ -73,8 +72,8 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
       </div>
     </section>
 
-    <!-- BSS/FSS 개념 정의 -->
-    <div class="os-sech">BSS / FSS 정의</div>
+    <!-- BSS/FSS 개념 정의: _DOCS_/Foundation/FS-구축계획서-2026-07-02.md §1.1, §3.1 기준 -->
+    <div class="os-sech">BSS / FSS 정의 <span class="os-dim">— FS 구축계획서 §1.1 · §3.1 정본</span></div>
     <section class="stack-defs">
       <article class="stack-def stack-def--bss" (click)="go('bss')" role="button" tabindex="0" (keydown.enter)="go('bss')">
         <div class="stack-def-h">
@@ -82,8 +81,8 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
           <h3>Basic Service Stack</h3>
         </div>
         <p>
-          클러스터 어디서든 쓰는 범용 k8s 기반 서비스입니다. Foundation은 BSS를 소유하지 않고,
-          필요한 의존성을 선언하고 소비합니다.
+          k8s에서 범용 제공하는 클러스터 공유 인프라입니다. 소비자는 클러스터 전체이며,
+          Foundation은 이 자원을 소유하지 않고 필요한 요구만 선언해 소비합니다.
         </p>
         <div class="stack-members">
           <span *ngFor="let m of bssMembers" class="stack-chip">{{ m }}</span>
@@ -96,8 +95,8 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
           <h3>Foundation Service Stack</h3>
         </div>
         <p>
-          OpenSphere 구성을 위해 Foundation이 준비하고 운영하는 전용 엔진입니다. capability 모듈과
-          설치 파이프라인을 만들며, BSS 멤버와 겹치지 않습니다.
+          사용자(사원·고객) 관리와 이를 위한 모든 시스템 운영 관리 서비스입니다.
+          10 Perspective를 지탱하는 기둥이며, capability 모듈이 FS의 정본 멤버입니다.
         </p>
         <div class="stack-members">
           <span *ngFor="let m of fssMembers" class="stack-chip">{{ m }}</span>
@@ -155,8 +154,8 @@ export class FoundationOverviewComponent {
   readonly s = this.reg.summary;
   readonly iApps = Apps24;
   readonly iHome = Home24;
-  readonly bssMembers = ['kube-prometheus-stack', 'ingress-nginx', 'cert-manager', 'StorageClass', 'Velero'];
-  readonly fssMembers = ['OpenTelemetry Collector', 'CloudNativePG', 'OpenSearch', 'Crossplane', 'Grafana Tempo', 'Grafana Loki', 'Grafana'];
+  readonly bssMembers = ['kube-prometheus-stack', 'storage(local-path)', 'ingress'];
+  readonly fssMembers = ['identity', 'data', 'ai', 'comm', 'observability', 'backup'];
 
   ngOnInit(): void { this.engines.start(); this.conn.start(); }
 

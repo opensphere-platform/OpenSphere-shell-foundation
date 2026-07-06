@@ -24,11 +24,9 @@ interface EngineCard {
 
 const LOGO_BASE = 'https://cdn.statically.io/gh/openplatform-labs/images@main/logos';
 
-// FSS 엔진 카탈로그 — Basic Service Stack(BSS, connectivity.component.ts)과 분리(2026-07-04, 사용자 확정).
-// 판정 기준: "범용 k8s 서비스면 BSS, OpenSphere 구성 전용 서비스면 FSS". 이 엔진들은 클러스터 아무
-// 워크로드나 쓰는 범용 도구가 아니라 OpenSphere 자신의 capability 모듈(data/observability)과 설치
-// 파이프라인을 구성하기 위해서만 존재 — 그래서 BSS 멤버가 될 수 없고(양립 불가) FSS 소속이다.
-// ※ Velero는 워크로드 무관 범용 DR 도구라 BSS로 재확정(2026-07-04) — connectivity.component.ts에 있다.
+// FSS 엔진 카탈로그 — FSS 정의 자체가 아니라 FS capability 모듈을 구현·조달하는 운영 표면이다.
+// 정본(_DOCS_/Foundation/FS-구축계획서-2026-07-02.md §3.2): FS 모듈은 identity/data/ai/comm/observability/backup.
+// 이 화면의 제품 카드(OTel/CNPG/OpenSearch/Crossplane 등)는 §3.2의 "엔진 후보"와 HYBRID-WRAP 조달 방식을 보여준다.
 // ※ tempo/loki/grafana는 착수 전 로드맵 카드 — PlaceholderModuleComponent로 로고/제목만 표시(2026-07-04).
 @Component({
   selector: 'app-foundation-engines',
@@ -43,21 +41,21 @@ const LOGO_BASE = 'https://cdn.statically.io/gh/openplatform-labs/images@main/lo
       eyebrow="Foundation · 관측" backLabel="FSS 엔진" (back)="vr.setTab('overview')"></app-placeholder-module>
 
     <ng-container *ngIf="!isDetailTab()">
-    <div class="os-title-row"><h2 class="os-h2">FSS 엔진 <span class="label label-info">Foundation Service Stack(FSS)</span></h2></div>
+    <div class="os-title-row"><h2 class="os-h2">FSS 엔진 <span class="label label-info">FS 구현·조달 표면</span></h2></div>
     <section class="stack-inline">
       <div>
         <span class="stack-kicker">Concept</span>
-        <strong>OpenSphere 구성 전용 엔진</strong>
-        <p>FSS는 Foundation capability와 설치 파이프라인을 만들기 위한 전용 엔진이다. 범용 host 서비스인 BSS와 멤버를 공유하지 않는다.</p>
+        <strong>Foundation capability 구현 엔진</strong>
+        <p>FS의 정본 멤버는 6개 capability 모듈이다. 이 화면은 그 모듈을 구현하기 위한 엔진 후보와 설치 상태를 다룬다.</p>
       </div>
       <div class="stack-members">
         <span *ngFor="let m of fssMembers" class="stack-chip">{{ m }}</span>
       </div>
     </section>
     <p class="os-sub">
-      OpenSphere <strong>구성 전용</strong> 엔진 카탈로그 — 범용 k8s 서비스(Basic Service Stack, <a class="vl-link" (click)="goBss()">BSS</a>)와
-      달리, 이 엔진들은 Foundation의 capability 모듈(data·observability)과 설치 파이프라인을 만드는 데만 쓰인다.
-      BSS 멤버는 될 수 없다.
+      Foundation Service Stack의 정본 정의는 사용자(사원·고객) 관리와 시스템 운영 관리이며,
+      정본 모듈은 identity·data·ai·comm·observability·backup이다(FS 구축계획서 §3.1~§3.2).
+      이 카탈로그는 그 모듈을 위한 operator-of-operators/HYBRID-WRAP 엔진 설치 화면이다.
     </p>
 
     <div class="hc-grid">
@@ -104,7 +102,7 @@ export class FoundationEnginesComponent {
   readonly IMPL_LABEL = IMPL_LABEL;
   readonly IMPL_PILL = IMPL_PILL;
   readonly failed = signal<Set<string>>(new Set());
-  readonly fssMembers = ['OpenTelemetry Collector', 'CloudNativePG', 'OpenSearch', 'Crossplane', 'Grafana Tempo', 'Grafana Loki', 'Grafana'];
+  readonly fssMembers = ['identity', 'data', 'ai', 'comm', 'observability', 'backup'];
 
   ngOnInit(): void { this.svc.start(); }
 
