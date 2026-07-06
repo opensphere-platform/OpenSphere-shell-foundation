@@ -191,12 +191,6 @@ pg-metric { display: block; height: 100%; }
 .hc-cat { display: inline-flex; align-items: center; gap: 6px; font-size: 0.74rem; color: var(--os-text-sec); }
 .hc-cat-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--os-brand-500); }
 .hc-badges { display: flex; align-items: center; gap: 6px; }
-.fss-grid { grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); }
-.fss-card .hc-role { min-height: 0; font-weight: 600; color: var(--os-ink); }
-.fss-kv { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 4px 10px; margin: 0 0 10px; font-size: 0.76rem; }
-.fss-kv span { color: var(--os-muted); }
-.fss-kv b { color: var(--os-text-sec); font-weight: 500; }
-.fss-card .hc-badges { flex-wrap: wrap; justify-content: flex-end; }
 .hc-refresh { margin-top: 14px; }
 .hc-card.hc-clickable { cursor: pointer; }
 .hc-card.hc-clickable:hover { border-color: var(--os-brand-500); }

@@ -2,7 +2,7 @@ import { Injectable, signal } from '@angular/core';
 import { apiBase } from '../api-base';
 import { State } from '../modules/postgres/cnpg.types';
 
-// FSS 멤버 카탈로그 안에서 제공하는 구현 엔진 후보의 라이브 상태.
+// FSS 엔진 카탈로그의 라이브 상태.
 // 정본(_DOCS_/Foundation/FS-구축계획서-2026-07-02.md §3.2): FS 멤버는 identity/data/ai/comm/observability/backup.
 // 이 service는 정본 멤버 자체가 아니라 그 모듈을 구현·조달하는 엔진 후보의 live 상태를 조회한다.
 @Injectable({ providedIn: 'root' })

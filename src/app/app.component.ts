@@ -120,7 +120,7 @@ const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; d
           <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['bss']" [size]="16" />BSS (Host 연결)
         </a>
         <a clrVerticalNavLink [class.active]="vr.module() === 'engines'" (click)="go('engines')" (keydown.enter)="go('engines')">
-          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['engines']" [size]="16" />FSS 멤버
+          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['engines']" [size]="16" />FSS 엔진
         </a>
 
         <clr-vertical-nav-group *ngFor="let g of groups()"
@@ -154,7 +154,7 @@ const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; d
         <app-placeholder-module *ngIf="roadmapMeta() as rm" [name]="rm.name" [logo]="rm.logo" [mono]="rm.mono"
           [eyebrow]="'Foundation · ' + rm.domain"></app-placeholder-module>
         <clr-alert *ngIf="disabledModule()" clrAlertType="warning" [clrAlertClosable]="false">
-          <clr-alert-item><span class="alert-text">이 plugin은 비활성 상태입니다. FSS 멤버 카탈로그에서 설치 상태를 확인하세요.</span></clr-alert-item>
+          <clr-alert-item><span class="alert-text">이 plugin은 비활성 상태입니다. FSS 엔진 카탈로그에서 설치 상태를 확인하세요.</span></clr-alert-item>
         </clr-alert>
       </section>
     </div>
@@ -223,7 +223,7 @@ export class AppComponent implements OnInit, OnDestroy {
   private label(id: string): string {
     if (id === 'overview') return 'Overview';
     if (id === 'bss') return 'BSS (Host 연결)';
-    if (id === 'engines') return 'FSS 멤버';
+    if (id === 'engines') return 'FSS 엔진';
     const rm = ROADMAP_META[id];
     if (rm) return rm.name;
     const p = this.reg.all.find((x) => x.id === id);

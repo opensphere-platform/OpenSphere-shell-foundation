@@ -66,7 +66,7 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
           <strong>capability 모듈</strong>을 설치·운영하고, 다른 subShell이 소비할 백킹서비스를 호스팅합니다.
         </p>
         <div class="ov-hero-actions">
-          <button class="btn btn-primary" (click)="go('engines')">FSS 멤버 보기</button>
+          <button class="btn btn-primary" (click)="go('engines')">FSS 엔진 설치</button>
         </div>
       </div>
       <div class="ov-hero-stat">
@@ -189,9 +189,9 @@ export class FoundationOverviewComponent {
     },
     {
       n: '1',
-      title: 'FSS 멤버 선택',
-      body: '계획서의 FS 6모듈을 기준으로 구현 엔진 후보와 설치 진입점을 확인합니다.',
-      action: 'Members',
+      title: 'FSS 엔진 선언',
+      body: 'OpenSearch, CloudNativePG, Crossplane 같은 구현 엔진을 설치 선언합니다.',
+      action: 'Engines',
       module: 'engines',
     },
     {
@@ -232,7 +232,7 @@ export class FoundationOverviewComponent {
       const svc = p.linkModule === 'bss' ? this.conn : this.engines;
       const state = svc.liveState(p.liveKey);
       if (state === 'loading') { return base; } // 확인 중엔 아무 것도 단정하지 않음(플리커 방지)
-      const catalogLabel = p.linkModule === 'bss' ? 'BSS' : 'FSS 멤버';
+      const catalogLabel = p.linkModule === 'bss' ? 'BSS' : 'FSS 엔진';
       const opNote = state === 'ok' ? `${p.liveLabel} 설치·운영중 — ${catalogLabel}에서 상태 확인` : `${p.liveLabel} 미설치 — ${catalogLabel}에서 설치 가능`;
       return { ...base, opNote, linkTab: p.linkTab, linkModule: p.linkModule };
     };

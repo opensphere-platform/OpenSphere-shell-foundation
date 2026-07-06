@@ -115,8 +115,8 @@ const LOGO_BASE = 'https://cdn.statically.io/gh/openplatform-labs/images@main/lo
     </section>
     <p class="os-sub">
       Foundation은 Basic Service Stack의 자원을 소유하지 않고 <strong>요구만 선언</strong>한다(FS 구축계획서 §1.2).
-      아래 카드는 정본 BSS 실체와 host 연결 운영 의존성을 함께 보여준다. OpenSphere capability 멤버와 구현 엔진 후보는
-      <a class="vl-link" (click)="goEngines()">FSS 멤버 카탈로그</a>에서 별도로 다룬다.
+      아래 카드는 정본 BSS 실체와 host 연결 운영 의존성을 함께 보여준다. OpenSphere capability 구현 엔진은
+      <a class="vl-link" (click)="goEngines()">FSS 엔진 카탈로그</a>에서 별도로 다룬다.
     </p>
 
     <div class="os-metrics os-metrics--tight">

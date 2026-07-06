@@ -18,7 +18,7 @@ const LOGO = 'https://cdn.statically.io/gh/openplatform-labs/images@main/logos/p
   imports: [CommonModule, ClarityModule, CarbonIcon, BarChart],
   template: `
     <a class="vl-back" (click)="back()" (keydown.enter)="back()" role="button" tabindex="0">
-      <os-cicon [icon]="iBack" [size]="16" /> FSS 멤버
+      <os-cicon [icon]="iBack" [size]="16" /> FSS 엔진
     </a>
 
     <section class="vl-hero">
