@@ -41,6 +41,12 @@ interface EngineCard {
   tab?: string;
 }
 
+interface EngineSection {
+  id: string;
+  title: string;
+  summary: string;
+}
+
 const LOGO_BASE = 'https://cdn.statically.io/gh/openplatform-labs/images@main/logos';
 
 // FSS 엔진 카탈로그 — 기존 카드형 구조를 유지하되, FS 구축계획서 §3.2의 6개 모듈별 엔진 후보를 빠짐없이 배치한다.
@@ -74,34 +80,44 @@ const LOGO_BASE = 'https://cdn.statically.io/gh/openplatform-labs/images@main/lo
       아래 카드는 FS 구축계획서 §3.2의 엔진 후보와 HYBRID-WRAP delivery 엔진을 관리 진입점으로 배열한 것이다.
     </p>
 
-    <div class="hc-grid">
-      <div class="hc-card" *ngFor="let c of cards"
-           [class.hc-clickable]="c.detail" (click)="c.detail && open(c)"
-           [attr.role]="c.detail ? 'button' : null" [attr.tabindex]="c.detail ? 0 : null"
-           (keydown.enter)="c.detail && open(c)">
-        <div class="hc-head">
-          <div class="hc-logo">
-            <img *ngIf="c.logo && !failed().has(c.id)" [src]="logoUrl(c.logo)" [alt]="c.name" loading="lazy" (error)="markFailed(c.id)" />
-            <span *ngIf="!c.logo || failed().has(c.id)" class="hc-mono">{{ c.mono }}</span>
-          </div>
-          <div class="hc-idblock">
-            <div class="hc-name">{{ c.name }}<span *ngIf="c.detail" class="hc-open">관리 →</span></div>
-            <div class="hc-provider">{{ c.provider }}<span *ngIf="c.version"> · {{ c.version }}</span></div>
-          </div>
+    <section class="hc-section" *ngFor="let section of sections">
+      <div class="hc-section-head">
+        <div>
+          <span class="stack-kicker">{{ section.id }}</span>
+          <h3>{{ section.title }}</h3>
         </div>
+        <p>{{ section.summary }}</p>
+      </div>
 
-        <p class="hc-role">{{ c.role }}</p>
-        <div class="hc-wiring"><span class="hc-wiring-k">연결</span><span>{{ c.wiring }}</span></div>
+      <div class="hc-grid">
+        <div class="hc-card" *ngFor="let c of cardsFor(section.id)"
+             [class.hc-clickable]="c.detail" (click)="c.detail && open(c)"
+             [attr.role]="c.detail ? 'button' : null" [attr.tabindex]="c.detail ? 0 : null"
+             (keydown.enter)="c.detail && open(c)">
+          <div class="hc-head">
+            <div class="hc-logo">
+              <img *ngIf="c.logo && !failed().has(c.id)" [src]="logoUrl(c.logo)" [alt]="c.name" loading="lazy" (error)="markFailed(c.id)" />
+              <span *ngIf="!c.logo || failed().has(c.id)" class="hc-mono">{{ c.mono }}</span>
+            </div>
+            <div class="hc-idblock">
+              <div class="hc-name">{{ c.name }}<span *ngIf="c.detail" class="hc-open">관리 →</span></div>
+              <div class="hc-provider">{{ c.provider }}<span *ngIf="c.version"> · {{ c.version }}</span></div>
+            </div>
+          </div>
 
-        <div class="hc-foot">
-          <span class="hc-cat"><span class="hc-cat-dot"></span>{{ c.category }}</span>
-          <span class="hc-badges">
-            <span class="label" [ngClass]="IMPL_PILL[c.impl]">{{ IMPL_LABEL[c.impl] }}</span>
-            <span *ngIf="c.liveKey" class="label" [ngClass]="livePill(c.liveKey)">{{ liveLabel(c.liveKey) }}</span>
-          </span>
+          <p class="hc-role">{{ c.role }}</p>
+          <div class="hc-wiring"><span class="hc-wiring-k">연결</span><span>{{ c.wiring }}</span></div>
+
+          <div class="hc-foot">
+            <span class="hc-cat"><span class="hc-cat-dot"></span>{{ c.category }}</span>
+            <span class="hc-badges">
+              <span class="label" [ngClass]="IMPL_PILL[c.impl]">{{ IMPL_LABEL[c.impl] }}</span>
+              <span *ngIf="c.liveKey" class="label" [ngClass]="livePill(c.liveKey)">{{ liveLabel(c.liveKey) }}</span>
+            </span>
+          </div>
         </div>
       </div>
-    </div>
+    </section>
 
     <div class="os-actions hc-refresh">
       <button class="btn btn-sm" (click)="svc.refresh()" [disabled]="svc.busy()">
@@ -119,6 +135,15 @@ export class FoundationEnginesComponent {
   readonly IMPL_PILL = IMPL_PILL;
   readonly failed = signal<Set<string>>(new Set());
   readonly fssMembers = ['identity', 'data', 'ai', 'comm', 'observability', 'backup'];
+  readonly sections: EngineSection[] = [
+    { id: 'identity', title: 'Identity / Access', summary: '사원·고객 신원, 디렉터리, 정책, SCIM 동기화 계층.' },
+    { id: 'data', title: 'Data Plane', summary: 'PostgreSQL, object storage, cache, document DB, 검색 인덱스 등 데이터 capability.' },
+    { id: 'ai', title: 'AI / Retrieval', summary: 'LLM 라우팅, 추론 관측, 임베딩과 벡터 검색 substrate.' },
+    { id: 'comm', title: 'Communication', summary: '메일, 알림, 협업, ChatOps로 이어지는 커뮤니케이션 백본.' },
+    { id: 'observability', title: 'Observability', summary: '메트릭·로그·트레이스 수집, 저장, 조회, 대시보드 계층.' },
+    { id: 'backup', title: 'Backup / Recovery', summary: '백업 정책, 실행, 복구와 pre-upgrade gate를 담당하는 계층.' },
+    { id: 'delivery', title: 'Delivery / HYBRID-WRAP', summary: 'FSS 엔진 후보를 선언형 API와 operator-of-operators 방식으로 설치·관리.' },
+  ];
 
   ngOnInit(): void { this.svc.start(); }
 
@@ -132,6 +157,7 @@ export class FoundationEnginesComponent {
   placeholderCard(): EngineCard | undefined {
     return PLACEHOLDER_TABS.has(this.vr.tab()) ? this.cards.find((c) => c.id === this.vr.tab()) : undefined;
   }
+  cardsFor(category: string): EngineCard[] { return this.cards.filter((c) => c.category === category); }
   logoUrl(name: string): string { return `${LOGO_BASE}/${name}.svg`; }
   markFailed(id: string): void { this.failed.update((s) => new Set(s).add(id)); }
 

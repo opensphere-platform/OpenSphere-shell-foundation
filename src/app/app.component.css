@@ -171,6 +171,10 @@ pg-metric { display: block; height: 100%; }
 @media (max-width: 620px) { .ov-domains, .ov-steps { grid-template-columns: 1fr; } .ov-reg-row { grid-template-columns: 1fr; align-items: start; } .ov-reg-head { display: none; } .ov-reg-actions { justify-self: start; } }
 
 /* ── Host 연결(Connectivity) 카탈로그 — ArtifactHub식 로고 카드 ── */
+.hc-section { margin: 0 0 18px; }
+.hc-section-head { display: grid; grid-template-columns: minmax(10rem, 0.36fr) minmax(0, 0.64fr); gap: 12px; align-items: end; margin: 0 0 8px; padding-top: 4px; }
+.hc-section-head h3 { margin: 2px 0 0; font-size: 1rem; font-weight: 600; color: var(--os-ink); }
+.hc-section-head p { margin: 0; color: var(--os-muted); font-size: 0.78rem; line-height: 1.45; }
 .hc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; }
 .hc-card { display: flex; flex-direction: column; background: #fff; border: 1px solid var(--os-border); border-radius: 8px;
   padding: 16px 18px; transition: box-shadow 0.12s, border-color 0.12s; }
@@ -196,7 +200,7 @@ pg-metric { display: block; height: 100%; }
 .hc-card.hc-clickable:hover { border-color: var(--os-brand-500); }
 .hc-open { font-size: 0.72rem; font-weight: 600; color: var(--os-brand-500); margin-left: 8px; white-space: nowrap; }
 
-@media (max-width: 620px) { .hc-grid { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .hc-section-head, .hc-grid { grid-template-columns: 1fr; } }
 
 /* ── Velero 전용 페이지 (shell-template 톤: IBM Cloud식 히어로 + 섹션 + Carbon Tile 룩) ── */
 .vl-back { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 14px; font-size: 0.8rem; color: var(--os-brand-500); cursor: pointer; }
