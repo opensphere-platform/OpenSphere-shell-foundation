@@ -190,7 +190,7 @@ export class FoundationOverviewComponent {
     {
       n: '1',
       title: 'FSS 엔진 선언',
-      body: 'OpenSearch, CloudNativePG, Crossplane 같은 구현 엔진을 설치 선언합니다.',
+      body: 'OpenSearch, PostgreSQL(CloudNativePG), Crossplane 같은 구현 엔진을 설치 선언합니다.',
       action: 'Engines',
       module: 'engines',
     },

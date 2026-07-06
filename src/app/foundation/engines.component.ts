@@ -197,10 +197,10 @@ export class FoundationEnginesComponent {
       wiring: '아직 착수 전 — 정책 bundle과 admission 연동 설계가 필요하다.',
     },
     {
-      id: 'cnpg', name: 'CloudNativePG', provider: 'cloudnative-pg', version: 'PG 17', logo: 'postgresql', mono: 'PG', detail: true,
+      id: 'cnpg', name: 'PostgreSQL', provider: 'CloudNativePG operator', version: 'PG 17', logo: 'postgresql', mono: 'PG', detail: true,
       category: 'data', impl: 'real', liveKey: 'cnpg',
-      role: 'PostgreSQL 데이터베이스를 운영·관리하는 1차 operator. PgClaim capability의 기반.',
-      wiring: '카드를 클릭하면 전용 페이지에서 버전 선택·설치·상태·관리 Cluster 목록을 볼 수 있다.',
+      role: '관계형 데이터베이스 capability. CloudNativePG operator가 PostgreSQL cluster 수명주기를 운영·관리한다.',
+      wiring: '카드를 클릭하면 PostgreSQL 전용 페이지에서 버전 선택·설치·상태·관리 Cluster 목록을 볼 수 있다.',
     },
     {
       id: 'psmdb', name: 'Percona PSMDB', provider: 'percona.com', version: '', logo: 'percona', mono: 'MDB', detail: true,
