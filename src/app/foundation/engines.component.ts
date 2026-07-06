@@ -181,13 +181,13 @@ export class FoundationEnginesComponent {
       wiring: 'Keycloak plugin 화면에서 realm, workload, federation 상태를 관리한다.',
     },
     {
-      id: 'syncope', name: 'Apache Syncope', provider: 'syncope.apache.org', version: '', logo: 'syncope', mono: 'SY', detail: true,
+      id: 'syncope', name: 'Apache Syncope', provider: 'syncope.apache.org', version: '', logo: 'apache-2', mono: 'SY', detail: true,
       category: 'identity', impl: 'stub', liveKey: '',
       role: 'IGA 단일 권위. ADR-FND-002의 JIT 금지와 SCIM 동기화 경계를 담당할 예정.',
       wiring: '아직 미구현 — 로드맵 placeholder에서 범위만 확인한다.',
     },
     {
-      id: 'samba', name: 'Samba AD', provider: 'samba.org', version: 'AD DC', logo: 'samba', mono: 'AD', detail: true, module: 'samba',
+      id: 'samba', name: 'Samba AD', provider: 'samba.org', version: 'AD DC', logo: 'samba-server', mono: 'AD', detail: true, module: 'samba',
       category: 'identity', impl: 'real', liveKey: '',
       role: '사원 디렉터리 capability. Keycloak이 LDAP federation으로 연결한다.',
       wiring: 'Samba-AD plugin 화면에서 domain, LDAP, workload 상태를 관리한다.',
@@ -235,7 +235,7 @@ export class FoundationEnginesComponent {
       wiring: '카드를 클릭하면 FoundationModel/data parameters.engines.opensearch 선언과 endpoint 상태를 관리한다.',
     },
     {
-      id: 'litellm', name: 'LiteLLM', provider: 'litellm.ai', version: '', logo: 'litellm', mono: 'LLM', detail: true,
+      id: 'litellm', name: 'LiteLLM', provider: 'litellm.ai', version: '', logo: 'litlellm', mono: 'LLM', detail: true,
       category: 'ai', impl: 'stub', liveKey: '',
       role: 'LLM provider routing 후보. OAA와 AI Level 추론 경로를 통합한다.',
       wiring: 'OAA Gateway/LLMRoute와 연결할 후속 엔진.',
@@ -265,7 +265,7 @@ export class FoundationEnginesComponent {
       wiring: '통합 알림 경로가 확정되면 provider와 template을 관리한다.',
     },
     {
-      id: 'mattermost', name: 'Mattermost', provider: 'mattermost.com', version: '', logo: 'mattermost', mono: 'M', detail: true,
+      id: 'mattermost', name: 'Mattermost', provider: 'mattermost.com', version: '', logo: 'mattermost-icon', mono: 'M', detail: true,
       category: 'comm', impl: 'stub', liveKey: '',
       role: '협업/ChatOps 엔진 후보. Workspace perspective의 협업 채널.',
       wiring: '아직 착수 전 — workspace, team, bot integration 경로가 필요하다.',
