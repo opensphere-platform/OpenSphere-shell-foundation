@@ -200,7 +200,9 @@ export class AppComponent implements OnInit, OnDestroy {
   activePlugin(): HostedPlugin | undefined {
     const id = this.vr.module();
     const p = this.reg.all.find((x) => x.id === id && !!x.activation);
-    return p && this.reg.isEnabled(p.id) ? p : undefined;
+    if (!p) { return undefined; }
+    if (p.id === 'samba') { return p; }
+    return this.reg.isEnabled(p.id) ? p : undefined;
   }
 
   private openOpenSearchInstaller(): void {
@@ -210,6 +212,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   disabledModule(): boolean {
     const m = this.vr.module();
+    if (m === 'samba') { return false; }
     return ['postgres', 'opensearch', 'rustfs', 'keycloak', 'samba'].includes(m) && !this.reg.isEnabled(m);
   }
 
