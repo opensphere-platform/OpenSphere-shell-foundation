@@ -10,10 +10,14 @@ rules:
     resources: ["customresourcedefinitions"]
     verbs: ["get","list","watch"]
   - apiGroups: ["apps"]
-    resources: ["deployments"]
+    resources: ["deployments","daemonsets"]        # node-agent(fs-backup) DaemonSet 상태 포함
     verbs: ["get","list","watch"]
   - apiGroups: [""]
     resources: ["pods","events","services","namespaces"]
+    verbs: ["get","list","watch"]
+  # 백업 대상/일정/이력 조회(velero 페이지 loadBsl·samba-ad _loadBackup) — 읽기는 SA/그룹 공통.
+  - apiGroups: ["velero.io"]
+    resources: ["backupstoragelocations","schedules","backups","restores","volumesnapshotlocations","podvolumebackups"]
     verbs: ["get","list","watch"]
 ---
 # 읽기(폴링) — foundation subShell SA
@@ -29,5 +33,26 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata: { name: foundation-velero-manage-admins }
 roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: foundation-velero-manage }
+subjects:
+  - { kind: Group, name: opensphere-console-admins, apiGroup: rbac.authorization.k8s.io }
+---
+# 백업 등록 쓰기 — 콘솔 관리자 그룹에만, velero 네임스페이스로 스코프(최소권한: secrets 클러스터전역 부여 회피).
+# 공용 기본 대상은 velero 페이지가 Release로 구성(provider-helm이 BSL·secret 생성), 전용 override와
+# plugin별 Schedule/일회성 Backup은 사용자 임퍼소네이션으로 이 Role을 통해 생성한다.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: { name: foundation-velero-backup, namespace: velero }
+rules:
+  - apiGroups: ["velero.io"]
+    resources: ["schedules","backups","backupstoragelocations","restores","deletebackuprequests"]
+    verbs: ["get","list","watch","create","update","patch","delete"]
+  - apiGroups: [""]
+    resources: ["secrets"]                          # 전용 override BSL 자격증명(velero ns 한정)
+    verbs: ["get","list","create","update","patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: { name: foundation-velero-backup-admins, namespace: velero }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: foundation-velero-backup }
 subjects:
   - { kind: Group, name: opensphere-console-admins, apiGroup: rbac.authorization.k8s.io }
