@@ -58,6 +58,37 @@ type pgOpts struct {
 	exts                               []string
 	superuser                          bool
 	monitoring                         bool
+	backup                             backupOpts
+}
+
+// backupOpts — S3 오브젝트스토리지 백업 연결(§8 D-02 미결정: Backbone RustFS 재사용 vs 별도배포 — 여기서는
+// 어느 쪽도 기본 강제하지 않고 명시 선언(spec.parameters.backup)이 있을 때만 CNPG spec.backup을 채운다.
+// [[basic-foundation-connector-gap]]
+type backupOpts struct {
+	enabled         bool
+	endpointURL     string // 예: Backbone RustFS나 별도 S3의 endpoint(s3Endpoint 파라미터로 명시 필요)
+	destinationPath string // 예: s3://<bucket>/foundation-pg
+	secretName      string // accessKeyId/secretAccessKey 키를 가진 기존 Secret 이름(이 컨트롤러가 생성하지 않음 — 선언만)
+	retentionPolicy string
+}
+
+func dataBackupParams(p map[string]interface{}) backupOpts {
+	bo := backupOpts{retentionPolicy: "30d"}
+	bp, _ := p["backup"].(map[string]interface{})
+	if bp == nil {
+		return bo
+	}
+	bo.enabled = pBool(bp, "enabled", false)
+	bo.endpointURL = pStr(bp, "s3Endpoint", "")
+	bo.destinationPath = pStr(bp, "destinationPath", "")
+	bo.secretName = pStr(bp, "secretName", "")
+	bo.retentionPolicy = pStr(bp, "retentionPolicy", "30d")
+	// 3요소(endpoint/destination/secret) 중 하나라도 비면 misconfiguration이므로 비활성으로 안전 강등
+	// (CNPG가 barmanObjectStore 불완전 스펙으로 크래시루프 도는 것보다 "백업 없음"이 정직).
+	if bo.endpointURL == "" || bo.destinationPath == "" || bo.secretName == "" {
+		bo.enabled = false
+	}
+	return bo
 }
 
 func pStr(p map[string]interface{}, k, def string) string {
@@ -103,7 +134,9 @@ func resourceProfile(name string, p map[string]interface{}) map[string]interface
 }
 
 func dataParams(fm *unstructured.Unstructured, cfg *config) pgOpts {
-	o := pgOpts{instances: 1, image: cfg.pgImage, storageClass: "standard", storageSize: "1Gi", poolerMode: "transaction", poolerInstances: 1, superuser: false, monitoring: false}
+	// storageClass: 리터럴 하드코딩 대신 HostRequirements(§1.2)로 선언 — 기본값=cfg.defaultStorageClass,
+	// 모델별 override=spec.parameters.hostRequirements.storageClass. [[basic-foundation-connector-gap]]
+	o := pgOpts{instances: 1, image: cfg.pgImage, storageClass: readHostRequirements(fm, cfg).StorageClass, storageSize: "1Gi", poolerMode: "transaction", poolerInstances: 1, superuser: false, monitoring: false}
 	o.pgParams = map[string]interface{}{"max_connections": "100"}
 	p, _, _ := unstructured.NestedMap(fm.Object, "spec", "parameters")
 	if p == nil {
@@ -135,6 +168,7 @@ func dataParams(fm *unstructured.Unstructured, cfg *config) pgOpts {
 	o.poolerInstances = pInt(p, "poolerInstances", 1)
 	o.superuser = pBool(p, "enableSuperuserAccess", false)
 	o.monitoring = pBool(p, "monitoring", false)
+	o.backup = dataBackupParams(p)
 	if e, ok := p["extensions"].([]interface{}); ok {
 		for _, x := range e {
 			if s, ok := x.(string); ok && s != "" {
@@ -166,6 +200,22 @@ func buildDataBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructure
 	}
 	if o.resources != nil {
 		spec["resources"] = o.resources
+	}
+	if o.backup.enabled {
+		// CNPG barmanObjectStore — S3 대상은 명시 선언(spec.parameters.backup)에서만 온다.
+		// Backbone RustFS 재사용 여부(§8 D-02)를 이 컨트롤러가 대신 결정하지 않는다 — 자격증명은
+		// 기존 Secret(secretName)을 참조만 하고 생성하지 않는다(크리덴셜 발급은 범위 밖).
+		spec["backup"] = map[string]interface{}{
+			"retentionPolicy": o.backup.retentionPolicy,
+			"barmanObjectStore": map[string]interface{}{
+				"destinationPath": o.backup.destinationPath,
+				"endpointURL":     o.backup.endpointURL,
+				"s3Credentials": map[string]interface{}{
+					"accessKeyId":     map[string]interface{}{"name": o.backup.secretName, "key": "ACCESS_KEY_ID"},
+					"secretAccessKey": map[string]interface{}{"name": o.backup.secretName, "key": "ACCESS_SECRET_KEY"},
+				},
+			},
+		}
 	}
 	cluster := &unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": "postgresql.cnpg.io/v1", "kind": "Cluster",

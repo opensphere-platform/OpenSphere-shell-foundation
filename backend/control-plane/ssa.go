@@ -26,7 +26,10 @@ const (
 	lblModel          = "foundation.opensphere.io/model"
 	lblOwnerFM        = "foundation.opensphere.io/owner-fm"
 	lblDeliveryEngine = "foundation.opensphere.io/delivery-engine" // ADR-FND-006 §3.3 회수 셀렉터 식별자
-	cpManagedBy       = "foundation-control-plane"
+	// 엔진(내부 plugin) 단위 회수 셀렉터 — 번들 YAML이 오브젝트별로 정적 라벨로 선언(2026-07-06, Samba-AD 편입).
+	// parameters.engines.<id>=disabled 시 install()이 이 라벨로 해당 엔진 operand만 회수한다(PVC는 kinds에서 제외 = 보존).
+	lblEngine   = "foundation.opensphere.io/engine"
+	cpManagedBy = "foundation-control-plane"
 )
 
 // applyObj — 유일한 변경 프리미티브. SSA(force ownership). resourceVersion 불필요(apply는 멱등).

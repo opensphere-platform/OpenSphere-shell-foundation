@@ -165,6 +165,34 @@ async function nodeHealthPublish() {
   } catch (e) { /* best-effort */ }
 }
 
+// ── FoundationModel 수명주기 전이 → 콘솔 인박스 (메시지 통합, 2026-07-06) ──
+// plugin(엔진) 설치/회수/Ready 전이를 콘솔 audit bus에 발행 — Samba-AD 등 내부 plugin이
+// "설치되면서 메시지 통합에 등록"되는 배선. 전이 시에만 발행(dedup — 폴링 스팸 금지, 위조 0: 실측 status만).
+const _fmLast = new Map(); // model → { phase, engines: 'samba=1,keycloak=0' }
+async function fmTransitionPublish() {
+  try {
+    const r = await fetch(`${APISERVER}/apis/foundation.opensphere.io/v1alpha1/foundationmodels`, { headers: { Authorization: `Bearer ${tok()}` } });
+    if (!r.ok) return;
+    for (const fm of (await r.json()).items || []) {
+      const name = fm.metadata?.name || '';
+      const phase = fm.status?.phase || '';
+      const engines = (fm.status?.observed || [])
+        .filter((o) => typeof o?.id === 'string' && o.id.endsWith('_up'))
+        .map((o) => `${o.id.replace(/_up$/, '')}=${o.value}`)
+        .sort().join(',');
+      const cur = `${phase}|${engines}`;
+      const prev = _fmLast.get(name);
+      _fmLast.set(name, cur);
+      if (prev === undefined || prev === cur || !phase) continue; // 첫 관측은 기준선만(재기동 스팸 방지)
+      const sev = phase === 'Installed' ? 'info' : (phase === 'Failed' || phase === 'Blocked') ? 'error' : 'warning';
+      await publishNotify({
+        action: 'ModelTransition', target: `FoundationModel/${name}`, result: sev,
+        reason: `${name} 모델 ${phase}${engines ? ` (${engines})` : ''}`,
+      });
+    }
+  } catch (e) { /* best-effort */ }
+}
+
 function serveFrom(root, rel, res) {
   const fp = path.join(root, path.normalize('/' + rel).replace(/^(\.\.[/\\])+/, ''));
   if (!fp.startsWith(root)) { res.writeHead(403); return res.end('forbidden'); }
@@ -364,8 +392,10 @@ server.on('upgrade', async (req, socket, head) => {
 
 server.listen(PORT, () => {
   console.log(`foundation v${VERSION} on :${PORT}`);
-  // 콘솔 인박스에 시작 이벤트 발행 + 주기적 노드 헬스(유기적 연동)
+  // 콘솔 인박스에 시작 이벤트 발행 + 주기적 노드 헬스 + FoundationModel 수명주기 전이(유기적 연동)
   publishNotify({ action: 'started', target: 'foundation', result: 'info', reason: `Foundation 백엔드 v${VERSION} 시작` });
   nodeHealthPublish();
+  fmTransitionPublish(); // 첫 호출 = 기준선 수립(발행 없음), 이후 전이만 발행
   setInterval(nodeHealthPublish, 60000);
+  setInterval(fmTransitionPublish, 30000);
 });

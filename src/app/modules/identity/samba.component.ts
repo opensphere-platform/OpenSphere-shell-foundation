@@ -1,63 +1,54 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { CUSTOM_ELEMENTS_SCHEMA, Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { ClarityModule } from '@clr/angular';
 import { SambaService } from './identity.services';
 import { PILL } from '../postgres/cnpg.types';
-import { PgMetric } from '../postgres/ui/pg-metric';
 
-// Samba-AD(workspace 디렉터리) 콘솔 — 상태·realm·LDAP 소비점(Clarity). 폴러는 shell 소유.
+// Samba-AD — host(Foundation)의 안층 마운트 셸 (D1 승격, 2026-07-06).
+// 화면 본체는 독립 plugin(OpenSphere-plugin-samba-ad, kind=plugin·hostRef=foundation)이 소유한다:
+//   · 콘솔 Extension Host가 DUPA 신뢰체인(서명 이중검증)으로 로드·activate → <osp-samba-ad> 커스텀
+//     엘리먼트가 정의됨(plugin은 registerPage를 호출하지 않아 mainShell 1단에는 비노출).
+//   · host(여기)는 그 태그를 자기 안층 메뉴 자리에 꽂아 렌더만 한다 — 자기 완결성(§2.8)은 plugin이,
+//     표시 거버넌스는 host가, 보안 경계는 mainShell이(감사 D1 보수 해석) 각각 소유.
+// plugin 미로드(미설치/검증 실패) 시: 정직한 안내 + health 어댑터(SambaService)는 registry 소유라 유지.
 @Component({
   selector: 'app-samba',
   standalone: true,
-  imports: [CommonModule, ClarityModule, PgMetric],
+  imports: [CommonModule, ClarityModule],
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
-    <div class="os-title-row">
-      <h2 class="os-h2">Samba-AD <span class="label label-info">plugin</span></h2>
-      <span class="label" [ngClass]="pillCls()">{{ svc.phase() }}</span>
-      <label class="clr-control-label os-ml-auto"><input type="checkbox" class="clr-checkbox" [checked]="svc.autoRefresh()" (change)="svc.toggleAuto()"> auto 15s</label>
-      <button class="btn btn-sm" (click)="svc.refresh()" [disabled]="svc.busy()">{{ svc.busy() ? '동기화…' : '새로고침' }}</button>
-    </div>
-    <p class="os-sub">workspace/사원 디렉터리 · Samba Active Directory DC · realm {{ svc.realm }} · ns {{ svc.ns }}<span *ngIf="svc.lastSync()"> · {{ svc.lastSync() }}</span></p>
-
-    <div class="os-metrics">
-      <pg-metric label="상태" [value]="svc.phase()" [status]="svc.phaseCls()"></pg-metric>
-      <pg-metric label="Replicas" [value]="svc.readyN() + ' / ' + svc.totalN()" [status]="svc.ready() ? 'ok' : 'warn'" sub="ready"></pg-metric>
-      <pg-metric label="Domain" [value]="svc.domain" sub="NetBIOS"></pg-metric>
-      <pg-metric label="LDAP" value=":389" sub="endpoint"></pg-metric>
-    </div>
-
-    <div class="os-cardgrid">
-      <div class="card">
-        <div class="card-header">디렉터리 · {{ svc.name }}</div>
-        <div class="card-block">
-          <dl class="os-kv">
-            <dt>이미지</dt><dd class="os-mono">{{ svc.image() || '—' }}</dd>
-            <dt>Node</dt><dd class="os-mono">{{ svc.node() }}</dd>
-            <dt>재시작</dt><dd>{{ svc.restarts() }}</dd>
-            <dt>Realm</dt><dd class="os-mono">{{ svc.realm }}</dd>
-          </dl>
-        </div>
+    <ng-container *ngIf="pluginReady(); else waiting">
+      <osp-samba-ad></osp-samba-ad>
+      <p class="os-sub os-mono">hosted by foundation · plugin: OpenSphere-plugin-samba-ad (콘솔 신뢰체인 적재 · 안층 마운트)</p>
+    </ng-container>
+    <ng-template #waiting>
+      <div class="os-title-row">
+        <h2 class="os-h2">Samba-AD <span class="label label-info">plugin</span></h2>
+        <span class="label" [ngClass]="pillCls()">{{ svc.phase() }}</span>
       </div>
-      <div class="card">
-        <div class="card-header">연결 — 상위 서비스 소비점</div>
-        <div class="card-block">
-          <dl class="os-kv">
-            <dt>LDAP</dt><dd class="os-mono">{{ svc.ldap }}</dd>
-            <dt>Base DN</dt><dd class="os-mono">{{ svc.baseDn() }}</dd>
-            <dt>Admin</dt><dd class="os-mono">Administrator (dev)</dd>
-          </dl>
-          <p class="os-sub">Keycloak User Federation의 LDAP 연결 대상. 사용자·그룹 관리는 AD 도구(RSAT)/samba-tool.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="os-sech">관리</div>
-    <clr-alert clrAlertType="info" [clrAlertClosable]="false" [clrAlertLightweight]="true">
-      <clr-alert-item><span class="alert-text">사용자·그룹 생성은 samba-tool 또는 Windows RSAT. Keycloak이 이 LDAP를 federation해 사원 로그인을 제공.</span></clr-alert-item>
-    </clr-alert>
+      <clr-alert [clrAlertType]="timedOut() ? 'warning' : 'info'" [clrAlertClosable]="false">
+        <clr-alert-item><span class="alert-text" *ngIf="!timedOut()">
+          Samba-AD plugin 로드 대기 중… (콘솔 Extension Host가 서명 검증 후 적재)
+        </span><span class="alert-text" *ngIf="timedOut()">
+          Samba-AD plugin(samba-ad)이 로드되지 않았습니다 — 콘솔 관리(Installed Plugins)에서 UIPluginPackage/samba-ad의
+          설치·검증 상태(Enabled/Failed·reason)를 확인하세요. operand 수명주기는 Plugins 관리(engines.samba) 소관으로 별개입니다.
+        </span></clr-alert-item>
+      </clr-alert>
+    </ng-template>
   `,
 })
-export class SambaComponent {
-  readonly svc = inject(SambaService);
+export class SambaComponent implements OnInit, OnDestroy {
+  readonly svc = inject(SambaService); // health 어댑터(plugins-admin·Overview 집계용) — registry 소유 유지
+  readonly pluginReady = signal(false);
+  readonly timedOut = signal(false);
+  private timer: ReturnType<typeof setTimeout> | undefined;
+
+  ngOnInit(): void {
+    if (customElements.get('osp-samba-ad')) { this.pluginReady.set(true); return; }
+    // 콘솔이 아직 로드 중일 수 있음 — whenDefined 대기 + 8s 타임아웃(미설치 안내).
+    void customElements.whenDefined('osp-samba-ad').then(() => this.pluginReady.set(true));
+    this.timer = setTimeout(() => { if (!this.pluginReady()) { this.timedOut.set(true); } }, 8000);
+  }
+  ngOnDestroy(): void { if (this.timer) { clearTimeout(this.timer); } }
   pillCls(): string { return PILL[this.svc.phaseCls()]; }
 }

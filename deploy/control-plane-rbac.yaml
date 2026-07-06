@@ -1,0 +1,29 @@
+# foundation-control-plane의 관리 번들 배포 권한(opensphere-foundation ns 한정 Role).
+# 2026-07-06: 라이브에만 있던 Role을 리포 정본화(drift 해소 — 감사 S2와 동일 원칙) +
+#   Samba-AD operand 편입(identity 번들)으로 persistentvolumeclaims 추가.
+#   ⚠️ PVC verbs에 delete/deletecollection 미포함 — withdraw 회수에서도 AD 데이터(SAM DB) 보존
+#   (identity_bundle.yaml PVC 주석·bundleKinds와 동일 정책).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: foundation-control-plane-deployer
+  namespace: opensphere-foundation
+rules:
+  - apiGroups: [""]
+    resources: [serviceaccounts, configmaps, services]
+    verbs: [get, list, watch, create, patch, delete, deletecollection]
+  - apiGroups: [""]
+    resources: [persistentvolumeclaims]
+    verbs: [get, list, watch, create, patch]
+  - apiGroups: ["apps"]
+    resources: [deployments]
+    verbs: [get, list, watch, create, patch, delete, deletecollection]
+  - apiGroups: ["networking.k8s.io"]
+    resources: [networkpolicies]
+    verbs: [get, list, watch, create, patch, delete, deletecollection]
+  - apiGroups: ["postgresql.cnpg.io"]
+    resources: [clusters, poolers, databases]
+    verbs: [get, list, watch, create, patch, delete, deletecollection]
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, list, watch, create, patch, delete]

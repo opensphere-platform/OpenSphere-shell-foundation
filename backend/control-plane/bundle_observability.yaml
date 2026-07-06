@@ -1,6 +1,9 @@
 # observability operand 번들 — control plane이 SSA로 적용(__NAMESPACE__/__IMAGE__ 치환).
-# D-1: OTel Collector(OTLP 수신 → batch → debug exporter). 다운스트림(Tempo/Loki/Prometheus)은 D-2(정직: 미연결).
+# D-1: OTel Collector(OTLP 수신 → batch → debug exporter). 다운스트림(Tempo/Loki)은 D-2(정직: 미연결).
 # Namespace는 코드에서 별도 ensure(공유 ns라 owner 라벨 미부착·삭제 안 함).
+# 메트릭은 HostDelegate=true(§3.3 정본) — Basic Prometheus로 push 안 하고 prometheus exporter(pull, :8889)로 노출 +
+# ServiceMonitor로 Basic kube-prometheus-stack(serviceMonitorSelectorNilUsesHelmValues=false, 전 ns 스크레이프)이 가져가게 위임.
+# [[basic-foundation-connector-gap]]
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -29,6 +32,8 @@ data:
     exporters:
       debug:
         verbosity: basic
+      prometheus:
+        endpoint: 0.0.0.0:8889
     extensions:
       health_check:
         endpoint: 0.0.0.0:13133
@@ -39,7 +44,7 @@ data:
           address: 0.0.0.0:8888
       pipelines:
         traces:  { receivers: [otlp], processors: [memory_limiter, batch], exporters: [debug] }
-        metrics: { receivers: [otlp], processors: [memory_limiter, batch], exporters: [debug] }
+        metrics: { receivers: [otlp], processors: [memory_limiter, batch], exporters: [debug, prometheus] }
         logs:    { receivers: [otlp], processors: [memory_limiter, batch], exporters: [debug] }
 ---
 apiVersion: apps/v1
@@ -65,6 +70,7 @@ spec:
             - { name: otlp-grpc, containerPort: 4317 }
             - { name: otlp-http, containerPort: 4318 }
             - { name: metrics, containerPort: 8888 }
+            - { name: otel-metrics, containerPort: 8889 }
             - { name: health, containerPort: 13133 }
           readinessProbe: { httpGet: { path: /, port: 13133 }, initialDelaySeconds: 5, periodSeconds: 10 }
           livenessProbe: { httpGet: { path: /, port: 13133 }, initialDelaySeconds: 10, periodSeconds: 20 }
@@ -87,9 +93,10 @@ spec:
     - { name: otlp-grpc, port: 4317, targetPort: 4317 }
     - { name: otlp-http, port: 4318, targetPort: 4318 }
     - { name: metrics, port: 8888, targetPort: 8888 }
+    - { name: otel-metrics, port: 8889, targetPort: 8889 }
     - { name: health, port: 13133, targetPort: 13133 }
 ---
-# default-deny 클러스터에서도 (a) control plane→:8888 메트릭 스크레이프, (b) 소비자→OTLP(4317/4318)가 끊기지 않도록 동봉.
+# default-deny 클러스터에서도 (a) control plane→:8888/:8889 메트릭 스크레이프(Basic Prometheus 포함), (b) 소비자→OTLP(4317/4318)가 끊기지 않도록 동봉.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -104,4 +111,22 @@ spec:
         - { protocol: TCP, port: 4317 }
         - { protocol: TCP, port: 4318 }
         - { protocol: TCP, port: 8888 }
+        - { protocol: TCP, port: 8889 }
         - { protocol: TCP, port: 13133 }
+---
+# Basic Service Stack 소비계약(§1.1 "소비 계약"=/metrics+ServiceMonitor) 실제 배선.
+# kube-prometheus-stack이 serviceMonitorSelectorNilUsesHelmValues=false + 빈 셀렉터로 전 ns를 스크레이프하므로
+# 라벨 없이도 자동 발견됨(monitoring-values.yaml 실측).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: foundation-observability-collector
+  namespace: __NAMESPACE__
+spec:
+  selector:
+    matchLabels: { app: foundation-observability-collector }
+  namespaceSelector:
+    matchNames: ["__NAMESPACE__"]
+  endpoints:
+    - { port: otel-metrics, interval: 30s }
+    - { port: metrics, interval: 30s }

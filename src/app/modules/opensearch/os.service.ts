@@ -1,5 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { apiBase, FND_NS } from '../../api-base';
+import { PollBackoff } from '../../shared/poll-backoff';
 import { Phase, State, osHealthPhase } from './os.types';
 
 // OpenSearch 콘솔 단일 데이터 진입점 — /api/opensearch 프록시(읽기 전용 화이트리스트) + 15s 단일 폴러 + 6-state.
@@ -34,6 +35,7 @@ export class OsService {
 
   private timer: any = null;
   private started = false;
+  private backoff = new PollBackoff();
 
   start(): void {
     if (this.started) { return; }
@@ -54,9 +56,17 @@ export class OsService {
     if (!r.ok) { return 'error'; }
     return len ? 'ok' : 'empty';
   }
+  // key로 백오프 판단 후에만 실제 조회 — 반복 실패(502 등) 확정된 엔드포인트는 재조회 빈도를 낮춘다.
+  private async getJsonB(key: string, path: string): Promise<{ ok: boolean; status: number; data: any } | null> {
+    if (!this.backoff.due(key)) { return null; }
+    const r = await this.getJson(path);
+    this.backoff.report(key, this.mapState(r, r.data ? 1 : 0));
+    return r;
+  }
 
   async refresh(): Promise<void> {
     this.busy.set(true);
+    this.backoff.nextTick();
     await Promise.allSettled([
       this.loadHealth(), this.loadStats(), this.loadNodes(), this.loadIndices(),
       this.loadShards(), this.loadTemplates(), this.loadAliases(), this.loadSettings(),
@@ -66,16 +76,16 @@ export class OsService {
     try { this.lastSync.set(new Date().toLocaleTimeString()); } catch { /* noop */ }
   }
 
-  async loadHealth() { const r = await this.getJson('/_cluster/health'); if (r.ok) { this.health.set(r.data); this.healthState.set('ok'); } else { this.healthState.set(r.status === 403 ? 'noperm' : 'error'); } }
-  async loadStats() { const r = await this.getJson('/_cluster/stats'); if (r.ok) { this.stats.set(r.data); } }
-  async loadNodes() { const r = await this.getJson('/_cat/nodes?format=json&h=name,node.role,master,heap.percent,ram.percent,cpu,disk.used_percent,version,load_1m'); this.nodes.set(r.data || []); this.nodeState.set(this.mapState(r, (r.data || []).length)); }
-  async loadIndices() { const r = await this.getJson('/_cat/indices?format=json&bytes=b&s=index&h=index,health,status,docs.count,docs.deleted,pri,rep,store.size'); this.indices.set(r.data || []); this.indexState.set(this.mapState(r, (r.data || []).length)); }
-  async loadShards() { const r = await this.getJson('/_cat/shards?format=json&bytes=b&h=index,shard,prirep,state,docs,store,node'); this.shards.set(r.data || []); this.shardState.set(this.mapState(r, (r.data || []).length)); }
-  async loadTemplates() { const r = await this.getJson('/_cat/templates?format=json&h=name,index_patterns,order,version'); this.templates.set(r.data || []); this.tmplState.set(this.mapState(r, (r.data || []).length)); }
-  async loadAliases() { const r = await this.getJson('/_cat/aliases?format=json&h=alias,index,is_write_index'); this.aliases.set(r.data || []); }
-  async loadSettings() { const r = await this.getJson('/_cluster/settings?flat_settings=true'); if (r.ok) { this.settings.set(r.data); } }
-  async loadPending() { const r = await this.getJson('/_cluster/pending_tasks'); this.pending.set(r.data?.tasks || []); this.taskState.set(this.mapState(r, (r.data?.tasks || []).length)); }
-  async loadThreadPool() { const r = await this.getJson('/_cat/thread_pool?format=json&h=node_name,name,active,queue,rejected'); this.threadPool.set((r.data || []).filter((t: any) => +t.active || +t.queue || +t.rejected)); }
+  async loadHealth() { const r = await this.getJsonB('health', '/_cluster/health'); if (!r) { return; } if (r.ok) { this.health.set(r.data); this.healthState.set('ok'); } else { this.healthState.set(r.status === 403 ? 'noperm' : 'error'); } }
+  async loadStats() { const r = await this.getJsonB('stats', '/_cluster/stats'); if (r?.ok) { this.stats.set(r.data); } }
+  async loadNodes() { const r = await this.getJsonB('nodes', '/_cat/nodes?format=json&h=name,node.role,master,heap.percent,ram.percent,cpu,disk.used_percent,version,load_1m'); if (!r) { return; } this.nodes.set(r.data || []); this.nodeState.set(this.mapState(r, (r.data || []).length)); }
+  async loadIndices() { const r = await this.getJsonB('indices', '/_cat/indices?format=json&bytes=b&s=index&h=index,health,status,docs.count,docs.deleted,pri,rep,store.size'); if (!r) { return; } this.indices.set(r.data || []); this.indexState.set(this.mapState(r, (r.data || []).length)); }
+  async loadShards() { const r = await this.getJsonB('shards', '/_cat/shards?format=json&bytes=b&h=index,shard,prirep,state,docs,store,node'); if (!r) { return; } this.shards.set(r.data || []); this.shardState.set(this.mapState(r, (r.data || []).length)); }
+  async loadTemplates() { const r = await this.getJsonB('templates', '/_cat/templates?format=json&h=name,index_patterns,order,version'); if (!r) { return; } this.templates.set(r.data || []); this.tmplState.set(this.mapState(r, (r.data || []).length)); }
+  async loadAliases() { const r = await this.getJsonB('aliases', '/_cat/aliases?format=json&h=alias,index,is_write_index'); if (r?.ok) { this.aliases.set(r.data || []); } }
+  async loadSettings() { const r = await this.getJsonB('settings', '/_cluster/settings?flat_settings=true'); if (r?.ok) { this.settings.set(r.data); } }
+  async loadPending() { const r = await this.getJsonB('pending', '/_cluster/pending_tasks'); if (!r) { return; } this.pending.set(r.data?.tasks || []); this.taskState.set(this.mapState(r, (r.data?.tasks || []).length)); }
+  async loadThreadPool() { const r = await this.getJsonB('threadpool', '/_cat/thread_pool?format=json&h=node_name,name,active,queue,rejected'); if (r?.ok) { this.threadPool.set((r.data || []).filter((t: any) => +t.active || +t.queue || +t.rejected)); } }
 
   // ── computed ──
   readonly status = computed<string>(() => this.health()?.status || (this.healthState() === 'loading' ? '' : 'unknown'));

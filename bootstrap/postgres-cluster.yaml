@@ -1,6 +1,9 @@
 # Foundation 모듈: PostgreSQL — CloudNativePG 단일노드 공유 인스턴스 (dev).
 # operator: helm install cnpg cnpg/cloudnative-pg -n cnpg-system
 # CNPG가 app DB/user + connection Secret(opensphere-pg-app) 자동 생성. imageName 생략 = operator 기본 PG 이미지.
+# image-source: ghcr-mirror(unknown) — CNPG operator 미설치(§6 실측)라 기본 PG 이미지 좌표 확인 불가.
+# operator 설치(Phase 0) 후 실제 기본 이미지를 GHCR로 미러링하고 spec.imageName을 명시로 전환할 것.
+# [[ghcr-image-mirror-policy]] [[basic-foundation-connector-gap]]
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:

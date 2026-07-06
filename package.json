@@ -34,7 +34,8 @@
     "rxjs": "~7.8.0",
     "tslib": "^2.6.0",
     "ws": "^8.18.0",
-    "zone.js": "~0.15.0"
+    "zone.js": "~0.15.0",
+    "@carbon/icons": "^11.82.0"
   },
   "devDependencies": {
     "@angular/build": "^22.0.0",

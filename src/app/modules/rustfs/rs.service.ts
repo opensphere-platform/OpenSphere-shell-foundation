@@ -1,5 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { apiBase, FND_NS } from '../../api-base';
+import { PollBackoff } from '../../shared/poll-backoff';
 import { Phase, State, phaseClass } from '../postgres/cnpg.types';
 
 const NAME = 'opensphere-rustfs';
@@ -24,6 +25,7 @@ export class RsService {
 
   private timer: any = null;
   private started = false;
+  private backoff = new PollBackoff();
 
   start(): void {
     if (this.started) { return; }
@@ -38,31 +40,37 @@ export class RsService {
 
   async refresh(): Promise<void> {
     this.busy.set(true);
+    this.backoff.nextTick();
     await Promise.allSettled([this.loadSts(), this.loadPods(), this.loadPvc()]);
     this.busy.set(false);
     try { this.lastSync.set(new Date().toLocaleTimeString()); } catch { /* noop */ }
   }
   async loadSts(): Promise<void> {
+    if (!this.backoff.due('sts')) { return; }
     try {
       const r = await fetch(this.k(`apis/apps/v1/namespaces/${this.ns}/statefulsets/${this.name}`));
-      if (r.status === 403) { this.state.set('noperm'); return; }
-      if (!r.ok) { this.state.set('nocrd'); return; }
-      this.sts.set(await r.json());
-      this.state.set('ok');
-    } catch { this.state.set('error'); }
+      const s: State = r.status === 403 ? 'noperm' : !r.ok ? 'nocrd' : 'ok';
+      this.backoff.report('sts', s);
+      this.state.set(s);
+      if (s === 'ok') { this.sts.set(await r.json()); }
+    } catch { this.backoff.report('sts', 'error'); this.state.set('error'); }
   }
   async loadPods(): Promise<void> {
+    if (!this.backoff.due('pods')) { return; }
     try {
       const sel = encodeURIComponent(`app=${this.name}`);
       const r = await fetch(this.k(`api/v1/namespaces/${this.ns}/pods?labelSelector=${sel}`));
+      this.backoff.report('pods', r.ok ? 'ok' : r.status === 404 ? 'nocrd' : 'error');
       this.pods.set(r.ok ? ((await r.json()).items || []) : []);
-    } catch { this.pods.set([]); }
+    } catch { this.backoff.report('pods', 'error'); this.pods.set([]); }
   }
   async loadPvc(): Promise<void> {
+    if (!this.backoff.due('pvc')) { return; }
     try {
       const r = await fetch(this.k(`api/v1/namespaces/${this.ns}/persistentvolumeclaims/data-${this.name}-0`));
+      this.backoff.report('pvc', r.ok ? 'ok' : r.status === 404 ? 'nocrd' : 'error');
       this.pvc.set(r.ok ? await r.json() : null);
-    } catch { this.pvc.set(null); }
+    } catch { this.backoff.report('pvc', 'error'); this.pvc.set(null); }
   }
 
   readonly ready = computed<boolean>(() => {

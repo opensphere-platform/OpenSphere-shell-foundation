@@ -64,7 +64,22 @@ func ensureNamespace(name string) *unstructured.Unstructured {
 }
 
 func buildObservabilityBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructured.Unstructured, error) {
-	return buildBundle(observabilityBundleYAML, cfg.managedNS, cfg.collectorImage, "observability", fm.GetName())
+	objs, err := buildBundle(observabilityBundleYAML, cfg.managedNS, cfg.collectorImage, "observability", fm.GetName())
+	if err != nil {
+		return nil, err
+	}
+	// PrometheusDelegate=false(HostRequirements, §1.2)면 Basic Prometheus 위임을 원치 않는 것이므로
+	// ServiceMonitor를 아예 선언하지 않는다(기본=true라 통상 경로는 영향 없음).
+	if !readHostRequirements(fm, cfg).PrometheusDelegate {
+		kept := objs[:0]
+		for _, o := range objs {
+			if o.GetKind() != "ServiceMonitor" {
+				kept = append(kept, o)
+			}
+		}
+		objs = kept
+	}
+	return objs, nil
 }
 
 // collectorSvcDNS — Binding endpoint·probe·metric 스크레이프의 단일 좌표(번들 Service 이름과 일치).

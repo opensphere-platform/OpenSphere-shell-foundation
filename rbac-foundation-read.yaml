@@ -1,6 +1,7 @@
-# Foundation 모듈 전용 읽기 권한 — CloudNativePG·OpenSearch operator·provisioning Claim.
+# Foundation 모듈 전용 읽기 권한 — CloudNativePG·OpenSearch operator·provisioning Claim·Foundation CRD.
 # cluster-reader(impersonate 포함) 본체와 분리한 최소권한 read-only ClusterRole.
-# 모듈 상태 카드(PG Cluster CR phase/primary/image, OpenSearch CR, Claim 목록)가 데이터를 읽기 위함.
+# 모듈 상태 카드(PG Cluster CR phase/primary/image, OpenSearch CR, Claim 목록)와
+# Host 연결 페이지(FoundationModel/FoundationModuleDescriptor 개수)가 데이터를 읽기 위함.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata: { name: foundation-backing-read }
@@ -13,6 +14,9 @@ rules:
     verbs: ["get","list","watch"]
   - apiGroups: ["provisioning.opensphere.io"]
     resources: ["postgresclaims","opensearchindexclaims"]
+    verbs: ["get","list","watch"]
+  - apiGroups: ["foundation.opensphere.io"]
+    resources: ["foundationmodels","foundationmoduledescriptors","foundationbindings","foundationclaims"]
     verbs: ["get","list","watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { ClarityModule } from '@clr/angular';
-import { apiBase } from '../../../api-base';
+import { apiBase, writeHeaders } from '../../../api-base';
 import { CnpgService } from '../cnpg.service';
 import { PILL, phaseClass } from '../cnpg.types';
 import { PgState } from '../ui/pg-state';
@@ -73,7 +73,7 @@ export class PgBackupsTab {
     };
     try {
       const r = await fetch(`${apiBase()}/api/k8s/apis/postgresql.cnpg.io/v1/namespaces/${this.svc.ns}/backups`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(obj),
+        method: 'POST', headers: writeHeaders(), body: JSON.stringify(obj),
       });
       if (r.ok) { this.msg.set('✓ 백업 요청됨'); await this.svc.refresh(); }
       else if (r.status === 403) { this.msg.set('권한 없음 — 백업 생성 권한이 필요합니다.'); }

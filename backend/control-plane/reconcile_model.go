@@ -10,6 +10,7 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -110,7 +111,28 @@ func (r *modelReconciler) install(ctx context.Context, fm *unstructured.Unstruct
 	}
 	for _, o := range objs {
 		if err := applyObj(ctx, r.direct, o); err != nil {
+			// HostDelegate 계약 오브젝트(§3.3): Basic Prometheus Operator 미설치 클러스터에서도
+			// 나머지 operand(Deployment/Service 등)는 정상 배포되도록 CRD 부재는 non-fatal degrade.
+			if o.GetKind() == "ServiceMonitor" && meta.IsNoMatchError(err) {
+				log.Info("ServiceMonitor CRD 없음 — Basic Prometheus Operator 미설치로 판단, 관측 연결 위임 skip(non-fatal)", "name", o.GetName())
+				continue
+			}
 			return reconcile.Result{}, fmt.Errorf("apply %s/%s: %w", o.GetKind(), o.GetName(), err)
+		}
+	}
+	// 엔진 단위 회수(2026-07-06): engines 설치옵션으로 disabled된 엔진은 build 필터로 '앞으로 안 깔릴'뿐
+	// 아니라 '이미 깔린' operand도 lblEngine 셀렉터로 회수한다(Disable=실회수 — "메뉴=실재의 투영").
+	// PVC는 bundleKinds에 없어 보존(AD SAM DB 등 데이터). DeleteAllOf는 멱등.
+	for _, e := range b.engines {
+		if engineEnabled(fm, e) {
+			continue
+		}
+		sel := client.MatchingLabels{lblManagedBy: cpManagedBy, lblOwnerFM: fm.GetName(), lblEngine: e}
+		for _, gvk := range bundleKinds() {
+			o := gvkObj(gvk)
+			if err := r.direct.DeleteAllOf(ctx, o, client.InNamespace(ns), sel); err != nil && !apierrors.IsNotFound(err) && !meta.IsNoMatchError(err) {
+				return reconcile.Result{}, fmt.Errorf("engine 회수 %s(%s): %w", e, gvk.Kind, err)
+			}
 		}
 	}
 	// 2) 준비도(정직: Deployment readyReplicas, 또는 CR-기반 오버라이드) + status.observed(실 신호) — 단일 status 쓰기

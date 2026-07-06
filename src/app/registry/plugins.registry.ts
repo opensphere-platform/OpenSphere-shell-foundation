@@ -25,18 +25,20 @@ export const FOUNDATION_PLUGINS: HostedPlugin[] = [
     consumePoint: 'opensphere-rustfs.opensphere-foundation.svc:9000',
     healthRef: 'rustfs', view: { module: 'rustfs' },
   },
+  // 2026-07-06(Samba-AD 편입): identity 엔진 2종의 consumePoint를 control-plane identity 번들 실물
+  // (foundation-identity-*)로 정합 — 실물은 FoundationModel(identity) CR → reconciler(SSA)가 만든다.
   {
     id: 'keycloak', name: 'Keycloak', icon: 'key', kind: 'plugin', hostRef: 'foundation',
     capability: 'identity.iam.workspace', capabilityLabel: '신원/SSO (IAM)',
-    desc: 'workspace/사원 IAM·SSO capability · Keycloak. Foundation PostgreSQL 소비 · Samba-AD LDAP federation. (Kanidm 콘솔과 무관)',
-    consumePoint: 'opensphere-keycloak.opensphere-foundation.svc:8080',
+    desc: 'workspace/사원 IAM·SSO capability · Keycloak(identity 번들 D-3, start-dev). Samba-AD LDAP federation. (Kanidm 콘솔과 무관)',
+    consumePoint: 'foundation-identity-keycloak.opensphere-foundation.svc:8080',
     healthRef: 'keycloak', view: { module: 'keycloak' },
   },
   {
     id: 'samba', name: 'Samba-AD', icon: 'users', kind: 'plugin', hostRef: 'foundation',
     capability: 'identity.directory.ad', capabilityLabel: '디렉터리 (AD/LDAP)',
-    desc: 'workspace/사원 디렉터리 capability · Samba Active Directory DC. Keycloak이 LDAP(389)로 federation.',
-    consumePoint: 'opensphere-samba.opensphere-foundation.svc:389',
+    desc: 'workspace/사원 디렉터리 capability · Samba AD DC(identity 번들, engines.samba 설치옵션). Keycloak이 LDAP(389)로 federation.',
+    consumePoint: 'foundation-identity-samba.opensphere-foundation.svc:389',
     healthRef: 'samba', view: { module: 'samba' },
   },
 ];

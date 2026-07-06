@@ -8,22 +8,74 @@ import { KeycloakComponent } from './modules/identity/keycloak.component';
 import { SambaComponent } from './modules/identity/samba.component';
 import { FoundationOverviewComponent } from './foundation/overview.component';
 import { FoundationAdminComponent } from './foundation/plugins-admin.component';
+import { FoundationConnectivityComponent } from './foundation/connectivity.component';
+import { FoundationEnginesComponent } from './foundation/engines.component';
+import { PlaceholderModuleComponent } from './foundation/placeholder-module.component';
 import { FoundationRegistryService } from './registry/foundation-registry.service';
-import { HostedPlugin } from './registry/hosted-plugin';
 import { ViewRouter } from './view-router';
-import { OsIcon } from './os-icon';
+import { CarbonIcon } from './carbon-icon';
+import Home16 from '@carbon/icons/es/home/16';
+import Apps16 from '@carbon/icons/es/apps/16';
+import Db2Database16 from '@carbon/icons/es/db2--database/16';
+import UserMultiple16 from '@carbon/icons/es/user--multiple/16';
+import Search16 from '@carbon/icons/es/search/16';
+import ObjectStorage16 from '@carbon/icons/es/object-storage/16';
+import Password16 from '@carbon/icons/es/password/16';
+import Network416 from '@carbon/icons/es/network--4/16';
+import Cube16 from '@carbon/icons/es/cube/16';
+import MachineLearningModel16 from '@carbon/icons/es/machine-learning-model/16';
+import Chat16 from '@carbon/icons/es/chat/16';
 
-interface NavGroup { id: string; label: string; iconKey: string; children: HostedPlugin[] }
+// 좌 내비 아이콘 키 → Carbon 16px 디스크립터(os-cicon). AI Hub/shell-template/shell-base와 동일 방식
+// (@carbon/icons SVG 디스크립터 + CarbonIcon 렌더러. cds-icon 웹컴포넌트가 아니라 크래시와 무관).
+const ICON: Record<string, any> = {
+  overview: Home16, plugins: Apps16, bss: Network416, engines: Cube16,
+  data: Db2Database16, db: Db2Database16, search: Search16, storage: ObjectStorage16,
+  identity: UserMultiple16, users: UserMultiple16, key: Password16,
+  ai: MachineLearningModel16, comm: Chat16,
+};
+
+interface NavChild { id: string; name: string; planned?: boolean }
+interface NavGroup { id: string; label: string; iconKey: string; children: NavChild[]; planned?: boolean }
+
+// AI/Comm은 아직 FOUNDATION_PLUGINS registry에 등록되지 않은 로드맵 도메인이라 정적 목록으로 노출.
+// 실제 엔진이 배선되면 registry 엔트리로 승격하고 여기서 제거한다(2026-07-04).
+const ROADMAP_GROUPS: NavGroup[] = [
+  { id: 'ai', label: 'AI', iconKey: 'ai', planned: true, children: [
+    { id: 'litellm', name: 'LiteLLM' }, { id: 'langfuse', name: 'Langfuse' }, { id: 'embed', name: 'Embed' },
+  ] },
+  { id: 'comm', label: 'Comm', iconKey: 'comm', planned: true, children: [
+    { id: 'stalwart', name: 'Stalwart (JMAP)' }, { id: 'novu', name: 'Novu' }, { id: 'mattermost', name: 'Mattermost' },
+  ] },
+];
+
+// Identity 그룹은 Keycloak/Samba-AD(live, registry 파생)에 Syncope(로드맵)를 얹은 혼합 그룹 —
+// FS-구축계획서 §3.2: identity 엔진 후보 = Keycloak·Syncope·Samba AD·OPA·SCIM-GW, Syncope는
+// ADR-FND-002(IGA 단일권위·JIT 금지, Accepted)까지 확정됐지만 "미구현 스텁"이라 여기 로드맵으로 노출(2026-07-04).
+const IDENTITY_ROADMAP: NavChild[] = [{ id: 'syncope', name: 'Syncope (IGA)', planned: true }];
+
+// 로드맵 모듈 id → placeholder 페이지에 넘길 메타(이름/로고/모노그램/도메인 eyebrow).
+const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; domain: string }> = {
+  litellm: { name: 'LiteLLM', logo: 'litellm', mono: 'L', domain: 'AI' },
+  langfuse: { name: 'Langfuse', logo: 'langfuse', mono: 'LF', domain: 'AI' },
+  embed: { name: 'Embed', logo: '', mono: 'E', domain: 'AI' },
+  stalwart: { name: 'Stalwart (JMAP)', logo: 'stalwart', mono: 'S', domain: 'Comm' },
+  novu: { name: 'Novu', logo: 'novu', mono: 'N', domain: 'Comm' },
+  mattermost: { name: 'Mattermost', logo: 'mattermost', mono: 'M', domain: 'Comm' },
+  syncope: { name: 'Apache Syncope', logo: 'syncope', mono: 'SY', domain: 'Identity(IGA)' },
+};
 
 // Foundation subShell — plugin 호스팅 shell(§2.7). 크롬(2단 내비·breadcrumb·라우팅)은 SDK 정본
 // OpenSphere-shell-template와 동일 패턴: 흰 clr-vertical-nav(.cm-nav, 12rem grid, 왼쪽 blue bar),
 // 상단 회색 breadcrumb 바, 경로 세그먼트 라우팅(/p/foundation/<module> + pushState).
-// **디자인 시스템 = Clarity 단일**(Carbon 미사용). 아이콘=clrVerticalNavIcon+인라인SVG, 표=clr-datagrid, 트리=clr-tree/clr-vertical-nav-group.
+// 구조·컴포넌트 = Clarity(clr-vertical-nav·clr-tree·clr-datagrid). 아이콘 = Carbon(@carbon/icons·os-cicon) —
+// shell-template/shell-ai/shell-base와 동일 관례(Clarity는 아이콘 세트를 자체 제공하지 않고, Clarity Core의
+// cds-icon 웹컴포넌트는 이 ShadowDom Angular-Element 셸에서 부트스트랩 크래시 → Carbon SVG 디스크립터로 대체).
 // 좌 내비 = capability 모듈(Data/Identity)을 clr-vertical-nav-group 트리로, 엔진은 그 자식(registry 파생·활성만).
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, ClarityModule, OsIcon, PostgresComponent, OpenSearchComponent, RustfsComponent, KeycloakComponent, SambaComponent, FoundationOverviewComponent, FoundationAdminComponent],
+  imports: [CommonModule, ClarityModule, CarbonIcon, PostgresComponent, OpenSearchComponent, RustfsComponent, KeycloakComponent, SambaComponent, FoundationOverviewComponent, FoundationAdminComponent, FoundationConnectivityComponent, FoundationEnginesComponent, PlaceholderModuleComponent],
   encapsulation: ViewEncapsulation.ShadowDom,
   styleUrls: ['./app.component.css'],
   styles: [`
@@ -41,6 +93,7 @@ interface NavGroup { id: string; label: string; iconKey: string; children: Hoste
     }
     .cm-brand { display: flex; align-items: center; gap: 0.4rem; min-height: 3.05rem; padding: 0.55rem 0.9rem; border-bottom: 1px solid #e0e0e0; }
     .cm-brand strong { font-size: 0.875rem; font-weight: 600; color: #161616; }
+    .cm-roadmap-tag { font-size: 0.68rem; color: #8c8c8c; font-weight: 400; margin-left: 4px; }
 
     .os-content { min-width: 0; min-height: 100vh; overflow: auto; padding: 1.1rem 1.4rem 2rem; background: var(--os-overview-bg, #f4f4f4); }
     .os-tree-ic { width: 16px; height: 16px; fill: currentColor; }
@@ -63,19 +116,25 @@ interface NavGroup { id: string; label: string; iconKey: string; children: Hoste
         <div class="cm-brand"><strong>Foundation</strong></div>
 
         <a clrVerticalNavLink [class.active]="vr.module() === 'overview'" (click)="go('overview')" (keydown.enter)="go('overview')">
-          <os-icon clrVerticalNavIcon class="os-tree-ic" name="overview" [size]="16"/>Overview
+          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['overview']" [size]="16" />Overview
         </a>
         <a clrVerticalNavLink [class.active]="vr.module() === 'plugins'" (click)="go('plugins')" (keydown.enter)="go('plugins')">
-          <os-icon clrVerticalNavIcon class="os-tree-ic" name="plugins" [size]="16"/>Plugins 관리
+          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['plugins']" [size]="16" />Plugins 관리
+        </a>
+        <a clrVerticalNavLink [class.active]="vr.module() === 'bss'" (click)="go('bss')" (keydown.enter)="go('bss')">
+          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['bss']" [size]="16" />BSS (Host 연결)
+        </a>
+        <a clrVerticalNavLink [class.active]="vr.module() === 'engines'" (click)="go('engines')" (keydown.enter)="go('engines')">
+          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['engines']" [size]="16" />FSS 엔진
         </a>
 
         <clr-vertical-nav-group *ngFor="let g of groups()"
             [clrVerticalNavGroupExpanded]="isOpen(g.id)" (clrVerticalNavGroupExpandedChange)="setOpen(g.id, $event)">
-          <os-icon clrVerticalNavIcon class="os-tree-ic" [name]="g.iconKey" [size]="16"/>{{ g.label }}
+          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON[g.iconKey]" [size]="16" />{{ g.label }}<span class="cm-roadmap-tag" *ngIf="g.planned"> 예정</span>
           <clr-vertical-nav-group-children>
             <!-- 깊이 1(그룹 자식)은 아이콘 없이 들여쓴 텍스트 — shell-template/AI Hub 표준(아이콘=깊이 0만). -->
             <a *ngFor="let c of g.children" clrVerticalNavLink
-               [class.active]="vr.module() === c.id" (click)="go(c.id)" (keydown.enter)="go(c.id)">{{ c.name }}</a>
+               [class.active]="vr.module() === c.id" (click)="go(c.id)" (keydown.enter)="go(c.id)">{{ c.name }}<span class="cm-roadmap-tag" *ngIf="c.planned"> 예정</span></a>
           </clr-vertical-nav-group-children>
         </clr-vertical-nav-group>
       </clr-vertical-nav>
@@ -92,11 +151,15 @@ interface NavGroup { id: string; label: string; iconKey: string; children: Hoste
 
         <app-foundation-overview *ngIf="vr.module() === 'overview'"></app-foundation-overview>
         <app-foundation-admin *ngIf="vr.module() === 'plugins'"></app-foundation-admin>
+        <app-foundation-connectivity *ngIf="vr.module() === 'bss'"></app-foundation-connectivity>
+        <app-foundation-engines *ngIf="vr.module() === 'engines'"></app-foundation-engines>
         <app-postgres *ngIf="vr.module() === 'postgres' && reg.isEnabled('postgres')"></app-postgres>
         <app-opensearch *ngIf="vr.module() === 'opensearch' && reg.isEnabled('opensearch')"></app-opensearch>
         <app-rustfs *ngIf="vr.module() === 'rustfs' && reg.isEnabled('rustfs')"></app-rustfs>
         <app-keycloak *ngIf="vr.module() === 'keycloak' && reg.isEnabled('keycloak')"></app-keycloak>
         <app-samba *ngIf="vr.module() === 'samba' && reg.isEnabled('samba')"></app-samba>
+        <app-placeholder-module *ngIf="roadmapMeta() as rm" [name]="rm.name" [logo]="rm.logo" [mono]="rm.mono"
+          [eyebrow]="'Foundation · ' + rm.domain"></app-placeholder-module>
         <clr-alert *ngIf="disabledModule()" clrAlertType="warning" [clrAlertClosable]="false">
           <clr-alert-item><span class="alert-text">이 plugin은 비활성 상태입니다 — Plugins 관리에서 활성화하세요.</span></clr-alert-item>
         </clr-alert>
@@ -107,6 +170,7 @@ interface NavGroup { id: string; label: string; iconKey: string; children: Hoste
 export class AppComponent implements OnInit, OnDestroy {
   readonly vr = inject(ViewRouter);
   readonly reg = inject(FoundationRegistryService);
+  readonly ICON = ICON;
 
   private readonly openState = signal<Record<string, boolean>>({ data: true, identity: true });
 
@@ -118,7 +182,8 @@ export class AppComponent implements OnInit, OnDestroy {
     const data = pick('data.');
     const identity = pick('identity.');
     if (data.length) out.push({ id: 'data', label: 'Data', iconKey: 'data', children: data });
-    if (identity.length) out.push({ id: 'identity', label: 'Identity', iconKey: 'identity', children: identity });
+    out.push({ id: 'identity', label: 'Identity', iconKey: 'identity', children: [...identity, ...IDENTITY_ROADMAP] });
+    out.push(...ROADMAP_GROUPS);
     return out;
   });
 
@@ -135,9 +200,18 @@ export class AppComponent implements OnInit, OnDestroy {
     return ['postgres', 'opensearch', 'rustfs', 'keycloak', 'samba'].includes(m) && !this.reg.isEnabled(m);
   }
 
+  /** 로드맵 모듈(AI/Comm) 페이지에 넘길 메타 — 해당 모듈이 아니면 undefined(placeholder 미표시). */
+  roadmapMeta(): { name: string; logo: string; mono: string; domain: string } | undefined {
+    return ROADMAP_META[this.vr.module()];
+  }
+
   private label(id: string): string {
     if (id === 'overview') return 'Overview';
     if (id === 'plugins') return 'Plugins 관리';
+    if (id === 'bss') return 'BSS (Host 연결)';
+    if (id === 'engines') return 'FSS 엔진';
+    const rm = ROADMAP_META[id];
+    if (rm) return rm.name;
     const p = this.reg.all.find((x) => x.id === id);
     return p ? p.name : id;
   }

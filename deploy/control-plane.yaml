@@ -1,0 +1,63 @@
+# foundation-control-plane Deployment — V2-native 선언형 소스(ADR-FND-001/INV-1 준수).
+# 기존에 V1_REF(OpenSphere-Platform/opensphere-foundation-shell/deploy/control-plane.yaml)에만 있던
+# 배포 매니페스트를 클러스터 실측(kubectl get deploy -o yaml의 last-applied-configuration)에서 복원해
+# V2로 이식 — [[v2-bringup-gap]] 해소분. RBAC/ServiceAccount는 이 파일 범위 밖(별도 적용됨, 기존과 동일).
+# 이미지: [[ghcr-image-mirror-policy]] 반영 — manager 본체는 다이제스트 핀, collector/keycloak operand
+# 이미지는 ghcr.io/opensphere-platform/mirror/* 경유(2026-07-03 실제 미러링 완료분).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: foundation-control-plane
+  namespace: opensphere-system
+  labels:
+    app: foundation-control-plane
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: foundation-control-plane
+  template:
+    metadata:
+      labels:
+        app: foundation-control-plane
+    spec:
+      serviceAccountName: foundation-control-plane
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: manager
+          # image-source: ghcr-mirror(ok, 자체빌드) — 다이제스트 핀(2026-06-27 빌드와 동일 콘텐츠, 태그만 정정)
+          image: ghcr.io/opensphere-platform/foundation-control-plane@sha256:8107224c5ec2a4553b64b062844bc8ae493fee8618fa8fd21584aa81efac6783
+          imagePullPolicy: IfNotPresent
+          args:
+            - --managed-namespace=opensphere-foundation
+            # image-source: ghcr-mirror(ok) origin=otel/opentelemetry-collector-contrib:0.111.0
+            - --collector-image=ghcr.io/opensphere-platform/mirror/opentelemetry-collector-contrib:0.111.0
+            # image-source: ghcr-mirror(ok) origin=quay.io/keycloak/keycloak:26.0
+            - --keycloak-image=ghcr.io/opensphere-platform/mirror/keycloak:26.0
+            # image-source: ghcr-mirror(missing, upstream org=cloudnative-pg) — CNPG operator 미설치라 재검토 보류
+            - --pg-image=ghcr.io/cloudnative-pg/postgresql:17
+            # --default-storage-class 미포함: 현재 고정된 다이제스트(2026-06-27 빌드)는 이 세션에서 추가한
+            # host_requirements.go 이전 바이너리라 그 플래그가 없음(crash: "flag provided but not defined").
+            # 새 바이너리를 빌드·푸시하고 여기 digest를 갱신한 뒤에만 추가할 것. [[basic-foundation-connector-gap]]
+          env:
+            - name: FOUNDATION_DIRECT_APPLY
+              value: "true"
+          ports:
+            - name: health
+              containerPort: 8081
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8081 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8081 }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }

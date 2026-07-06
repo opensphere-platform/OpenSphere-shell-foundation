@@ -1,17 +1,20 @@
-# Foundation 내부 모듈(엔진) 수명주기 정본 — FoundationModel CR (감사 시정 S4, 2026-07-06).
-# "메뉴=실재의 투영"(§3.3): UI의 Enable/Disable은 이 CR의 spec.desiredState를 PATCH하고,
-# UI 표시는 CR에서 hydrate한다. CR 부재 = 미등록(비노출). localStorage 소프트 토글(fnd.disabled) 폐지.
-# CRD(foundation.opensphere.io/v1alpha1, Cluster-scope)의 desiredState enum = Installed | Disabled.
-# metadata.name = subShell 내부 plugin id(FOUNDATION_PLUGINS와 1:1), spec.model = 소속 capability 도메인.
----
-# 쓰기 RBAC — 콘솔 admin 그룹(임퍼소네이션, subshell-write-auth 계약)의 desiredState 전이 허용.
-# 관례: foundation-velero-manage-admins / foundation-storageclass-apply-admins와 동일 패턴(리소스별 최소권한).
+# Foundation 모듈 수명주기 정본 — FoundationModel CR (감사 시정 S4 → 2026-07-06 도메인 단위로 정정).
+#
+# ⚠️ 의미론(2026-07-06 정정): FoundationModel은 **도메인(모델) 단위**다 — reconciler(backend/control-plane,
+#   reconcile_model.go)가 spec.model로 번들을 디스패치하고 metadata.name을 owner 라벨(회수 셀렉터)로 쓰므로
+#   **name == model** 이어야 한다. 초기 S4의 plugin 단위 5 CR(postgres/samba/... 각각 1 CR)은 같은 번들을
+#   중복 트리거하고 owner 라벨을 서로 덮어써 계약 위반이었다(감사회신-시정 후속 정정).
+#
+# 엔진(내부 plugin) 단위 수명주기 = spec.parameters.engines.<engineId>: enabled | disabled
+#   · UI(plugins-admin)의 Enable/Disable은 이 필드를 PATCH한다("메뉴=실재의 투영").
+#   · identity 번들(control-plane)은 engines.{keycloak,samba}를 실제로 게이트한다(disabled → operand 미배포).
+#   · data 번들은 현재 CNPG(postgres)만 실구현 — opensearch/rustfs 게이트는 번들 편입 시 적용(정직).
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata: { name: foundation-models-manage }
 rules:
   - apiGroups: ["foundation.opensphere.io"]
-    resources: [foundationmodels]
+    resources: [foundationmodels, foundationmoduledescriptors]
     # delete 미포함(최소권한) — 등록 해지는 이 yaml에서 항목 제거 후 kubectl 선언 경로로.
     verbs: [get, list, watch, create, patch]
 ---
@@ -22,37 +25,53 @@ roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: foundat
 subjects:
   - { kind: Group, name: opensphere-console-admins, apiGroup: rbac.authorization.k8s.io }
 ---
+# ── identity 모듈 (엔진: keycloak=IAM/SSO, samba=디렉터리 AD) ──
 apiVersion: foundation.opensphere.io/v1alpha1
 kind: FoundationModel
 metadata:
-  name: postgres
-  labels: { opensphere.io/foundation-plugin: postgres }
-spec: { model: data, desiredState: Installed }
+  name: identity
+spec:
+  model: identity
+  desiredState: Installed
+  parameters:
+    engines:
+      keycloak: enabled
+      samba: enabled
 ---
+# ── data 모듈 (엔진: postgres=CNPG 실구현 · opensearch/rustfs=번들 편입 대기) ──
 apiVersion: foundation.opensphere.io/v1alpha1
 kind: FoundationModel
 metadata:
-  name: opensearch
-  labels: { opensphere.io/foundation-plugin: opensearch }
-spec: { model: data, desiredState: Installed }
+  name: data
+spec:
+  model: data
+  desiredState: Installed
+  parameters:
+    engines:
+      postgres: enabled
+      opensearch: enabled
+      rustfs: enabled
 ---
+# ── identity 모듈 자기기술(FoundationModuleDescriptor) — "모듈이 자기 자신을 설명한다"(FS-구축계획서 §9.4) ──
+# 감사(2026-07-06) F1 갭의 첫 착수: descriptor CR을 클러스터에 선언(현재 UI는 개수·이름 관찰, 후속: registry hydrate).
 apiVersion: foundation.opensphere.io/v1alpha1
-kind: FoundationModel
+kind: FoundationModuleDescriptor
 metadata:
-  name: rustfs
-  labels: { opensphere.io/foundation-plugin: rustfs }
-spec: { model: data, desiredState: Installed }
----
-apiVersion: foundation.opensphere.io/v1alpha1
-kind: FoundationModel
-metadata:
-  name: keycloak
-  labels: { opensphere.io/foundation-plugin: keycloak }
-spec: { model: identity, desiredState: Installed }
----
-apiVersion: foundation.opensphere.io/v1alpha1
-kind: FoundationModel
-metadata:
-  name: samba
-  labels: { opensphere.io/foundation-plugin: samba }
-spec: { model: identity, desiredState: Installed }
+  name: identity
+spec:
+  model: identity
+  description:
+    summary: "사원(workforce) 신원 모듈 — Keycloak(OIDC IAM/SSO) + Samba-AD(디렉터리 DC, LDAP 389). Keycloak이 Samba LDAP를 federation해 사원 로그인을 제공. Syncope(IGA)·SCIM-GW는 D-7."
+  catalog:
+    authority: registry
+    install: optional
+    fixed: false
+  operator:
+    capability: ["identity.iam.workspace", "identity.directory.ad"]
+    chartRef: { name: "control-plane identity_bundle (SSA — chart 아님, 정직 표기)" }
+    image: "ghcr.io/opensphere-platform/mirror/keycloak:26.0 + ghcr.io/opensphere-platform/mirror/samba-domain:20260706"
+  relations:
+    consumed: []
+    consumers:
+      - { ref: "foundation-identity-keycloak", via: "LDAP federation(389) → foundation-identity-samba" }
+      - { ref: "workspace-subshell(계획)", via: "OIDC issuer(workforce realm) 소비" }

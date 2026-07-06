@@ -39,7 +39,8 @@ spec:
     spec:
       containers:
         - name: keycloak
-          image: quay.io/keycloak/keycloak:26.0
+          # image-source: ghcr-mirror(ok) origin=quay.io/keycloak/keycloak:26.0 — [[ghcr-image-mirror-policy]]
+          image: ghcr.io/opensphere-platform/mirror/keycloak:26.0
           args: ["start-dev"]
           env:
             - { name: KC_DB, value: postgres }

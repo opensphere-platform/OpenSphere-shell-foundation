@@ -45,7 +45,10 @@ spec:
       hostname: dc1
       containers:
         - name: samba
-          image: nowsci/samba-domain:latest
+          # image-source: ghcr-mirror(missing) origin=nowsci/samba-domain:latest — GHCR 미러 아직 없음, 원본 직접참조 유지.
+          # :latest 태그는 [[ghcr-image-mirror-policy]] 재현성 원칙 위반이라 확인된 dated 태그로 고정.
+          # 이 원본 자체가 미러링돼야 하는 상태 — [[basic-foundation-connector-gap]] 참고.
+          image: nowsci/samba-domain:20260701025204
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true

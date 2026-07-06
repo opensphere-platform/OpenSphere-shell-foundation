@@ -1,5 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { apiBase, FND_NS } from '../../api-base';
+import { PollBackoff } from '../../shared/poll-backoff';
 import { Instance, Phase, State, age, phaseClass } from './cnpg.types';
 
 const NAME = 'opensphere-pg';
@@ -32,6 +33,7 @@ export class CnpgService {
 
   private timer: any = null;
   private started = false;
+  private backoff = new PollBackoff();
 
   start(): void {
     if (this.started) { return; }
@@ -44,6 +46,7 @@ export class CnpgService {
 
   async refresh(): Promise<void> {
     this.busy.set(true);
+    this.backoff.nextTick();
     await Promise.allSettled([
       this.loadCluster(), this.loadPods(), this.loadBackups(),
       this.loadScheduled(), this.loadDatabases(), this.loadEvents(), this.loadServices(),
@@ -54,44 +57,49 @@ export class CnpgService {
 
   private k(path: string): string { return `${apiBase()}/api/k8s/${path}`; }
 
-  private async getList(path: string, set: (v: any[]) => void, state?: (s: State) => void): Promise<void> {
+  // key로 백오프 판단 — nocrd/noperm 확정 후엔 지수 백오프로 재조회 빈도만 낮춘다(state는 그대로 유지).
+  private async getList(key: string, path: string, set: (v: any[]) => void, state?: (s: State) => void): Promise<void> {
+    if (!this.backoff.due(key)) { return; }
     try {
       const r = await fetch(this.k(path));
-      if (r.status === 403) { state?.('noperm'); return; }
-      if (r.status === 404) { state?.('nocrd'); return; }
-      if (!r.ok) { state?.('error'); return; }
+      const s: State = r.status === 403 ? 'noperm' : r.status === 404 ? 'nocrd' : !r.ok ? 'error' : 'ok';
+      this.backoff.report(key, s);
+      if (s === 'noperm' || s === 'nocrd' || s === 'error') { state?.(s); return; }
       const items = (await r.json()).items || [];
       set(items);
       state?.(items.length ? 'ok' : 'empty');
-    } catch { state?.('error'); }
+    } catch { this.backoff.report(key, 'error'); state?.('error'); }
   }
 
   async loadCluster(): Promise<void> {
+    if (!this.backoff.due('cluster')) { return; }
     try {
       const r = await fetch(this.k(`apis/postgresql.cnpg.io/v1/namespaces/${this.ns}/clusters/${this.name}`));
-      if (r.status === 403) { this.clusterState.set('noperm'); return; }
-      if (!r.ok) { this.clusterState.set('nocrd'); return; }
-      this.cluster.set(await r.json());
-      this.clusterState.set('ok');
-    } catch { this.clusterState.set('error'); }
+      const s: State = r.status === 403 ? 'noperm' : !r.ok ? 'nocrd' : 'ok';
+      this.backoff.report('cluster', s);
+      this.clusterState.set(s);
+      if (s === 'ok') { this.cluster.set(await r.json()); }
+    } catch { this.backoff.report('cluster', 'error'); this.clusterState.set('error'); }
   }
   async loadPods(): Promise<void> {
+    if (!this.backoff.due('pods')) { return; }
     try {
       const sel = encodeURIComponent(`cnpg.io/cluster=${this.name}`);
       const r = await fetch(this.k(`api/v1/namespaces/${this.ns}/pods?labelSelector=${sel}`));
+      this.backoff.report('pods', r.ok ? 'ok' : r.status === 404 ? 'nocrd' : 'error');
       this.pods.set(r.ok ? ((await r.json()).items || []) : []);
-    } catch { this.pods.set([]); }
+    } catch { this.backoff.report('pods', 'error'); this.pods.set([]); }
   }
-  loadBackups() { return this.getList(`apis/postgresql.cnpg.io/v1/namespaces/${this.ns}/backups`, (v) => this.backups.set(v), (s) => this.backupState.set(s)); }
-  loadScheduled() { return this.getList(`apis/postgresql.cnpg.io/v1/namespaces/${this.ns}/scheduledbackups`, (v) => this.scheduled.set(v)); }
-  loadDatabases() { return this.getList(`apis/postgresql.cnpg.io/v1/namespaces/${this.ns}/databases`, (v) => this.databases.set(v), (s) => this.dbState.set(s)); }
+  loadBackups() { return this.getList('backups', `apis/postgresql.cnpg.io/v1/namespaces/${this.ns}/backups`, (v) => this.backups.set(v), (s) => this.backupState.set(s)); }
+  loadScheduled() { return this.getList('scheduled', `apis/postgresql.cnpg.io/v1/namespaces/${this.ns}/scheduledbackups`, (v) => this.scheduled.set(v)); }
+  loadDatabases() { return this.getList('databases', `apis/postgresql.cnpg.io/v1/namespaces/${this.ns}/databases`, (v) => this.databases.set(v), (s) => this.dbState.set(s)); }
   loadEvents() {
     const sel = encodeURIComponent(`involvedObject.name=${this.name}`);
-    return this.getList(`api/v1/namespaces/${this.ns}/events?fieldSelector=${sel}`, (v) => this.events.set(v), (s) => this.eventState.set(s));
+    return this.getList('events', `api/v1/namespaces/${this.ns}/events?fieldSelector=${sel}`, (v) => this.events.set(v), (s) => this.eventState.set(s));
   }
   loadServices() {
     const sel = encodeURIComponent(`cnpg.io/cluster=${this.name}`);
-    return this.getList(`api/v1/namespaces/${this.ns}/services?labelSelector=${sel}`, (v) => this.services.set(v));
+    return this.getList('services', `api/v1/namespaces/${this.ns}/services?labelSelector=${sel}`, (v) => this.services.set(v));
   }
 
   // ── computed (파생) ──

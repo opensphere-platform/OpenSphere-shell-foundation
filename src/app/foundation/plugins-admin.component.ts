@@ -59,7 +59,7 @@ import { ViewRouter } from '../view-router';
           <button class="btn btn-sm" (click)="open(p)" [disabled]="!reg.isEnabled(p.id)">열기</button>
         </clr-dg-cell>
       </clr-dg-row>
-      <clr-dg-footer>{{ reg.all.length }} plugin · Lifecycle 정본 = FoundationModel CR(desiredState) — CR 부재는 '미등록'(감사 시정 S4, localStorage 토글 폐지).</clr-dg-footer>
+      <clr-dg-footer>{{ reg.all.length }} plugin · Enable=선언형 설치·배포(control-plane SSA) · Disable=실회수(워크로드 제거, PVC 데이터 보존) · 정본=FoundationModel &lt;domain&gt; parameters.engines — 등록/해지는 deploy/foundationmodels.yaml 선언.</clr-dg-footer>
     </clr-datagrid>
   `,
 })

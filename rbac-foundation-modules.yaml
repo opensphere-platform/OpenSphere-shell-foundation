@@ -1,0 +1,37 @@
+# Host 연결 7개 상세 페이지(kube-prometheus-stack/ingress-nginx/cert-manager/StorageClass/OTel/CNPG/Crossplane)용 권한 확장.
+# 읽기는 foundation SA(cluster-reader가 못 덮는 cert-manager.io·pkg.crossplane.io 그룹만 추가),
+# 쓰기는 콘솔 관리자 그룹(그룹 임퍼소네이션) — StorageClass 선택 적용은 foundation-control-plane Deployment 하나로 resourceNames 한정.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: foundation-modules-read }
+rules:
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificates"]
+    verbs: ["get","list","watch"]
+  - apiGroups: ["pkg.crossplane.io"]
+    resources: ["providers","configurations","functions"]
+    verbs: ["get","list","watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: foundation-modules-read-sa }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: foundation-modules-read }
+subjects:
+  - { kind: ServiceAccount, name: default, namespace: opensphere-system }
+---
+# StorageClass 기본값 "선택 적용" — foundation-control-plane Deployment의 --default-storage-class 인자만 patch 가능(다른 Deployment는 불가).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: foundation-storageclass-apply }
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["foundation-control-plane"]
+    verbs: ["update","patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: foundation-storageclass-apply-admins }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: foundation-storageclass-apply }
+subjects:
+  - { kind: Group, name: opensphere-console-admins, apiGroup: rbac.authorization.k8s.io }
