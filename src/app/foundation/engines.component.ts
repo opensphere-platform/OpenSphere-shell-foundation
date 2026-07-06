@@ -13,7 +13,7 @@ const REAL_DETAIL_TABS = new Set(['otel', 'cnpg', 'crossplane', 'opensearch']);
 const PLACEHOLDER_TABS = new Set([
   'syncope', 'opa',
   'psmdb', 'valkey',
-  'litellm', 'langfuse', 'embed',
+  'litellm', 'langfuse',
   'stalwart', 'novu', 'mattermost',
   'tempo', 'loki', 'grafana-operator',
   'ptm', 'argocd',
@@ -134,14 +134,12 @@ export class FoundationEnginesComponent {
   readonly IMPL_LABEL = IMPL_LABEL;
   readonly IMPL_PILL = IMPL_PILL;
   readonly failed = signal<Set<string>>(new Set());
-  readonly fssMembers = ['identity', 'data', 'ai', 'comm', 'observability', 'backup'];
+  readonly fssMembers = ['identity', 'data', 'ai', 'comm'];
   readonly sections: EngineSection[] = [
     { id: 'identity', title: 'Identity / Access', summary: '사원·고객 신원, 디렉터리, 정책, SCIM 동기화 계층.' },
     { id: 'data', title: 'Data Plane', summary: 'PostgreSQL, object storage, cache, document DB, 검색 인덱스 등 데이터 capability.' },
-    { id: 'ai', title: 'AI / Retrieval', summary: 'LLM 라우팅, 추론 관측, 임베딩과 벡터 검색 substrate.' },
+    { id: 'ai', title: 'AI / Retrieval', summary: 'LLM 라우팅, 추론 관측, embedding route와 OpenSearch 기반 vector retrieval substrate.' },
     { id: 'comm', title: 'Communication', summary: '메일, 알림, 협업, ChatOps로 이어지는 커뮤니케이션 백본.' },
-    { id: 'observability', title: 'Observability', summary: '메트릭·로그·트레이스 수집, 저장, 조회, 대시보드 계층.' },
-    { id: 'backup', title: 'Backup / Recovery', summary: '백업 정책, 실행, 복구와 pre-upgrade gate를 담당하는 계층.' },
     { id: 'delivery', title: 'Delivery / GitOps & Adapter', summary: 'GitOps/ArgoCD를 기본 전달 경로로 두고, Crossplane은 선택 가능한 provisioning adapter로 둔다.' },
   ];
 
@@ -231,20 +229,14 @@ export class FoundationEnginesComponent {
     {
       id: 'litellm', name: 'LiteLLM', provider: 'litellm.ai', version: '', logo: 'litlellm', mono: 'LLM', detail: true,
       category: 'ai', impl: 'stub', liveKey: '',
-      role: 'LLM provider routing 후보. OAA와 AI Level 추론 경로를 통합한다.',
-      wiring: 'OAA Gateway/LLMRoute와 연결할 후속 엔진.',
+      role: 'LLM provider routing 후보. OAA와 AI Level 추론 경로, embedding route를 통합한다.',
+      wiring: 'OAA Gateway/LLMRoute/EmbeddingRoute와 연결할 후속 엔진.',
     },
     {
       id: 'langfuse', name: 'Langfuse', provider: 'langfuse.com', version: '', logo: 'langfuse', mono: 'LF', detail: true,
       category: 'ai', impl: 'stub', liveKey: '',
       role: 'LLM observability 후보. ClickHouse 의존성 결정이 남아 있다.',
       wiring: '추론 trace, prompt, cost 관측 경로로 연결할 예정이다.',
-    },
-    {
-      id: 'embed', name: 'Embed', provider: 'OpenSphere', version: '', logo: '', mono: 'E', detail: true,
-      category: 'ai', impl: 'stub', liveKey: '',
-      role: '임베딩과 VectorRetrieval substrate 후보.',
-      wiring: 'pgvector/OpenSearch 등 retrieval backend와 연결한다.',
     },
     {
       id: 'stalwart', name: 'Stalwart', provider: 'stalw.art', version: 'JMAP', logo: 'stalwart', mono: 'S', detail: true,

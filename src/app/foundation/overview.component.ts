@@ -42,7 +42,7 @@ interface SetupStep {
 // liveKey가 있으면 실제 카탈로그(BSS host 연결 또는 FS 구현 엔진)의 실측 상태를 그대로 반영한다(하드코딩 금지).
 // FS 정본 멤버는 제품명이 아니라 identity/data/ai/comm/observability/backup capability 모듈이다.
 const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: string; linkTab?: string; linkModule?: 'bss' | 'engines' }> = {
-  ai: { modules: 'LiteLLM · Langfuse · Embed' },
+  ai: { modules: 'LiteLLM · Langfuse · Vector Retrieval' },
   comm: { modules: 'Stalwart(JMAP) · Novu · Mattermost' },
   observability: { modules: 'OpenTelemetry Collector · Prometheus(Basic 위임) · Tempo · Loki · Grafana', liveKey: 'otel', liveLabel: 'OpenTelemetry Collector', linkTab: 'otel', linkModule: 'engines' },
   backup: { modules: 'Velero', liveKey: 'velero', liveLabel: 'Velero', linkTab: 'velero', linkModule: 'bss' },

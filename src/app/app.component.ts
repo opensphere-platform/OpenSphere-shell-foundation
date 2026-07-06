@@ -40,7 +40,7 @@ interface NavGroup { id: string; label: string; iconKey: string; children: NavCh
 // 실제 엔진이 배선되면 registry 엔트리로 승격하고 여기서 제거한다(2026-07-04).
 const ROADMAP_GROUPS: NavGroup[] = [
   { id: 'ai', label: 'AI', iconKey: 'ai', planned: true, children: [
-    { id: 'litellm', name: 'LiteLLM' }, { id: 'langfuse', name: 'Langfuse' }, { id: 'embed', name: 'Embed' },
+    { id: 'litellm', name: 'LiteLLM' }, { id: 'langfuse', name: 'Langfuse' },
   ] },
   { id: 'comm', label: 'Comm', iconKey: 'comm', planned: true, children: [
     { id: 'stalwart', name: 'Stalwart (JMAP)' }, { id: 'novu', name: 'Novu' }, { id: 'mattermost', name: 'Mattermost' },
@@ -55,7 +55,6 @@ const IDENTITY_ROADMAP: NavChild[] = [{ id: 'syncope', name: 'Syncope (IGA)', pl
 const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; domain: string }> = {
   litellm: { name: 'LiteLLM', logo: 'litellm', mono: 'L', domain: 'AI' },
   langfuse: { name: 'Langfuse', logo: 'langfuse', mono: 'LF', domain: 'AI' },
-  embed: { name: 'Embed', logo: '', mono: 'E', domain: 'AI' },
   stalwart: { name: 'Stalwart (JMAP)', logo: 'stalwart', mono: 'S', domain: 'Comm' },
   novu: { name: 'Novu', logo: 'novu', mono: 'N', domain: 'Comm' },
   mattermost: { name: 'Mattermost', logo: 'mattermost', mono: 'M', domain: 'Comm' },
