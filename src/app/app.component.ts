@@ -8,7 +8,6 @@ import { FoundationOverviewComponent } from './foundation/overview.component';
 import { FoundationConnectivityComponent } from './foundation/connectivity.component';
 import { FoundationEnginesComponent } from './foundation/engines.component';
 import { ControlPlaneComponent } from './foundation/control-plane.component';
-import { PlaceholderModuleComponent } from './foundation/placeholder-module.component';
 import { PluginOutletComponent } from './foundation/plugin-outlet.component';
 import { FoundationRegistryService } from './registry/foundation-registry.service';
 import { ViewRouter } from './view-router';
@@ -23,8 +22,6 @@ import Password16 from '@carbon/icons/es/password/16';
 import Network416 from '@carbon/icons/es/network--4/16';
 import Cube16 from '@carbon/icons/es/cube/16';
 import FlowConnection16 from '@carbon/icons/es/flow--connection/16';
-import MachineLearningModel16 from '@carbon/icons/es/machine-learning-model/16';
-import Chat16 from '@carbon/icons/es/chat/16';
 
 // 좌 내비 아이콘 키 → Carbon 16px 디스크립터(os-cicon). AI Hub/shell-template/shell-base와 동일 방식
 // (@carbon/icons SVG 디스크립터 + CarbonIcon 렌더러. cds-icon 웹컴포넌트가 아니라 크래시와 무관).
@@ -32,7 +29,6 @@ const ICON: Record<string, any> = {
   overview: Home16, bss: Network416, engines: Cube16, control: FlowConnection16,
   data: Db2Database16, db: Db2Database16, search: Search16, storage: ObjectStorage16,
   identity: UserMultiple16, users: UserMultiple16, key: Password16,
-  ai: MachineLearningModel16, comm: Chat16,
 };
 
 interface NavChild { id: string; name: string; planned?: boolean }
@@ -40,28 +36,11 @@ interface NavGroup { id: string; label: string; iconKey: string; children: NavCh
 
 // AI/Comm은 아직 FOUNDATION_PLUGINS registry에 등록되지 않은 로드맵 도메인이라 정적 목록으로 노출.
 // 실제 엔진이 배선되면 registry 엔트리로 승격하고 여기서 제거한다(2026-07-04).
-const ROADMAP_GROUPS: NavGroup[] = [
-  { id: 'ai', label: 'AI', iconKey: 'ai', planned: true, children: [
-    { id: 'litellm', name: 'LiteLLM' }, { id: 'langfuse', name: 'Langfuse' },
-  ] },
-  { id: 'comm', label: 'Comm', iconKey: 'comm', planned: true, children: [
-    { id: 'stalwart', name: 'Stalwart (JMAP)' }, { id: 'novu', name: 'Novu' }, { id: 'mattermost', name: 'Mattermost' },
-  ] },
-];
 
 // Identity 그룹은 Keycloak/Samba-AD(live, registry 파생)에 Syncope(로드맵)를 얹은 혼합 그룹.
 // ADR-FND-002: IGA 단일권위는 Syncope. 별도 SCIM gateway는 멤버가 아니라 Syncope 내장 SCIM 2.0 또는 얇은 connector로 수렴한다.
-const IDENTITY_ROADMAP: NavChild[] = [{ id: 'syncope', name: 'Syncope (IGA)', planned: true }];
 
 // 로드맵 모듈 id → placeholder 페이지에 넘길 메타(이름/로고/모노그램/도메인 eyebrow).
-const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; domain: string }> = {
-  litellm: { name: 'LiteLLM', logo: 'litellm', mono: 'L', domain: 'AI' },
-  langfuse: { name: 'Langfuse', logo: 'langfuse', mono: 'LF', domain: 'AI' },
-  stalwart: { name: 'Stalwart (JMAP)', logo: 'stalwart', mono: 'S', domain: 'Comm' },
-  novu: { name: 'Novu', logo: 'novu', mono: 'N', domain: 'Comm' },
-  mattermost: { name: 'Mattermost', logo: 'mattermost', mono: 'M', domain: 'Comm' },
-  syncope: { name: 'Apache Syncope', logo: 'apache-2', mono: 'SY', domain: 'Identity(IGA + SCIM)' },
-};
 
 // Foundation subShell — plugin 호스팅 shell(§2.7). 크롬(2단 내비·breadcrumb·라우팅)은 SDK 정본
 // OpenSphere-shell-template와 동일 패턴: 흰 clr-vertical-nav(.cm-nav, 12rem grid, 왼쪽 blue bar),
@@ -73,7 +52,7 @@ const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; d
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, ClarityModule, CarbonIcon, PostgresComponent, RustfsComponent, KeycloakComponent, FoundationOverviewComponent, FoundationConnectivityComponent, FoundationEnginesComponent, ControlPlaneComponent, PlaceholderModuleComponent, PluginOutletComponent],
+  imports: [CommonModule, ClarityModule, CarbonIcon, PostgresComponent, RustfsComponent, KeycloakComponent, FoundationOverviewComponent, FoundationConnectivityComponent, FoundationEnginesComponent, ControlPlaneComponent, PluginOutletComponent],
   encapsulation: ViewEncapsulation.ShadowDom,
   styleUrls: ['./app.component.css'],
   styles: [`
@@ -156,8 +135,6 @@ const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; d
         <app-postgres *ngIf="vr.module() === 'postgres' && reg.isEnabled('postgres')"></app-postgres>
         <app-rustfs *ngIf="vr.module() === 'rustfs' && reg.isEnabled('rustfs')"></app-rustfs>
         <app-keycloak *ngIf="vr.module() === 'keycloak' && reg.isEnabled('keycloak')"></app-keycloak>
-        <app-placeholder-module *ngIf="roadmapMeta() as rm" [name]="rm.name" [logo]="rm.logo" [mono]="rm.mono"
-          [eyebrow]="'Foundation · ' + rm.domain"></app-placeholder-module>
         <clr-alert *ngIf="disabledModule()" clrAlertType="warning" [clrAlertClosable]="false">
           <clr-alert-item><span class="alert-text">이 plugin은 비활성 상태입니다. FSS 엔진 카탈로그에서 설치 상태를 확인하세요.</span></clr-alert-item>
         </clr-alert>
@@ -180,8 +157,7 @@ export class AppComponent implements OnInit, OnDestroy {
     const data = pick('data.');
     const identity = pick('identity.');
     if (data.length) out.push({ id: 'data', label: 'Data', iconKey: 'data', children: data });
-    out.push({ id: 'identity', label: 'Identity', iconKey: 'identity', children: [...identity, ...IDENTITY_ROADMAP] });
-    out.push(...ROADMAP_GROUPS);
+    if (identity.length) out.push({ id: 'identity', label: 'Identity', iconKey: 'identity', children: identity });
     return out;
   });
 
@@ -208,7 +184,6 @@ export class AppComponent implements OnInit, OnDestroy {
     const id = this.vr.module();
     const p = this.reg.all.find((x) => x.id === id && !!x.activation);
     if (!p) { return undefined; }
-    if (p.id === 'samba') { return p; }
     return this.reg.isEnabled(p.id) ? p : undefined;
   }
 
@@ -219,22 +194,15 @@ export class AppComponent implements OnInit, OnDestroy {
 
   disabledModule(): boolean {
     const m = this.vr.module();
-    if (m === 'samba') { return false; }
     return ['postgres', 'opensearch', 'rustfs', 'keycloak', 'samba'].includes(m) && !this.reg.isEnabled(m);
   }
 
   /** 로드맵 모듈(AI/Comm) 페이지에 넘길 메타 — 해당 모듈이 아니면 undefined(placeholder 미표시). */
-  roadmapMeta(): { name: string; logo: string; mono: string; domain: string } | undefined {
-    return ROADMAP_META[this.vr.module()];
-  }
-
   private label(id: string): string {
     if (id === 'overview') return 'Overview';
     if (id === 'bss') return 'BSS (Host 연결)';
     if (id === 'engines') return 'FSS 엔진';
     if (id === 'control-plane') return 'Control Plane';
-    const rm = ROADMAP_META[id];
-    if (rm) return rm.name;
     const p = this.reg.all.find((x) => x.id === id);
     return p ? p.name : id;
   }
