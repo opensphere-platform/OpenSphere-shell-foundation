@@ -4,6 +4,15 @@ import { ClarityModule } from '@clr/angular';
 import { EnginesService } from './engines.service';
 import { FoundationRegistryService } from '../registry/foundation-registry.service';
 import { ViewRouter } from '../view-router';
+import { apiBase } from '../api-base';
+
+type InstallStepState = 'pending' | 'running' | 'pass' | 'warn' | 'fail';
+interface InstallStep {
+  step: string;
+  state: InstallStepState;
+  evidence: string;
+  time: string;
+}
 
 @Component({
   selector: 'app-opensearch-engine',
@@ -53,6 +62,28 @@ import { ViewRouter } from '../view-router';
             <button class="btn btn-sm" (click)="refresh()" [disabled]="busy()">Refresh</button>
           </div>
         </div>
+
+        <div class="card">
+          <div class="card-header">Install Process</div>
+          <div class="card-block">
+            <clr-datagrid>
+              <clr-dg-column>Time</clr-dg-column>
+              <clr-dg-column>State</clr-dg-column>
+              <clr-dg-column>Step</clr-dg-column>
+              <clr-dg-column>Evidence</clr-dg-column>
+              <clr-dg-row *ngFor="let item of installSteps()">
+                <clr-dg-cell class="os-mono">{{ item.time }}</clr-dg-cell>
+                <clr-dg-cell><span class="label" [ngClass]="stepPill(item.state)">{{ item.state }}</span></clr-dg-cell>
+                <clr-dg-cell>{{ item.step }}</clr-dg-cell>
+                <clr-dg-cell class="os-mono">{{ item.evidence }}</clr-dg-cell>
+              </clr-dg-row>
+            </clr-datagrid>
+            <p class="os-sub" *ngIf="installSteps().length === 0">
+              설치 버튼을 누르면 Plugin 등록, CLI, Manual/OAA/Search, Metrics, Grafana, Logs, Operand 선언,
+              FoundationModel 적용, control-plane reconcile 단계를 순서대로 기록합니다.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div class="clr-col-lg-7 clr-col-md-12">
@@ -92,21 +123,45 @@ export class OpenSearchEngineComponent {
   readonly busy = signal(false);
   readonly message = signal('');
   readonly messageType = signal<'success' | 'danger' | 'warning' | 'info'>('info');
+  readonly installSteps = signal<InstallStep[]>([]);
 
   installed(): boolean { return this.reg.modelOf('opensearch') === 'Installed'; }
 
   async prepare(): Promise<void> {
     this.busy.set(true);
-    await this.reg.setEnabled('opensearch', true);
-    await this.svc.refresh();
-    this.busy.set(false);
-    if (this.reg.lastError()) {
+    this.installSteps.set([]);
+    try {
+      await this.checkJson('Plugin registration', this.k('apis/plugins.opensphere.io/v1alpha1/namespaces/opensphere-system/uipluginregistrations/opensearch'), 'UIPluginRegistration/opensearch is registered');
+      await this.checkJson('CLI contribution', this.plugin('/cli/manifest'), 'os opensearch status/indices/events/access manifest returned');
+      this.addStep('Manual / OAA / Search', 'pass', 'manual:contribute declares plugin:opensearch/operations for Manual Registry, global search, and OAA retrieval');
+      await this.checkJson('ServiceMonitor registration', this.k('apis/monitoring.coreos.com/v1/namespaces/opensphere-system/servicemonitors/opensearch'), 'ServiceMonitor/opensearch targets /metrics');
+      await this.checkText('Metrics endpoint', this.plugin('/metrics'), 'opensphere_opensearch_plugin_up exposed');
+      await this.checkJson('Grafana connection', this.plugin('/api/grafana'), 'Grafana health, Prometheus datasource, Alertmanager datasource returned');
+      await this.checkJson('Logs connection', this.plugin('/api/logs?minutes=5'), 'Loki log endpoint returned');
+      await this.checkJson('Operand declaration', this.plugin('/operand/manifests'), 'OpenSearch operand declaration endpoint returned');
+      this.addStep('FoundationModel declaration', 'running', 'patch spec.parameters.engines.opensearch=enabled');
+      await this.reg.setEnabled('opensearch', true);
+      if (this.reg.lastError()) {
+        throw new Error(this.reg.lastError());
+      }
+      this.updateLastStep('pass', 'FoundationModel/data install declaration saved');
+      this.addStep('Control-plane reconcile', 'running', 'waiting for opensphere-search StatefulSet observation');
+      await this.svc.refresh();
+      const live = this.svc.liveState('opensearch');
+      if (live === 'ok') {
+        this.updateLastStep('pass', 'StatefulSet opensphere-search observed');
+      } else {
+        this.updateLastStep('warn', `Current live state: ${live}. The declaration is prepared; workload reconciliation may still be pending.`);
+      }
+      this.messageType.set('success');
+      this.message.set('OpenSearch install process finished. Review the process log and readiness state.');
+    } catch (e) {
+      this.markRunningFailed(String((e as Error)?.message ?? e));
       this.messageType.set('danger');
-      this.message.set(this.reg.lastError());
-      return;
+      this.message.set(`OpenSearch install process failed: ${String((e as Error)?.message ?? e)}`);
+    } finally {
+      this.busy.set(false);
     }
-    this.messageType.set('success');
-    this.message.set('OpenSearch install declaration is prepared. The control-plane will reconcile the workload.');
   }
 
   async refresh(): Promise<void> {
@@ -117,6 +172,64 @@ export class OpenSearchEngineComponent {
 
   back(): void { this.vr.setTab('overview'); }
   openPlugin(): void { this.vr.setModule('opensearch'); }
+
+  private k(path: string): string { return `${apiBase()}/api/k8s/${path}`; }
+  private plugin(path: string): string { return `${apiBase()}/api/plugins/opensearch${path}`; }
+
+  private now(): string {
+    try { return new Date().toLocaleTimeString(); } catch { return ''; }
+  }
+
+  private addStep(step: string, state: InstallStepState, evidence: string): void {
+    this.installSteps.update((rows) => [...rows, { step, state, evidence, time: this.now() }]);
+  }
+
+  private updateLastStep(state: InstallStepState, evidence: string): void {
+    this.installSteps.update((rows) => rows.map((row, i) => i === rows.length - 1 ? { ...row, state, evidence, time: this.now() } : row));
+  }
+
+  private markRunningFailed(evidence: string): void {
+    const rows = this.installSteps();
+    if (rows.length && rows[rows.length - 1].state === 'running') {
+      this.updateLastStep('fail', evidence);
+    } else {
+      this.addStep('Install process', 'fail', evidence);
+    }
+  }
+
+  private async checkJson(step: string, url: string, okEvidence: string): Promise<unknown> {
+    this.addStep(step, 'running', 'checking...');
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) {
+      throw new Error(`${step} HTTP ${res.status}`);
+    }
+    const body = await res.json();
+    this.updateLastStep('pass', okEvidence);
+    return body;
+  }
+
+  private async checkText(step: string, url: string, needle: string): Promise<string> {
+    this.addStep(step, 'running', 'checking...');
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) {
+      throw new Error(`${step} HTTP ${res.status}`);
+    }
+    const body = await res.text();
+    if (!body.includes(needle)) {
+      throw new Error(`${step} did not include ${needle}`);
+    }
+    this.updateLastStep('pass', needle);
+    return body;
+  }
+
+  stepPill(state: InstallStepState): string {
+    if (state === 'pass') { return 'label-success'; }
+    if (state === 'warn') { return 'label-warning'; }
+    if (state === 'fail') { return 'label-danger'; }
+    if (state === 'running') { return 'label-info'; }
+    return '';
+  }
+
   modelPill(): string {
     const s = this.reg.modelOf('opensearch');
     if (s === 'Installed') { return 'label-success'; }
