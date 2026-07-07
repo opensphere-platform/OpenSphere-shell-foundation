@@ -151,22 +151,24 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
       </button>
     </div>
 
-    <!-- 등록된 plugin 경로 -->
-    <div class="os-sech">Foundation plugin registry <span class="os-dim">— 메뉴는 등록·설치 상태의 투영</span></div>
+    <!-- 설치 완료 plugin 경로 -->
+    <div class="os-sech">Installed Foundation plugins <span class="os-dim">— 설치 완료 후 메뉴와 관리 화면으로 진입하는 목록</span></div>
     <div class="ov-registry">
       <div class="ov-reg-row ov-reg-head">
         <span>Plugin</span><span>Capability</span><span>Lifecycle</span><span>Runtime</span><span>Consume point</span><span></span>
       </div>
-      <div class="ov-reg-row" *ngFor="let p of reg.all">
+      <div class="ov-reg-row" *ngFor="let p of installedPlugins()">
         <span class="ov-reg-name">{{ p.name }}</span>
         <span>{{ p.capabilityLabel }}</span>
         <span><span class="label" [ngClass]="lifecyclePill(p)">{{ lifecycleLabel(p) }}</span></span>
         <span><span class="label" [ngClass]="reg.health(p).pill">{{ reg.health(p).label }}</span></span>
         <span class="os-mono">{{ p.consumePoint }}</span>
         <span class="ov-reg-actions">
-          <button class="btn btn-sm" type="button" *ngIf="reg.isEnabled(p.id)" (click)="openPlugin(p)">Open</button>
-          <button class="btn btn-sm btn-primary" type="button" *ngIf="!reg.isEnabled(p.id)" (click)="preparePlugin(p)">Prepare</button>
+          <button class="btn btn-sm" type="button" (click)="openPlugin(p)">Open</button>
         </span>
+      </div>
+      <div class="ov-empty" *ngIf="installedPlugins().length === 0">
+        설치된 FSS plugin이 없습니다. <button class="btn btn-link" type="button" (click)="go('engines')">FSS 엔진</button>에서 설치할 모듈을 선택하세요.
       </div>
     </div>
   `,
@@ -177,6 +179,7 @@ export class FoundationOverviewComponent {
   readonly conn = inject(ConnectivityService);
   private vr = inject(ViewRouter);
   readonly s = this.reg.summary;
+  readonly installedPlugins = this.reg.enabledPlugins;
   readonly bssMembers = ['kube-prometheus-stack', 'storage(local-path)', 'ingress'];
   readonly fssMembers = ['identity', 'data', 'ai', 'comm', 'observability', 'backup'];
   readonly setupSteps: SetupStep[] = [

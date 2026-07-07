@@ -195,14 +195,15 @@ export class FoundationRegistryService {
   // overview 헤더 — lifecycle(enabled) vs runtime(health) 2축 분리 집계.
   readonly summary = computed(() => {
     const en = this.enabledPlugins();
-    const h = this.all.map((p) => this.health(p));
+    const h = en.map((p) => this.health(p));
     return {
-      hosted: this.all.length,
+      catalog: this.all.length,
+      hosted: en.length,
       enabled: en.length,
       disabled: this.all.length - en.length,
       healthy: h.filter((x) => x.phase === 'ok').length,
       degraded: h.filter((x) => x.phase === 'bad').length,
-      capabilities: new Set(this.all.map((p) => p.capability)).size,
+      capabilities: new Set(en.map((p) => p.capability)).size,
     };
   });
 
