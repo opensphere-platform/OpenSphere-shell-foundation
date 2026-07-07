@@ -7,6 +7,7 @@ import { KeycloakComponent } from './modules/identity/keycloak.component';
 import { FoundationOverviewComponent } from './foundation/overview.component';
 import { FoundationConnectivityComponent } from './foundation/connectivity.component';
 import { FoundationEnginesComponent } from './foundation/engines.component';
+import { ControlPlaneComponent } from './foundation/control-plane.component';
 import { PlaceholderModuleComponent } from './foundation/placeholder-module.component';
 import { PluginOutletComponent } from './foundation/plugin-outlet.component';
 import { FoundationRegistryService } from './registry/foundation-registry.service';
@@ -21,13 +22,14 @@ import ObjectStorage16 from '@carbon/icons/es/object-storage/16';
 import Password16 from '@carbon/icons/es/password/16';
 import Network416 from '@carbon/icons/es/network--4/16';
 import Cube16 from '@carbon/icons/es/cube/16';
+import FlowConnection16 from '@carbon/icons/es/flow--connection/16';
 import MachineLearningModel16 from '@carbon/icons/es/machine-learning-model/16';
 import Chat16 from '@carbon/icons/es/chat/16';
 
 // 좌 내비 아이콘 키 → Carbon 16px 디스크립터(os-cicon). AI Hub/shell-template/shell-base와 동일 방식
 // (@carbon/icons SVG 디스크립터 + CarbonIcon 렌더러. cds-icon 웹컴포넌트가 아니라 크래시와 무관).
 const ICON: Record<string, any> = {
-  overview: Home16, bss: Network416, engines: Cube16,
+  overview: Home16, bss: Network416, engines: Cube16, control: FlowConnection16,
   data: Db2Database16, db: Db2Database16, search: Search16, storage: ObjectStorage16,
   identity: UserMultiple16, users: UserMultiple16, key: Password16,
   ai: MachineLearningModel16, comm: Chat16,
@@ -71,7 +73,7 @@ const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; d
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, ClarityModule, CarbonIcon, PostgresComponent, RustfsComponent, KeycloakComponent, FoundationOverviewComponent, FoundationConnectivityComponent, FoundationEnginesComponent, PlaceholderModuleComponent, PluginOutletComponent],
+  imports: [CommonModule, ClarityModule, CarbonIcon, PostgresComponent, RustfsComponent, KeycloakComponent, FoundationOverviewComponent, FoundationConnectivityComponent, FoundationEnginesComponent, ControlPlaneComponent, PlaceholderModuleComponent, PluginOutletComponent],
   encapsulation: ViewEncapsulation.ShadowDom,
   styleUrls: ['./app.component.css'],
   styles: [`
@@ -121,6 +123,10 @@ const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; d
           <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['engines']" [size]="16" />FSS 엔진
         </a>
 
+        <a clrVerticalNavLink [class.active]="vr.module() === 'control-plane'" (click)="go('control-plane')" (keydown.enter)="go('control-plane')">
+          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['control']" [size]="16" />Control Plane
+        </a>
+
         <clr-vertical-nav-group *ngFor="let g of groups()"
             [clrVerticalNavGroupExpanded]="isOpen(g.id)" (clrVerticalNavGroupExpandedChange)="setOpen(g.id, $event)">
           <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON[g.iconKey]" [size]="16" />{{ g.label }}<span class="cm-roadmap-tag" *ngIf="g.planned"> 예정</span>
@@ -145,6 +151,7 @@ const ROADMAP_META: Record<string, { name: string; logo: string; mono: string; d
         <app-foundation-overview *ngIf="vr.module() === 'overview'"></app-foundation-overview>
         <app-foundation-connectivity *ngIf="vr.module() === 'bss'"></app-foundation-connectivity>
         <app-foundation-engines *ngIf="vr.module() === 'engines'"></app-foundation-engines>
+        <app-control-plane *ngIf="vr.module() === 'control-plane'"></app-control-plane>
         <app-plugin-outlet *ngIf="activePlugin() as p" [plugin]="p"></app-plugin-outlet>
         <app-postgres *ngIf="vr.module() === 'postgres' && reg.isEnabled('postgres')"></app-postgres>
         <app-rustfs *ngIf="vr.module() === 'rustfs' && reg.isEnabled('rustfs')"></app-rustfs>
@@ -225,6 +232,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (id === 'overview') return 'Overview';
     if (id === 'bss') return 'BSS (Host 연결)';
     if (id === 'engines') return 'FSS 엔진';
+    if (id === 'control-plane') return 'Control Plane';
     const rm = ROADMAP_META[id];
     if (rm) return rm.name;
     const p = this.reg.all.find((x) => x.id === id);
