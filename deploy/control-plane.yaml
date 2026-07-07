@@ -27,7 +27,7 @@ spec:
       containers:
         - name: manager
           # image-source: ghcr-mirror(ok, 자체빌드) — 다이제스트 핀(2026-06-27 빌드와 동일 콘텐츠, 태그만 정정)
-          image: ghcr.io/opensphere-platform/foundation-control-plane@sha256:e9d95abca294a6c502b92bd545382e224a7ef0c04927d55fbbd33c8425d45b2f
+          image: ghcr.io/opensphere-platform/foundation-control-plane@sha256:ea80998b1955871534f8f5296343f22dcd9ee5e9f670c699b9c1a29d027c5976
           imagePullPolicy: IfNotPresent
           args:
             - --managed-namespace=opensphere-foundation

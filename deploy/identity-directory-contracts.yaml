@@ -1,0 +1,194 @@
+# Identity Directory Contract Pack — Foundation control-plane typed contract.
+# 제품 책임: 사용자가 CRD YAML을 직접 작성하지 않는다. OpenSphere가 이 pack을 설치/업데이트하고
+# admin은 제품 복구/업데이트 액션을 승인한다.
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: identitydirectoryclaims.foundation.opensphere.io
+  labels:
+    app.kubernetes.io/part-of: foundation-control-plane
+    foundation.opensphere.io/contract-pack: identity-directory
+spec:
+  group: foundation.opensphere.io
+  names:
+    kind: IdentityDirectoryClaim
+    listKind: IdentityDirectoryClaimList
+    plural: identitydirectoryclaims
+    singular: identitydirectoryclaim
+    shortNames: [idclaim]
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Provider
+          type: string
+          jsonPath: .spec.provider
+        - name: Realm
+          type: string
+          jsonPath: .spec.realm
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              properties:
+                provider:
+                  type: string
+                  enum: [samba-ad]
+                  default: samba-ad
+                realm:
+                  type: string
+                consumerRef:
+                  type: object
+                  properties:
+                    apiVersion: { type: string }
+                    kind: { type: string }
+                    name: { type: string }
+                    namespace: { type: string }
+                parameters:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Pending, Bound, Failed]
+                reason:
+                  type: string
+                bindingRef:
+                  type: object
+                  properties:
+                    name: { type: string }
+                    namespace: { type: string }
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: identitydirectorybindings.foundation.opensphere.io
+  labels:
+    app.kubernetes.io/part-of: foundation-control-plane
+    foundation.opensphere.io/contract-pack: identity-directory
+spec:
+  group: foundation.opensphere.io
+  names:
+    kind: IdentityDirectoryBinding
+    listKind: IdentityDirectoryBindingList
+    plural: identitydirectorybindings
+    singular: identitydirectorybinding
+    shortNames: [idbind]
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Claim
+          type: string
+          jsonPath: .spec.claimRef.name
+        - name: Endpoint
+          type: string
+          jsonPath: .spec.endpointRef.url
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [claimRef]
+              properties:
+                claimRef:
+                  type: object
+                  required: [name, namespace]
+                  properties:
+                    name: { type: string }
+                    namespace: { type: string }
+                endpointRef:
+                  type: object
+                  properties:
+                    name: { type: string }
+                    namespace: { type: string }
+                    service: { type: string }
+                    port: { type: integer }
+                    protocol: { type: string }
+                    url: { type: string }
+                secretRef:
+                  type: object
+                  properties:
+                    name: { type: string }
+                    namespace: { type: string }
+                policyRef:
+                  type: object
+                  properties:
+                    name: { type: string }
+                    namespace: { type: string }
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Pending, Connected, Degraded, Released]
+                connection:
+                  type: object
+                  properties:
+                    lastCheck: { type: string }
+                    rttMs: { type: integer }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: foundation-control-plane-identity-directory
+  labels:
+    app.kubernetes.io/part-of: foundation-control-plane
+    foundation.opensphere.io/contract-pack: identity-directory
+rules:
+  - apiGroups: [foundation.opensphere.io]
+    resources: [identitydirectoryclaims]
+    verbs: [get, list, watch, update, patch]
+  - apiGroups: [foundation.opensphere.io]
+    resources: [identitydirectoryclaims/status]
+    verbs: [get, update, patch]
+  - apiGroups: [foundation.opensphere.io]
+    resources: [identitydirectoryclaims/finalizers]
+    verbs: [update]
+  - apiGroups: [foundation.opensphere.io]
+    resources: [identitydirectorybindings]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [foundation.opensphere.io]
+    resources: [identitydirectorybindings/status]
+    verbs: [get, update, patch]
+  - apiGroups: [foundation.opensphere.io]
+    resources: [identitydirectorybindings/finalizers]
+    verbs: [update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: foundation-control-plane-identity-directory
+  labels:
+    app.kubernetes.io/part-of: foundation-control-plane
+    foundation.opensphere.io/contract-pack: identity-directory
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: foundation-control-plane-identity-directory
+subjects:
+  - kind: ServiceAccount
+    name: foundation-control-plane
+    namespace: opensphere-system

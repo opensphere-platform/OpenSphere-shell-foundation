@@ -31,6 +31,7 @@ import WarningAlt16 from '@carbon/icons/es/warning--alt/16';
     .cp-admin-card { background:#fff; border:1px solid #d0d7de; border-radius:4px; padding:.85rem .95rem; }
     .cp-admin-card h3 { margin:.05rem 0 .45rem; font-size:.95rem; font-weight:600; color:#26374f; }
     .cp-admin-card p { margin:.25rem 0; color:#4f5b70; font-size:.78rem; line-height:1.45; }
+    .cp-admin-actions { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; margin-top:.65rem; }
     .cp-admin-list { margin:.45rem 0 0; padding-left:1rem; color:#3b3b3b; font-size:.78rem; line-height:1.55; }
     .cp-admin-list li { margin:.2rem 0; }
     .cp-no { color:#c92100; font-weight:600; }
@@ -112,23 +113,31 @@ import WarningAlt16 from '@carbon/icons/es/warning--alt/16';
 
     <section class="cp-admin" *ngIf="identityBlocked()">
       <article class="cp-admin-card">
-        <h3>admin이 지금 해야 할 일</h3>
+        <h3>OpenSphere가 복구해야 할 일</h3>
         <p>
-          Samba-AD 설치를 계속 누르는 단계가 아니다. 먼저 Foundation control-plane이
-          <b>Identity Directory Contract Pack</b>을 제공하도록 준비해야 한다.
+          이것은 사용자 설정 문제가 아니라 Foundation control-plane의 계약 패키지 누락이다.
+          admin은 CRD YAML을 직접 작성하지 않고, OpenSphere가 제공하는
+          <b>Identity Directory Contract Pack</b> 복구/업데이트를 승인한다.
         </p>
         <ol class="cp-admin-list">
-          <li>Control Plane 릴리스/패키지에 <b>IdentityDirectoryClaim</b>, <b>IdentityDirectoryBinding</b> CRD를 추가한다.</li>
-          <li>같은 릴리스에 해당 typed 계약을 처리하는 <b>reconciler</b>를 포함한다.</li>
-          <li>이 화면에서 Contracts가 Ready로 바뀌는지 Refresh로 확인한다.</li>
+          <li>OpenSphere가 <b>IdentityDirectoryClaim</b>, <b>IdentityDirectoryBinding</b> CRD를 설치/업데이트한다.</li>
+          <li>Foundation control-plane이 typed 계약 reconciler로 Binding을 발급한다.</li>
+          <li>이 화면에서 Contracts와 Reconcilers가 Ready로 바뀌는지 확인한다.</li>
           <li>Ready가 되면 Samba-AD Preflight로 돌아가 설치를 진행한다.</li>
         </ol>
+        <div class="cp-admin-actions">
+          <button class="btn btn-primary" type="button" [disabled]="svc.repairBusy()" (click)="svc.repairIdentityDirectoryContracts()">
+            <span class="spinner spinner-inline" *ngIf="svc.repairBusy()"></span>
+            Repair Contract Pack
+          </button>
+          <span class="os-dim" *ngIf="svc.repairMessage()">{{ svc.repairMessage() }}</span>
+        </div>
       </article>
       <article class="cp-admin-card">
         <h3>하지 말아야 할 일</h3>
         <p><span class="cp-no">Crossplane 재설치 아님</span> — Crossplane은 실행/전달 엔진이며, typed identity 계약의 소유자가 아니다.</p>
         <p><span class="cp-no">Samba-AD 강제 설치 아님</span> — 소비 계약이 없으면 Keycloak 같은 consumer에게 연결권을 안전하게 발급할 수 없다.</p>
-        <p><span class="cp-yes">Control Plane 보강</span> — 이 문제의 책임 경계는 Foundation control-plane이다.</p>
+        <p><span class="cp-yes">제품 복구 대상</span> — 이 문제의 책임 경계는 OpenSphere Foundation control-plane이다.</p>
       </article>
     </section>
 

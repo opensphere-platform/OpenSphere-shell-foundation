@@ -13,7 +13,7 @@ spec:
   description: "Foundation — OpenSphere subShell (SDK 표준 골격)"
   image:
     repository: ghcr.io/opensphere-platform/foundation
-    digest: sha256:1c61b68cf287d2d05cc68f5ed3a61b97a39f5725b4536b735ecf3f4700c29ff1  # control-plane-admin-action-20260707-01
+    digest: sha256:df14f0dc9ab057fe7091e65053c3f9d4cba8fb3bac07a5ab61b255b7999f615a  # identity-contract-repair-ui-20260707-01
   nav:
     band: "운영 Operate"
     label: "Foundation"

@@ -1,5 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { apiBase } from '../api-base';
+import { apiBase, isAuthFail, writeHeaders } from '../api-base';
 
 export type CpState = 'pass' | 'warn' | 'fail' | 'loading';
 
@@ -119,12 +119,167 @@ const WORKLOADS = [
   },
 ];
 
+const IDENTITY_DIRECTORY_CRDS: Record<string, unknown>[] = [
+  {
+    apiVersion: 'apiextensions.k8s.io/v1',
+    kind: 'CustomResourceDefinition',
+    metadata: {
+      name: 'identitydirectoryclaims.foundation.opensphere.io',
+      labels: {
+        'app.kubernetes.io/part-of': 'foundation-control-plane',
+        'foundation.opensphere.io/contract-pack': 'identity-directory',
+      },
+    },
+    spec: {
+      group: 'foundation.opensphere.io',
+      names: {
+        kind: 'IdentityDirectoryClaim',
+        listKind: 'IdentityDirectoryClaimList',
+        plural: 'identitydirectoryclaims',
+        singular: 'identitydirectoryclaim',
+        shortNames: ['idclaim'],
+      },
+      scope: 'Namespaced',
+      versions: [{
+        name: 'v1alpha1',
+        served: true,
+        storage: true,
+        subresources: { status: {} },
+        additionalPrinterColumns: [
+          { name: 'Provider', type: 'string', jsonPath: '.spec.provider' },
+          { name: 'Realm', type: 'string', jsonPath: '.spec.realm' },
+          { name: 'Phase', type: 'string', jsonPath: '.status.phase' },
+        ],
+        schema: {
+          openAPIV3Schema: {
+            type: 'object',
+            required: ['spec'],
+            properties: {
+              spec: {
+                type: 'object',
+                properties: {
+                  provider: { type: 'string', enum: ['samba-ad'], default: 'samba-ad' },
+                  realm: { type: 'string' },
+                  consumerRef: {
+                    type: 'object',
+                    properties: {
+                      apiVersion: { type: 'string' },
+                      kind: { type: 'string' },
+                      name: { type: 'string' },
+                      namespace: { type: 'string' },
+                    },
+                  },
+                  parameters: { type: 'object', 'x-kubernetes-preserve-unknown-fields': true },
+                },
+              },
+              status: {
+                type: 'object',
+                properties: {
+                  phase: { type: 'string', enum: ['Pending', 'Bound', 'Failed'] },
+                  reason: { type: 'string' },
+                  bindingRef: {
+                    type: 'object',
+                    properties: { name: { type: 'string' }, namespace: { type: 'string' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }],
+    },
+  },
+  {
+    apiVersion: 'apiextensions.k8s.io/v1',
+    kind: 'CustomResourceDefinition',
+    metadata: {
+      name: 'identitydirectorybindings.foundation.opensphere.io',
+      labels: {
+        'app.kubernetes.io/part-of': 'foundation-control-plane',
+        'foundation.opensphere.io/contract-pack': 'identity-directory',
+      },
+    },
+    spec: {
+      group: 'foundation.opensphere.io',
+      names: {
+        kind: 'IdentityDirectoryBinding',
+        listKind: 'IdentityDirectoryBindingList',
+        plural: 'identitydirectorybindings',
+        singular: 'identitydirectorybinding',
+        shortNames: ['idbind'],
+      },
+      scope: 'Namespaced',
+      versions: [{
+        name: 'v1alpha1',
+        served: true,
+        storage: true,
+        subresources: { status: {} },
+        additionalPrinterColumns: [
+          { name: 'Claim', type: 'string', jsonPath: '.spec.claimRef.name' },
+          { name: 'Endpoint', type: 'string', jsonPath: '.spec.endpointRef.url' },
+          { name: 'Phase', type: 'string', jsonPath: '.status.phase' },
+        ],
+        schema: {
+          openAPIV3Schema: {
+            type: 'object',
+            required: ['spec'],
+            properties: {
+              spec: {
+                type: 'object',
+                required: ['claimRef'],
+                properties: {
+                  claimRef: {
+                    type: 'object',
+                    required: ['name', 'namespace'],
+                    properties: { name: { type: 'string' }, namespace: { type: 'string' } },
+                  },
+                  endpointRef: {
+                    type: 'object',
+                    properties: {
+                      name: { type: 'string' },
+                      namespace: { type: 'string' },
+                      service: { type: 'string' },
+                      port: { type: 'integer' },
+                      protocol: { type: 'string' },
+                      url: { type: 'string' },
+                    },
+                  },
+                  secretRef: {
+                    type: 'object',
+                    properties: { name: { type: 'string' }, namespace: { type: 'string' } },
+                  },
+                  policyRef: {
+                    type: 'object',
+                    properties: { name: { type: 'string' }, namespace: { type: 'string' } },
+                  },
+                },
+              },
+              status: {
+                type: 'object',
+                properties: {
+                  phase: { type: 'string', enum: ['Pending', 'Connected', 'Degraded', 'Released'] },
+                  connection: {
+                    type: 'object',
+                    properties: { lastCheck: { type: 'string' }, rttMs: { type: 'integer' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }],
+    },
+  },
+];
+
 @Injectable({ providedIn: 'root' })
 export class ControlPlaneService {
   readonly contracts = signal<CpItem[]>([]);
   readonly workloads = signal<CpWorkload[]>([]);
   readonly writePaths = signal<CpWritePath[]>([]);
   readonly busy = signal(false);
+  readonly repairBusy = signal(false);
+  readonly repairMessage = signal('');
   readonly lastSync = signal('');
   readonly error = signal('');
   private started = false;
@@ -183,6 +338,51 @@ export class ControlPlaneService {
     } catch {
       return { ok: false, status: 0, body: null };
     }
+  }
+
+  async repairIdentityDirectoryContracts(): Promise<void> {
+    this.repairBusy.set(true);
+    this.repairMessage.set('');
+    this.error.set('');
+    try {
+      for (const crd of IDENTITY_DIRECTORY_CRDS) {
+        await this.applyCrd(crd);
+      }
+      this.repairMessage.set('Identity Directory Contract Pack 적용 요청이 완료되었습니다. 상태를 다시 확인합니다.');
+      await this.refresh();
+    } catch (e) {
+      this.error.set(String(e));
+    } finally {
+      this.repairBusy.set(false);
+    }
+  }
+
+  private async applyCrd(obj: Record<string, unknown>): Promise<void> {
+    const name = String((obj['metadata'] as any)?.name ?? '');
+    const create = await fetch(this.k('apis/apiextensions.k8s.io/v1/customresourcedefinitions'), {
+      method: 'POST',
+      headers: writeHeaders(),
+      body: JSON.stringify(obj),
+    });
+    if (create.ok) { return; }
+    const createBody = await create.text();
+    if (create.status === 409) {
+      const patch = await fetch(this.k(`apis/apiextensions.k8s.io/v1/customresourcedefinitions/${name}`), {
+        method: 'PATCH',
+        headers: { ...writeHeaders(), 'content-type': 'application/merge-patch+json' },
+        body: JSON.stringify({ metadata: obj['metadata'], spec: obj['spec'] }),
+      });
+      if (patch.ok) { return; }
+      const patchBody = await patch.text();
+      throw new Error(`Contract Pack 업데이트 실패: ${name} HTTP ${patch.status} ${patchBody}`);
+    }
+    if (isAuthFail(create.status, createBody)) {
+      throw new Error('세션이 만료되었습니다. 콘솔을 새로고침한 뒤 다시 실행하세요.');
+    }
+    if (create.status === 403) {
+      throw new Error(`OpenSphere admin 승인 경로가 아직 CRD 적용 권한을 받지 못했습니다. 플랫폼 릴리스 권한/RBAC 보강이 필요합니다. (${name})`);
+    }
+    throw new Error(`Contract Pack 적용 실패: ${name} HTTP ${create.status} ${createBody}`);
   }
 
   private async loadContracts(): Promise<CpItem[]> {
