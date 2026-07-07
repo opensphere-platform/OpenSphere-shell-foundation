@@ -27,6 +27,14 @@ import WarningAlt16 from '@carbon/icons/es/warning--alt/16';
     .cp-alert { border:1px solid #e5534b; border-left:4px solid #e5534b; background:#fff7f6; padding:.8rem .9rem; margin-bottom:1rem; }
     .cp-alert h3 { margin:.05rem 0 .35rem; font-size:.9rem; }
     .cp-alert p { margin:.2rem 0; font-size:.78rem; line-height:1.45; color:#3b3b3b; }
+    .cp-admin { display:grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap:.75rem; margin:0 0 1rem; }
+    .cp-admin-card { background:#fff; border:1px solid #d0d7de; border-radius:4px; padding:.85rem .95rem; }
+    .cp-admin-card h3 { margin:.05rem 0 .45rem; font-size:.95rem; font-weight:600; color:#26374f; }
+    .cp-admin-card p { margin:.25rem 0; color:#4f5b70; font-size:.78rem; line-height:1.45; }
+    .cp-admin-list { margin:.45rem 0 0; padding-left:1rem; color:#3b3b3b; font-size:.78rem; line-height:1.55; }
+    .cp-admin-list li { margin:.2rem 0; }
+    .cp-no { color:#c92100; font-weight:600; }
+    .cp-yes { color:#2e8540; font-weight:600; }
     .cp-section { margin-top:1rem; }
     .cp-section h3 { margin:0 0 .5rem; font-size:.95rem; font-weight:600; color:#26374f; }
     .cp-grid { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:.75rem; }
@@ -44,7 +52,7 @@ import WarningAlt16 from '@carbon/icons/es/warning--alt/16';
     .cp-dot.warn { background:#f0ad00; }
     .cp-dot.fail { background:#c92100; }
     .cp-dot.loading { background:#8a8f98; }
-    @media (max-width: 980px) { .cp-strip, .cp-grid { grid-template-columns:1fr; } .cp-head { flex-direction:column; } }
+    @media (max-width: 980px) { .cp-strip, .cp-grid, .cp-admin { grid-template-columns:1fr; } .cp-head { flex-direction:column; } }
   `],
   template: `
     <div class="cp-head">
@@ -101,6 +109,28 @@ import WarningAlt16 from '@carbon/icons/es/warning--alt/16';
         따라서 다음 작업은 Crossplane 재설치가 아니라 Foundation control-plane에 typed IdentityDirectory 계약과 reconciler를 추가하는 것이다.
       </p>
     </div>
+
+    <section class="cp-admin" *ngIf="identityBlocked()">
+      <article class="cp-admin-card">
+        <h3>admin이 지금 해야 할 일</h3>
+        <p>
+          Samba-AD 설치를 계속 누르는 단계가 아니다. 먼저 Foundation control-plane이
+          <b>Identity Directory Contract Pack</b>을 제공하도록 준비해야 한다.
+        </p>
+        <ol class="cp-admin-list">
+          <li>Control Plane 릴리스/패키지에 <b>IdentityDirectoryClaim</b>, <b>IdentityDirectoryBinding</b> CRD를 추가한다.</li>
+          <li>같은 릴리스에 해당 typed 계약을 처리하는 <b>reconciler</b>를 포함한다.</li>
+          <li>이 화면에서 Contracts가 Ready로 바뀌는지 Refresh로 확인한다.</li>
+          <li>Ready가 되면 Samba-AD Preflight로 돌아가 설치를 진행한다.</li>
+        </ol>
+      </article>
+      <article class="cp-admin-card">
+        <h3>하지 말아야 할 일</h3>
+        <p><span class="cp-no">Crossplane 재설치 아님</span> — Crossplane은 실행/전달 엔진이며, typed identity 계약의 소유자가 아니다.</p>
+        <p><span class="cp-no">Samba-AD 강제 설치 아님</span> — 소비 계약이 없으면 Keycloak 같은 consumer에게 연결권을 안전하게 발급할 수 없다.</p>
+        <p><span class="cp-yes">Control Plane 보강</span> — 이 문제의 책임 경계는 Foundation control-plane이다.</p>
+      </article>
+    </section>
 
     <clr-alert *ngIf="svc.error()" clrAlertType="danger" [clrAlertClosable]="false">
       <clr-alert-item><span class="alert-text">{{ svc.error() }}</span></clr-alert-item>
