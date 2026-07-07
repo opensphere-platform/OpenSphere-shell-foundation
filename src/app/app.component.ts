@@ -184,6 +184,10 @@ export class AppComponent implements OnInit, OnDestroy {
     const id = this.vr.module();
     const p = this.reg.all.find((x) => x.id === id && !!x.activation);
     if (!p) { return undefined; }
+    // Samba-AD owns a lifecycle-aware Preflight/Install surface. It must be reachable
+    // from the FSS engine catalog before the operand is installed, while left-nav
+    // exposure still remains driven by installed engines only.
+    if (p.id === 'samba') { return p; }
     return this.reg.isEnabled(p.id) ? p : undefined;
   }
 
@@ -194,7 +198,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   disabledModule(): boolean {
     const m = this.vr.module();
-    return ['postgres', 'opensearch', 'rustfs', 'keycloak', 'samba'].includes(m) && !this.reg.isEnabled(m);
+    return ['postgres', 'opensearch', 'rustfs', 'keycloak'].includes(m) && !this.reg.isEnabled(m);
   }
 
   /** 로드맵 모듈(AI/Comm) 페이지에 넘길 메타 — 해당 모듈이 아니면 undefined(placeholder 미표시). */
