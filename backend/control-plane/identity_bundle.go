@@ -31,6 +31,15 @@ func issuerURL(ns string) string {
 }
 func ldapURL(ns string) string { return "ldap://" + sambaSvcDNS(ns) + ":389" }
 
+func configuredSambaRealm(fm *unstructured.Unstructured) string {
+	v, found, _ := unstructured.NestedString(fm.Object, "spec", "parameters", "samba", "domain")
+	v = strings.TrimSpace(v)
+	if found && v != "" {
+		return v
+	}
+	return "OPENSPHERE.LOCAL"
+}
+
 // engineEnabled — 엔진별 설치옵션(FoundationModel.spec.parameters.engines.<engine>). 기본 enabled;
 // 명시적 "disabled"만 끔(정직: 알 수 없는 값은 enabled로 취급하지 않고 그대로 켜짐 — fail-open 설치옵션).
 func engineEnabled(fm *unstructured.Unstructured, engine string) bool {
@@ -144,7 +153,7 @@ func extraIdentity(cfg *config, o *unstructured.Unstructured) {
 	setNested(o, issuerURL(cfg.managedNS), "status", "issuerURL")
 	setNested(o, issuerURL(cfg.managedNS)+"/protocol/openid-connect/certs", "status", "jwksURL")
 	setNested(o, ldapURL(cfg.managedNS), "status", "ldapURL")
-	setNested(o, sambaRealm, "status", "directoryRealm")
+	setNested(o, configuredSambaRealm(o), "status", "directoryRealm")
 }
 
 // bundleSpec — 모델별 operand 번들 정의. modelReconciler가 레지스트리로 일반화 처리(observability 동작 불변).
