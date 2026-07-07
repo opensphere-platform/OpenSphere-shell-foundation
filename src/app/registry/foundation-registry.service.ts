@@ -74,12 +74,12 @@ export class FoundationRegistryService {
     const d = m[this.domainOf(id)];
     if (!d) { return '미등록'; }
     if (d.desired !== 'Installed') { return 'Disabled'; } // 도메인 자체 Disabled → 소속 엔진 전부
-    return d.engines[id] === 'disabled' ? 'Disabled' : 'Installed'; // 설치옵션 기본 = enabled(번들과 동일 의미론)
+    return d.engines[id] === 'enabled' ? 'Installed' : 'Disabled';
   }
 
   isEnabled(id: string): boolean {
     const m = this.domains();
-    if (m === null) { return true; } // 첫 hydrate 전 낙관 표시(플리커 방지). 로드 후엔 CR이 유일 진실.
+    if (m === null) { return false; }
     return this.modelOf(id) === 'Installed';
   }
 
