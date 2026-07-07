@@ -39,6 +39,9 @@ const KANIDM_SNI = process.env.KANIDM_SNI || 'kanidm.opensphere-console-auth.svc
 const KANIDM_AZP = process.env.KANIDM_AZP || 'opensphere-console';
 const KANIDM_CA_PATH = process.env.KANIDM_CA_PATH || '/etc/kanidm-ca/ca.crt';
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const FND_NS = process.env.FOUNDATION_NS || 'opensphere-foundation';
+const SAMBA_BOOTSTRAP_SECRET = process.env.SAMBA_BOOTSTRAP_SECRET || 'foundation-identity-samba-creds';
+const SAMBA_BOOTSTRAP_SECRET_KEY = 'domain-password';
 // Kanidm JWKS — 자체서명 CA를 명시적 'ca' 옵션으로 신뢰(TLS 검증 비활성화 금지, NODE_EXTRA_CA_CERTS 미접촉).
 let _kjwks = null, _kjwksAt = 0;
 const KJWKS_TTL = 5 * 60 * 1000;
@@ -94,6 +97,55 @@ const readBody = (req) => new Promise((resolve, reject) => {
   const ch = []; req.on('data', (c) => ch.push(c)); req.on('end', () => resolve(Buffer.concat(ch))); req.on('error', reject);
 });
 const jsonRes = (res, code, obj) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
+const k8sJson = async (method, path, body) => {
+  const r = await fetch(`${APISERVER}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${tok()}`,
+      Accept: 'application/json',
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await r.text();
+  let json = null;
+  try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
+  return { ok: r.ok, status: r.status, json, text };
+};
+
+async function saveSambaBootstrapSecret(req, res) {
+  let actor;
+  try { actor = await verifyToken(req.headers['x-os-id-token']); }
+  catch (e) { return jsonRes(res, e.code || 401, { error: e.msg || 'unauthorized' }); }
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  let body;
+  try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); }
+  catch { return jsonRes(res, 400, { error: 'invalid json' }); }
+  const password = String(body.password || '');
+  if (password.length < 12) return jsonRes(res, 400, { error: 'bootstrap domain password must be at least 12 characters' });
+  const obj = {
+    apiVersion: 'v1',
+    kind: 'Secret',
+    metadata: {
+      name: SAMBA_BOOTSTRAP_SECRET,
+      namespace: FND_NS,
+      labels: { 'opensphere.io/plugin': 'samba-ad', 'opensphere.io/managed-by': 'foundation' },
+    },
+    type: 'Opaque',
+    stringData: { [SAMBA_BOOTSTRAP_SECRET_KEY]: password },
+  };
+  const path = `/api/v1/namespaces/${FND_NS}/secrets`;
+  let r = await k8sJson('POST', path, obj);
+  if (r.status === 409) {
+    r = await k8sJson('PATCH', `${path}/${SAMBA_BOOTSTRAP_SECRET}`, {
+      metadata: { labels: obj.metadata.labels },
+      stringData: obj.stringData,
+    });
+  }
+  console.log(`[audit] user=${actor.username} action=samba-bootstrap-secret-upsert target=${FND_NS}/${SAMBA_BOOTSTRAP_SECRET} status=${r.status} ${new Date().toISOString()}`);
+  if (!r.ok) return jsonRes(res, r.status, { error: r.json?.message || r.json?.error || `kubernetes HTTP ${r.status}` });
+  return jsonRes(res, 200, { ok: true, secretRef: { namespace: FND_NS, name: SAMBA_BOOTSTRAP_SECRET, key: SAMBA_BOOTSTRAP_SECRET_KEY } });
+}
 
 const MIME = {
   '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
@@ -332,6 +384,7 @@ const server = http.createServer(async (req, res) => {
       });
       return res.end(JSON.stringify({ user: actor.username }));
     }
+    if (p === '/api/foundation/samba/bootstrap-secret') return saveSambaBootstrapSecret(req, res);
     if (p.startsWith('/api/k8s/')) return k8sProxy(req, res, req.url);
     if (p.startsWith('/api/opensearch')) return opensearchProxy(req, res, req.url);
     if (p.startsWith('/api/prometheus')) return prometheusProxy(req, res, req.url);

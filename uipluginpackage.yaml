@@ -13,7 +13,7 @@ spec:
   description: "Foundation — OpenSphere subShell (SDK 표준 골격)"
   image:
     repository: ghcr.io/opensphere-platform/foundation
-    digest: sha256:50719739a328f3daa87eed29b821f5da96982a833d8cc2709bd954d07a3e0cf1  # samba-lifecycle-entry-20260707-01
+    digest: sha256:565e67e30760ebe559207d88f9cd4b0c60f15c2c729b0cc494dad61429913aa0  # samba-bootstrap-secret-endpoint-20260708-01
   nav:
     band: "운영 Operate"
     label: "Foundation"
