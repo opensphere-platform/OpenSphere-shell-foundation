@@ -1,5 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { apiBase, isAuthFail, writeHeaders } from '../api-base';
+import { apiBase, hostFetch, isAuthFail, writeHeaders } from '../api-base';
 
 export type CpState = 'pass' | 'warn' | 'fail' | 'loading';
 
@@ -330,7 +330,7 @@ export class ControlPlaneService {
 
   private async get(path: string): Promise<{ ok: boolean; status: number; body: any | null }> {
     try {
-      const r = await fetch(this.k(path));
+      const r = await hostFetch(this.k(path));
       const text = await r.text();
       let body: any = null;
       try { body = text ? JSON.parse(text) : null; } catch { body = { raw: text }; }
@@ -359,7 +359,7 @@ export class ControlPlaneService {
 
   private async applyCrd(obj: Record<string, unknown>): Promise<void> {
     const name = String((obj['metadata'] as any)?.name ?? '');
-    const create = await fetch(this.k('apis/apiextensions.k8s.io/v1/customresourcedefinitions'), {
+    const create = await hostFetch(this.k('apis/apiextensions.k8s.io/v1/customresourcedefinitions'), {
       method: 'POST',
       headers: writeHeaders(),
       body: JSON.stringify(obj),
@@ -367,7 +367,7 @@ export class ControlPlaneService {
     if (create.ok) { return; }
     const createBody = await create.text();
     if (create.status === 409) {
-      const patch = await fetch(this.k(`apis/apiextensions.k8s.io/v1/customresourcedefinitions/${name}`), {
+      const patch = await hostFetch(this.k(`apis/apiextensions.k8s.io/v1/customresourcedefinitions/${name}`), {
         method: 'PATCH',
         headers: { ...writeHeaders(), 'content-type': 'application/merge-patch+json' },
         body: JSON.stringify({ metadata: obj['metadata'], spec: obj['spec'] }),

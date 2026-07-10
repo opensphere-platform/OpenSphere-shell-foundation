@@ -30,4 +30,4 @@ kind: ClusterRoleBinding
 metadata: { name: foundation-backing-read-system }
 roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: foundation-backing-read }
 subjects:
-  - { kind: ServiceAccount, name: default, namespace: opensphere-system }
+  - { kind: ServiceAccount, name: opensphere-foundation, namespace: opensphere-system }

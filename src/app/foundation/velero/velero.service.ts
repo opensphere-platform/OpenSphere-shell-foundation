@@ -1,5 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { apiBase, writeHeaders, tokenExpired, isAuthFail } from '../../api-base';
+import { apiBase, hostFetch, writeHeaders, isAuthFail } from '../../api-base';
 import { State } from '../../modules/postgres/cnpg.types';
 
 // Velero 설치·상태 단일 데이터 진입점. Host 연결 카탈로그의 Velero 카드 클릭 시 열리는 전용 페이지가 소비.
@@ -117,7 +117,7 @@ export class VeleroService {
   private prom(query: string): string { return `${apiBase()}/api/prometheus/api/v1/query?query=${encodeURIComponent(query)}`; }
   private async existsState(path: string): Promise<State> {
     try {
-      const r = await fetch(this.k(path));
+      const r = await hostFetch(this.k(path));
       if (r.status === 403) { return 'noperm'; }
       if (r.status === 404) { return 'nocrd'; }
       if (!r.ok) { return 'error'; }
@@ -141,7 +141,7 @@ export class VeleroService {
   private async loadMetrics(): Promise<void> {
     try {
       const q = '{__name__=~"velero_(backup|restore)_(total|success_total|failure_total|partial_failure_total)"}';
-      const r = await fetch(this.prom(q));
+      const r = await hostFetch(this.prom(q));
       if (!r.ok) { this.metricsState.set(r.status === 403 ? 'noperm' : 'error'); return; }
       const j = await r.json();
       const rows: any[] = j?.data?.result ?? [];
@@ -164,7 +164,7 @@ export class VeleroService {
   }
   private async loadDeploy(): Promise<void> {
     try {
-      const r = await fetch(this.k(`apis/apps/v1/namespaces/${VELERO_NS}/deployments/velero`));
+      const r = await hostFetch(this.k(`apis/apps/v1/namespaces/${VELERO_NS}/deployments/velero`));
       if (r.status === 403) { this.deployState.set('noperm'); return; }
       if (!r.ok) { this.deployState.set('nocrd'); this.deploy.set(null); return; }
       this.deploy.set(await r.json());
@@ -173,14 +173,14 @@ export class VeleroService {
   }
   private async loadPods(): Promise<void> {
     try {
-      const r = await fetch(this.k(`api/v1/namespaces/${VELERO_NS}/pods`));
+      const r = await hostFetch(this.k(`api/v1/namespaces/${VELERO_NS}/pods`));
       this.pods.set(r.ok ? ((await r.json()).items ?? []) : []);
     } catch { this.pods.set([]); }
   }
   // 백업 대상(외부 S3) 실측 — velero.io BackupStorageLocation.
   private async loadBsl(): Promise<void> {
     try {
-      const r = await fetch(this.k(`apis/velero.io/v1/namespaces/${VELERO_NS}/backupstoragelocations`));
+      const r = await hostFetch(this.k(`apis/velero.io/v1/namespaces/${VELERO_NS}/backupstoragelocations`));
       if (r.status === 403) { this.bslState.set('noperm'); return; }
       if (!r.ok) { this.bslState.set(r.status === 404 ? 'nocrd' : 'error'); this.bsls.set([]); return; }
       const items: any[] = (await r.json()).items ?? [];
@@ -199,7 +199,7 @@ export class VeleroService {
   // fs-backup 실행 주체 — node-agent DaemonSet(전 노드). 백업 대상 저장 시 함께 활성화됨.
   private async loadNodeAgent(): Promise<void> {
     try {
-      const r = await fetch(this.k(`apis/apps/v1/namespaces/${VELERO_NS}/daemonsets/node-agent`));
+      const r = await hostFetch(this.k(`apis/apps/v1/namespaces/${VELERO_NS}/daemonsets/node-agent`));
       if (!r.ok) { this.nodeAgent.set(null); return; }
       const d = await r.json();
       this.nodeAgent.set({ desired: d.status?.desiredNumberScheduled ?? 0, ready: d.status?.numberReady ?? 0 });
@@ -319,7 +319,7 @@ export class VeleroService {
       },
     };
     try {
-      const r = await fetch(this.k('apis/helm.crossplane.io/v1beta1/releases'), {
+      const r = await hostFetch(this.k('apis/helm.crossplane.io/v1beta1/releases'), {
         method: 'POST', headers: writeHeaders(), body: JSON.stringify(rel),
       });
       if (r.status === 403) {
@@ -344,7 +344,7 @@ export class VeleroService {
   private async pollInstall(): Promise<void> {
     let synced = false;
     try {
-      const r = await fetch(this.k('apis/helm.crossplane.io/v1beta1/releases/velero'));
+      const r = await hostFetch(this.k('apis/helm.crossplane.io/v1beta1/releases/velero'));
       if (r.ok) {
         const rel = await r.json();
         const conds = rel.status?.conditions ?? [];
@@ -358,7 +358,7 @@ export class VeleroService {
 
     // velero ns 이벤트 → 로그 피드(신규만)
     try {
-      const r = await fetch(this.k('api/v1/namespaces/velero/events?limit=25'));
+      const r = await hostFetch(this.k('api/v1/namespaces/velero/events?limit=25'));
       if (r.ok) {
         const items = (await r.json()).items ?? [];
         items
@@ -398,7 +398,6 @@ export class VeleroService {
    *  자격증명은 values.credentials.secretContents.cloud로 전달 → 별도 Secret 쓰기 RBAC 불필요. */
   async saveBackupTarget(t: BackupTarget): Promise<void> {
     if (this.saveBusy()) { return; }
-    if (tokenExpired()) { this.sessionExpired.set(true); this.saveErr.set('세션이 만료되었습니다 (콘솔 로그인 15분 · 자동 갱신 없음).'); return; }
     if (!t.endpoint || !t.bucket || !t.accessKey || !t.secretKey) {
       this.saveErr.set('엔드포인트·버킷·Access Key·Secret Key는 필수입니다.'); return;
     }
@@ -417,7 +416,7 @@ export class VeleroService {
       } } },
     };
     try {
-      const r = await fetch(this.k('apis/helm.crossplane.io/v1beta1/releases/velero'), {
+      const r = await hostFetch(this.k('apis/helm.crossplane.io/v1beta1/releases/velero'), {
         method: 'PATCH',
         headers: { ...writeHeaders(), 'content-type': 'application/merge-patch+json' },
         body: JSON.stringify(patch),

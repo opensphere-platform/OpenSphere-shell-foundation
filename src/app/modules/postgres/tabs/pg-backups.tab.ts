@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { ClarityModule } from '@clr/angular';
-import { apiBase, writeHeaders } from '../../../api-base';
+import { apiBase, hostFetch, writeHeaders } from '../../../api-base';
 import { CnpgService } from '../cnpg.service';
 import { PILL, phaseClass } from '../cnpg.types';
 import { PgState } from '../ui/pg-state';
@@ -62,7 +62,7 @@ export class PgBackupsTab {
 
   bcls(b: any): string { return PILL[phaseClass(b.status?.phase || '', false)]; }
 
-  // on-demand Backup — X-OS-Id-Token 임퍼소네이션(셸 주입). backupConfigured일 때만 노출.
+  // on-demand Backup — Host-mediated Authorization 임퍼소네이션. backupConfigured일 때만 노출.
   async trigger(): Promise<void> {
     this.busy.set(true);
     this.msg.set('');
@@ -72,7 +72,7 @@ export class PgBackupsTab {
       spec: { cluster: { name: this.svc.name } },
     };
     try {
-      const r = await fetch(`${apiBase()}/api/k8s/apis/postgresql.cnpg.io/v1/namespaces/${this.svc.ns}/backups`, {
+      const r = await hostFetch(`${apiBase()}/api/k8s/apis/postgresql.cnpg.io/v1/namespaces/${this.svc.ns}/backups`, {
         method: 'POST', headers: writeHeaders(), body: JSON.stringify(obj),
       });
       if (r.ok) { this.msg.set('✓ 백업 요청됨'); await this.svc.refresh(); }

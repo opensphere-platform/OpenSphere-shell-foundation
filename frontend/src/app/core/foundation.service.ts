@@ -18,9 +18,7 @@ export class FoundationService {
     return '/api/plugins/foundation-shell';
   }
   private hdr(extra?: Record<string, string>) {
-    const h: Record<string, string> = { ...(extra || {}) };
-    try { const t = (window as any).__OS_AUTH__?.token?.(); if (t) h['X-OS-Id-Token'] = t; } catch { /* noop */ }
-    return { headers: h };
+    return { headers: { ...(extra || {}) } };
   }
   private url(p: string) { return `${this.base()}/api/k8s${p}`; }
 

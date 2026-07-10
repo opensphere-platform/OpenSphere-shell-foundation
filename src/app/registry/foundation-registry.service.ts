@@ -6,7 +6,7 @@ import { OsService } from '../modules/opensearch/os.service';
 import { RsService } from '../modules/rustfs/rs.service';
 import { KcService, SambaService } from '../modules/identity/identity.services';
 import { PILL, Phase } from '../modules/postgres/cnpg.types';
-import { apiBase, writeHeaders } from '../api-base';
+import { apiBase, hostFetch, writeHeaders } from '../api-base';
 
 // FoundationModel CR(foundation.opensphere.io/v1alpha1, Cluster-scope) — 수명주기의 클러스터 정본.
 const FM_PATH = 'apis/foundation.opensphere.io/v1alpha1/foundationmodels';
@@ -22,7 +22,7 @@ interface DomainCRView { desired: string; engines: Record<string, string> }
 // **spec.parameters.engines.<engineId>: enabled|disabled**(설치옵션 — identity 번들이 실제 게이트).
 //   · 표시: 도메인 CR에서 hydrate(15s 폴링). 도메인 CR 부재 = 소속 엔진 전부 '미등록'(비활성·비노출).
 //   · 전이: 도메인 CR에 merge-PATCH(engines.<id>); 도메인 CR 없으면 POST 생성(선언 API — ADR-FND-001).
-//   · 쓰기 인증: x-os-id-token → server.js가 사용자/그룹 임퍼소네이션(foundation-models-manage RBAC,
+//   · 쓰기 인증: Main Shell hostFetch의 Authorization → server.js가 사용자/그룹 임퍼소네이션(foundation-models-manage RBAC,
 //     deploy/foundationmodels.yaml). 실패는 lastError로 노출(침묵 금지).
 @Injectable({ providedIn: 'root' })
 export class FoundationRegistryService {
@@ -49,7 +49,7 @@ export class FoundationRegistryService {
 
   async refreshModels(): Promise<void> {
     try {
-      const res = await fetch(this.k(FM_PATH), { cache: 'no-store' });
+      const res = await hostFetch(this.k(FM_PATH), { cache: 'no-store' });
       if (res.status === 403) { this.modelsLoaded.set('noperm'); return; } // 마지막 값 유지(fail-open 읽기)
       if (!res.ok) { this.modelsLoaded.set('error'); return; }
       const body = await res.json();
@@ -89,13 +89,13 @@ export class FoundationRegistryService {
     const domain = this.domainOf(id);
     const value = on ? 'enabled' : 'disabled';
     try {
-      const res = await fetch(this.k(`${FM_PATH}/${domain}`), {
+      const res = await hostFetch(this.k(`${FM_PATH}/${domain}`), {
         method: 'PATCH',
         headers: { ...writeHeaders(), 'content-type': 'application/merge-patch+json' },
         body: JSON.stringify({ spec: { parameters: { engines: { [id]: value } } } }),
       });
       if (res.status === 404) {
-        const create = await fetch(this.k(FM_PATH), {
+        const create = await hostFetch(this.k(FM_PATH), {
           method: 'POST',
           headers: writeHeaders(),
           body: JSON.stringify({

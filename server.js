@@ -10,7 +10,7 @@ const path = require('path');
 const { WebSocketServer, WebSocket } = require('ws');
 const COOKIE = 'osng_token'; // 브라우저 WS는 커스텀 헤더를 못 실음 → 신원 토큰을 HttpOnly 쿠키로 전달
 // ⚠️ 'bearer' 쿠키는 콘솔 id_token이 아님(Kanidm UI 세션 등 별개 토큰, iss/aud 없음) — 읽지 말 것.
-//    신원 전달 정본 = 셸 전역 __OS_AUTH__.token() → x-os-id-token 헤더(콘솔 auth.service.ts 계약, AI Hub 동일).
+//    신원 전달 정본 = Main Shell ctx.api.fetch가 주입한 Authorization Bearer.
 function tokenFromCookie(cookieHeader) {
   if (!cookieHeader) return null;
   for (const part of cookieHeader.split(';')) {
@@ -18,6 +18,10 @@ function tokenFromCookie(cookieHeader) {
     if (i > 0 && part.slice(0, i).trim() === COOKIE) return decodeURIComponent(part.slice(i + 1).trim());
   }
   return null;
+}
+function requestToken(req) {
+  const match = String(req.headers.authorization || '').match(/^Bearer\s+(.+)$/i);
+  return match ? match[1] : '';
 }
 const PORT = process.env.PORT || 8080;
 const PLUGINS = process.env.PLUGINS_DIR || '/app/plugins';
@@ -115,7 +119,7 @@ const k8sJson = async (method, path, body) => {
 
 async function saveSambaBootstrapSecret(req, res) {
   let actor;
-  try { actor = await verifyToken(req.headers['x-os-id-token']); }
+  try { actor = await verifyToken(requestToken(req)); }
   catch (e) { return jsonRes(res, e.code || 401, { error: e.msg || 'unauthorized' }); }
   if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
   let body;
@@ -179,28 +183,29 @@ async function nodes() {
 // foundation 백엔드 → 콘솔 audit bus(/api/admin/events) → 셸 단일 인박스.
 // 시작/노드 경고를 콘솔 인박스에 발행 = subShell이 콘솔 알림 core와 '유기적' 작동.
 // best-effort: 발행 실패해도 foundation 본 기능엔 영향 없음. (manifest 권한 불요 — 백엔드 in-cluster 호출)
-// 감사 시정 S2(2026-07-06): 발행 입구는 X-Shell-Token(=SHELL_SERVICE_TOKEN, dupa-events-token Secret,
-//   controller podEnv가 주입) fail-closed — 헤더 배선 + 실패 침묵 금지(1회 경고 로그, 이후 억제).
+// 발행 입구는 projected ServiceAccount token을 Controller가 TokenReview하여 source와 대조한다.
 const CONTROLLER = process.env.OSP_CONTROLLER || 'http://dupa-registry-controller.opensphere-system.svc.cluster.local:8080';
-const SHELL_TOKEN = process.env.SHELL_SERVICE_TOKEN || '';
 let _notifyWarned = false;
 function warnNotifyOnce(msg) {
   if (_notifyWarned) return;
   _notifyWarned = true;
-  console.warn(`[notify] 콘솔 이벤트 발행 실패 — ${msg} (X-Shell-Token/dupa-events-token 배선 확인; 이후 동일 경고 억제)`);
+  console.warn(`[notify] 콘솔 이벤트 발행 실패 — ${msg} (ServiceAccount TokenReview 배선 확인; 이후 동일 경고 억제)`);
 }
 async function publishNotify(ev) {
+  let workloadToken = '';
+  try { workloadToken = tok(); } catch { /* handled by response path */ }
+  if (!workloadToken) return warnNotifyOnce('ServiceAccount token 없음');
   try {
     const res = await fetch(`${CONTROLLER}/api/admin/events`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         'x-opensphere-source': 'foundation',
-        ...(SHELL_TOKEN ? { 'x-shell-token': SHELL_TOKEN } : {}),
+        authorization: `Bearer ${workloadToken}`,
       },
       body: JSON.stringify({ source: 'foundation', ...ev }),
     });
-    if (!res.ok) warnNotifyOnce(`http=${res.status}${SHELL_TOKEN ? '' : ' (SHELL_SERVICE_TOKEN env 부재)'}`);
+    if (!res.ok) warnNotifyOnce(`http=${res.status}`);
   } catch (e) { warnNotifyOnce(String((e && (e.code || e.message)) || e)); }
 }
 const _notifiedNodes = new Set();
@@ -278,7 +283,7 @@ async function k8sProxy(req, res, rawUrl) {
   if (segs.includes('serviceaccounts') && last === 'token') return jsonRes(res, 403, { error: 'token subresource blocked by policy' });
 
   const isWrite = WRITE_METHODS.has(req.method);
-  const idToken = req.headers['x-os-id-token']; // 셸이 실어 보낸 콘솔 IdP id_token(__OS_AUTH__ 브리지)
+  const idToken = requestToken(req); // Main Shell이 host-mediated fetch에 주입한 콘솔 IdP token
   // 헤더는 새로 구성 — 클라이언트의 Impersonate-*/Authorization은 절대 전달하지 않음(위조 차단)
   const headers = { Authorization: `Bearer ${tok()}`, Accept: 'application/json' };
   let actor = null;
@@ -287,7 +292,7 @@ async function k8sProxy(req, res, rawUrl) {
     try { actor = await verifyToken(idToken); }
     catch (e) {
       const cookieNames = (req.headers.cookie || '').split(';').map((c) => c.trim().split('=')[0]).filter(Boolean).join(',');
-      console.log(`[auth-fail] write path=${pathOnly} hdrToken=${!!req.headers['x-os-id-token']} cookieToken=${!!tokenFromCookie(req.headers.cookie)} cookies=[${cookieNames}] err=${e && (e.msg || e.message || e)}`);
+      console.log(`[auth-fail] write path=${pathOnly} hdrToken=${!!requestToken(req)} cookieToken=${!!tokenFromCookie(req.headers.cookie)} cookies=[${cookieNames}] err=${e && (e.msg || e.message || e)}`);
       // e.code가 숫자가 아니면(예: TLS 오류 'DEPTH_ZERO_SELF_SIGNED_CERT') writeHead 크래시 → 502로 안전 매핑.
       const status = (typeof e.code === 'number') ? e.code : 502;
       return jsonRes(res, status, { error: e.msg || e.message || 'unauthorized' });
@@ -375,12 +380,12 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/session') {
       // WS(exec/터미널)용 신원 쿠키 발급 — 토큰 JWKS 검증 후 HttpOnly 쿠키로(브라우저 WS가 보낼 수 있게)
       let actor;
-      try { actor = await verifyToken(req.headers['x-os-id-token']); }
+      try { actor = await verifyToken(requestToken(req)); }
       catch (e) { return jsonRes(res, e.code || 401, { error: e.msg || 'unauthorized' }); }
       const secure = req.headers['x-forwarded-proto'] === 'https' ? ' Secure;' : '';
       res.writeHead(200, {
         'content-type': 'application/json',
-        'set-cookie': `${COOKIE}=${encodeURIComponent(req.headers['x-os-id-token'])}; HttpOnly; SameSite=Strict; Path=/api/plugins/foundation;${secure} Max-Age=600`,
+        'set-cookie': `${COOKIE}=${encodeURIComponent(requestToken(req))}; HttpOnly; SameSite=Strict; Path=/api/plugins/foundation;${secure} Max-Age=600`,
       });
       return res.end(JSON.stringify({ user: actor.username }));
     }

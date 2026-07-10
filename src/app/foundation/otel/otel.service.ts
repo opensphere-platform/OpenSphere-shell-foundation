@@ -1,5 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { apiBase, writeHeaders } from '../../api-base';
+import { apiBase, hostFetch, writeHeaders } from '../../api-base';
 import { State } from '../../modules/postgres/cnpg.types';
 
 export interface OtelVersion { chart: string; app: string; note?: string }
@@ -58,7 +58,7 @@ export class OtelService {
 
   private async loadDeploy(): Promise<void> {
     try {
-      const r = await fetch(this.k(`apis/apps/v1/namespaces/${NS}/deployments/otel-collector-opentelemetry-collector`));
+      const r = await hostFetch(this.k(`apis/apps/v1/namespaces/${NS}/deployments/otel-collector-opentelemetry-collector`));
       if (r.status === 403) { this.deployState.set('noperm'); return; }
       if (!r.ok) { this.deployState.set('nocrd'); this.deploy.set(null); return; }
       this.deploy.set(await r.json());
@@ -67,7 +67,7 @@ export class OtelService {
   }
   private async loadPods(): Promise<void> {
     try {
-      const r = await fetch(this.k(`api/v1/namespaces/${NS}/pods`));
+      const r = await hostFetch(this.k(`api/v1/namespaces/${NS}/pods`));
       this.pods.set(r.ok ? ((await r.json()).items ?? []) : []);
     } catch { this.pods.set([]); }
   }
@@ -136,7 +136,7 @@ export class OtelService {
       },
     };
     try {
-      const r = await fetch(this.k('apis/helm.crossplane.io/v1beta1/releases'), {
+      const r = await hostFetch(this.k('apis/helm.crossplane.io/v1beta1/releases'), {
         method: 'POST', headers: writeHeaders(), body: JSON.stringify(rel),
       });
       if (r.status === 403) {
@@ -161,7 +161,7 @@ export class OtelService {
   private async pollInstall(): Promise<void> {
     let synced = false;
     try {
-      const r = await fetch(this.k('apis/helm.crossplane.io/v1beta1/releases/otel-collector'));
+      const r = await hostFetch(this.k('apis/helm.crossplane.io/v1beta1/releases/otel-collector'));
       if (r.ok) {
         const rel = await r.json();
         synced = (rel.status?.conditions ?? []).some((c: any) => c.type === 'Synced' && c.status === 'True');
@@ -172,7 +172,7 @@ export class OtelService {
     const ready = this.ready();
 
     try {
-      const r = await fetch(this.k(`api/v1/namespaces/${NS}/events?limit=25`));
+      const r = await hostFetch(this.k(`api/v1/namespaces/${NS}/events?limit=25`));
       if (r.ok) {
         const items = (await r.json()).items ?? [];
         items.sort((a: any, b: any) => (a.lastTimestamp || '').localeCompare(b.lastTimestamp || ''))

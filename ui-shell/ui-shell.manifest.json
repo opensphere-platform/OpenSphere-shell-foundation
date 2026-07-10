@@ -1,13 +1,17 @@
 {
-  "manifestVersion": 2,
+  "manifestVersion": 3,
   "kind": "subShell",
   "id": "foundation",
+  "hostRef": "main",
+  "hostApiVersion": "1.0.0",
+  "hostCompat": ">=1.0.0 <2.0.0",
   "version": "0.1.0",
   "title": "Foundation",
-  "description": "OpenSphere subShell — Foundation (SDK 표준 골격).",
+  "description": "OpenSphere Foundation subShell.",
   "entry": "ui-shell.plugin.js",
-  "entrySha256": "f8371f0750189dee2fe82a2869654a4aaaa1bbc07cd8a5f33f54c09358276143",
+  "entrySha256": "f8fcc1a39f47a60eda8579b55d9309216ede5efdab0c3e7a1d4ca1ab373a5022",
   "shellCompat": ">=0.2.0 <0.9.0",
+  "sdkVersion": "0.3.6",
   "permissions": [
     "page:register",
     "api:proxy"
@@ -17,5 +21,46 @@
     "label": "Foundation"
   },
   "designSystem": "clarity",
-  "apiBase": "/api/plugins/foundation"
+  "apiBase": "/api/plugins/foundation",
+  "renderMode": "esm",
+  "contributions": {
+    "page": {
+      "enabled": true
+    },
+    "navigation": {
+      "enabled": false,
+      "mode": "none",
+      "reason": "Foundation owns navigation inside its page"
+    },
+    "api": {
+      "enabled": true,
+      "basePath": "/api/plugins/foundation"
+    },
+    "cli": {
+      "enabled": false,
+      "reason": "Foundation CLI manifest is not published"
+    },
+    "manual": {
+      "enabled": false,
+      "mode": "none",
+      "reason": "Foundation Manual contribution is not published"
+    },
+    "search": {
+      "enabled": false,
+      "mode": "none",
+      "reason": "Foundation search is page-local"
+    },
+    "notification": {
+      "enabled": true,
+      "frontend": false,
+      "backend": true
+    },
+    "observability": {
+      "enabled": true,
+      "logs": true,
+      "metrics": false,
+      "traces": false,
+      "reason": "Metrics and traces are pending; structured logs are available"
+    }
+  }
 }

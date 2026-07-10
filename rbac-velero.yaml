@@ -1,4 +1,8 @@
 # Velero 설치 흐름 권한 — 읽기(폴링)는 foundation SA, 쓰기(Release 생성)는 opensphere-console-admins 그룹(그룹 임퍼소네이션).
+apiVersion: v1
+kind: Namespace
+metadata: { name: velero }
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata: { name: foundation-velero-manage }
@@ -26,7 +30,7 @@ kind: ClusterRoleBinding
 metadata: { name: foundation-velero-manage-sa }
 roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: foundation-velero-manage }
 subjects:
-  - { kind: ServiceAccount, name: default, namespace: opensphere-system }
+  - { kind: ServiceAccount, name: opensphere-foundation, namespace: opensphere-system }
 ---
 # 쓰기(Release 생성) — 콘솔 관리자 그룹(쓰기 시 그룹 임퍼소네이션으로 적용)
 apiVersion: rbac.authorization.k8s.io/v1

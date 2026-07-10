@@ -1,5 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { apiBase, writeHeaders } from '../../api-base';
+import { apiBase, hostFetch, writeHeaders } from '../../api-base';
 
 const CP_NS = 'opensphere-system';
 const CP_DEPLOY = 'foundation-control-plane';
@@ -50,7 +50,7 @@ export class StorageClassService {
 
   private async loadClasses(): Promise<void> {
     try {
-      const r = await fetch(this.k('apis/storage.k8s.io/v1/storageclasses'));
+      const r = await hostFetch(this.k('apis/storage.k8s.io/v1/storageclasses'));
       if (!r.ok) { return; }
       const items: any[] = (await r.json()).items ?? [];
       this.classes.set(items.map((it) => ({
@@ -69,7 +69,7 @@ export class StorageClassService {
 
   private async loadPvcCounts(): Promise<void> {
     try {
-      const r = await fetch(this.k('api/v1/persistentvolumeclaims'));
+      const r = await hostFetch(this.k('api/v1/persistentvolumeclaims'));
       if (!r.ok) { return; }
       const items: any[] = (await r.json()).items ?? [];
       const m = new Map<string, number>();
@@ -85,7 +85,7 @@ export class StorageClassService {
 
   private async loadCurrentDefault(): Promise<void> {
     try {
-      const r = await fetch(this.k(`apis/apps/v1/namespaces/${CP_NS}/deployments/${CP_DEPLOY}`));
+      const r = await hostFetch(this.k(`apis/apps/v1/namespaces/${CP_NS}/deployments/${CP_DEPLOY}`));
       if (!r.ok) { return; }
       const j = await r.json();
       const containers: any[] = j.spec?.template?.spec?.containers ?? [];
@@ -111,7 +111,7 @@ export class StorageClassService {
     next.push(`${ARG_PREFIX}${this.selected()}`);
     const body = { spec: { template: { spec: { containers: [{ name: CP_CONTAINER, args: next }] } } } };
     try {
-      const r = await fetch(this.k(`apis/apps/v1/namespaces/${CP_NS}/deployments/${CP_DEPLOY}`), {
+      const r = await hostFetch(this.k(`apis/apps/v1/namespaces/${CP_NS}/deployments/${CP_DEPLOY}`), {
         method: 'PATCH', headers: { ...writeHeaders(), 'content-type': 'application/strategic-merge-patch+json' },
         body: JSON.stringify(body),
       });

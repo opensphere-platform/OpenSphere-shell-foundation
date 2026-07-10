@@ -1,8 +1,16 @@
 # Perspective 2 K8s Cluster — 구 k8s-console-ng RBAC 전체 흡수(누락 없이): 광범위 read-only(인벤토리 28종) + impersonate.
 # secrets는 의도적으로 제외(보안 기조 + 프록시도 차단). 쓰기는 검증된 사용자 임퍼소네이션(SA 자체 write 없음).
+apiVersion: v1
+kind: Namespace
+metadata: { name: opensphere-foundation }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: opensphere-foundation, namespace: opensphere-system }
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
-metadata: { name: cluster-reader }
+metadata: { name: foundation-cluster-reader }
 rules:
   - apiGroups: [""]
     resources: ["nodes","namespaces","pods","pods/log","services","configmaps","endpoints","limitranges","resourcequotas","serviceaccounts","events","persistentvolumeclaims","persistentvolumes","replicationcontrollers"]
@@ -68,10 +76,10 @@ rules:
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
-metadata: { name: cluster-reader-system }
-roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: cluster-reader }
+metadata: { name: foundation-cluster-reader }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: foundation-cluster-reader }
 subjects:
-  - { kind: ServiceAccount, name: default, namespace: opensphere-system }
+  - { kind: ServiceAccount, name: opensphere-foundation, namespace: opensphere-system }
 ---
 # Foundation-owned install action: Samba-AD bootstrap password is accepted only
 # through /api/foundation/samba/bootstrap-secret and written to this fixed Secret.
@@ -93,4 +101,4 @@ metadata:
   namespace: opensphere-foundation
 roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: foundation-samba-bootstrap-secret-writer }
 subjects:
-  - { kind: ServiceAccount, name: default, namespace: opensphere-system }
+  - { kind: ServiceAccount, name: opensphere-foundation, namespace: opensphere-system }

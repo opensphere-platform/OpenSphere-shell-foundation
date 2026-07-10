@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 const TAG = 'osp-foundation-shell'; // www/main.js(Angular Elements)가 customElements.define(TAG)
 let injected = false;
+let hostContextInstalled = false;
 
 function injectOnce(base) {
   if (injected) return;
@@ -17,11 +18,15 @@ function injectOnce(base) {
   document.head.appendChild(css);
   const s = document.createElement('script');
   s.type = 'module'; s.src = `${base}/app/main.js${v}`;
+  s.setAttribute('data-osp-plugin', 'foundation');
   document.head.appendChild(s);
 }
 
 export function activate(ctx) {
   const base = (ctx.api?.baseUrl ?? '').replace(/\/$/, '');
+  const contexts = window.__OPENSPHERE_HOST_CONTEXTS__ ||= Object.create(null);
+  contexts.foundation = { api: { baseUrl: base, fetch: ctx.api?.fetch } };
+  hostContextInstalled = true;
   injectOnce(base);
   ctx.extensions.registerPage({
     id: ctx.pluginId,
@@ -31,4 +36,9 @@ export function activate(ctx) {
   });
 }
 
-export function deactivate() {}
+export function deactivate() {
+  if (hostContextInstalled && window.__OPENSPHERE_HOST_CONTEXTS__) delete window.__OPENSPHERE_HOST_CONTEXTS__.foundation;
+  document.querySelectorAll('[data-osp-plugin="foundation"]').forEach((node) => node.remove());
+  hostContextInstalled = false;
+  injected = false;
+}

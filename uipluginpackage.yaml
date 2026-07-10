@@ -7,19 +7,24 @@ metadata:
   name: foundation
   namespace: opensphere-system
 spec:
+  kind: subShell
+  hostRef: main
+  hostApiVersion: "1.0.0"
+  hostCompat: ">=1.0.0 <2.0.0"
   displayName: "Foundation"
   owner: platform-experience
   version: 0.1.0
   description: "Foundation — OpenSphere subShell (SDK 표준 골격)"
+  serviceAccountName: opensphere-foundation
   image:
-    repository: ghcr.io/opensphere-platform/foundation
-    digest: sha256:34c920fae8920d0f517569d5f0bc3966df22bec2a5784e52e657c87148b67ef0  # opensearch-install-process-20260708-01
+    repository: foundation
+    digest: sha256:ee2059102f781b8d1e798dd835014c9e888e5fb5a8865fa8cb62f1bf3ad081a0
   nav:
     band: "운영 Operate"
     label: "Foundation"
   manifest:
     path: /plugins/ui-shell.manifest.json
-    sha256: "cf17a2b66ea6f02e9551373a7311788006b69d09ffc5f398d4c8781f1266bf08"
+    sha256: "9e7aeea64b106918482c1ea9bb00e232c0b3b347b0f341ed0f89fd07d0248967"
     signaturePath: /plugins/ui-shell.manifest.json.sig
   trust:
     keyId: opensphere-plugins-v2
@@ -29,6 +34,15 @@ spec:
     - api:proxy
   api:
     basePath: /api/plugins/foundation
+  contributions:
+    page: { enabled: true }
+    navigation: { enabled: false, mode: none, reason: "Foundation owns navigation inside its page" }
+    api: { enabled: true, basePath: /api/plugins/foundation }
+    cli: { enabled: false, reason: "Foundation CLI manifest is not published" }
+    manual: { enabled: false, mode: none, reason: "Foundation Manual contribution is not published" }
+    search: { enabled: false, mode: none, reason: "Foundation search is page-local" }
+    notification: { enabled: true, frontend: false, backend: true }
+    observability: { enabled: true, logs: true, metrics: false, traces: false, reason: "Metrics and traces are pending; structured logs are available" }
 ---
 apiVersion: plugins.opensphere.io/v1alpha1
 kind: UIPluginRegistration

@@ -17,7 +17,7 @@ kind: ClusterRoleBinding
 metadata: { name: foundation-modules-read-sa }
 roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: foundation-modules-read }
 subjects:
-  - { kind: ServiceAccount, name: default, namespace: opensphere-system }
+  - { kind: ServiceAccount, name: opensphere-foundation, namespace: opensphere-system }
 ---
 # StorageClass 기본값 "선택 적용" — foundation-control-plane Deployment의 --default-storage-class 인자만 patch 가능(다른 Deployment는 불가).
 apiVersion: rbac.authorization.k8s.io/v1

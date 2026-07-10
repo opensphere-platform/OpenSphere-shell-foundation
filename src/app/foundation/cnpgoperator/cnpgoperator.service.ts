@@ -1,5 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { apiBase, writeHeaders } from '../../api-base';
+import { apiBase, hostFetch, writeHeaders } from '../../api-base';
 import { State } from '../../modules/postgres/cnpg.types';
 
 export interface CnpgVersion { chart: string; app: string; note?: string }
@@ -59,7 +59,7 @@ export class CnpgOperatorService {
 
   private async loadDeploy(): Promise<void> {
     try {
-      const r = await fetch(this.k(`apis/apps/v1/namespaces/${NS}/deployments/${DEPLOY}`));
+      const r = await hostFetch(this.k(`apis/apps/v1/namespaces/${NS}/deployments/${DEPLOY}`));
       if (r.status === 403) { this.deployState.set('noperm'); return; }
       if (!r.ok) { this.deployState.set('nocrd'); this.deploy.set(null); return; }
       this.deploy.set(await r.json());
@@ -68,13 +68,13 @@ export class CnpgOperatorService {
   }
   private async loadPods(): Promise<void> {
     try {
-      const r = await fetch(this.k(`api/v1/namespaces/${NS}/pods`));
+      const r = await hostFetch(this.k(`api/v1/namespaces/${NS}/pods`));
       this.pods.set(r.ok ? ((await r.json()).items ?? []) : []);
     } catch { this.pods.set([]); }
   }
   private async loadClusters(): Promise<void> {
     try {
-      const r = await fetch(this.k('apis/postgresql.cnpg.io/v1/clusters'));
+      const r = await hostFetch(this.k('apis/postgresql.cnpg.io/v1/clusters'));
       if (!r.ok) { this.clusters.set([]); return; }
       const items: any[] = (await r.json()).items ?? [];
       this.clusters.set(items.map((it) => ({
@@ -144,7 +144,7 @@ export class CnpgOperatorService {
       },
     };
     try {
-      const r = await fetch(this.k('apis/helm.crossplane.io/v1beta1/releases'), {
+      const r = await hostFetch(this.k('apis/helm.crossplane.io/v1beta1/releases'), {
         method: 'POST', headers: writeHeaders(), body: JSON.stringify(rel),
       });
       if (r.status === 403) {
@@ -169,7 +169,7 @@ export class CnpgOperatorService {
   private async pollInstall(): Promise<void> {
     let synced = false;
     try {
-      const r = await fetch(this.k('apis/helm.crossplane.io/v1beta1/releases/cnpg'));
+      const r = await hostFetch(this.k('apis/helm.crossplane.io/v1beta1/releases/cnpg'));
       if (r.ok) {
         const rel = await r.json();
         synced = (rel.status?.conditions ?? []).some((c: any) => c.type === 'Synced' && c.status === 'True');
@@ -180,7 +180,7 @@ export class CnpgOperatorService {
     const ready = this.ready();
 
     try {
-      const r = await fetch(this.k(`api/v1/namespaces/${NS}/events?limit=25`));
+      const r = await hostFetch(this.k(`api/v1/namespaces/${NS}/events?limit=25`));
       if (r.ok) {
         const items = (await r.json()).items ?? [];
         items.sort((a: any, b: any) => (a.lastTimestamp || '').localeCompare(b.lastTimestamp || ''))
