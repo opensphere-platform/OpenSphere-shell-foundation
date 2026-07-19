@@ -1,0 +1,89 @@
+name: Promote curated mirror channel
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_channel:
+        description: Existing verified channel
+        required: true
+        type: choice
+        options: [edge, candidate]
+      target_channel:
+        description: Target channel
+        required: true
+        type: choice
+        options: [candidate, stable]
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
+concurrency:
+  group: foundation-mirror-promotion
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate ordered promotion
+        env:
+          SOURCE: ${{ inputs.source_channel }}
+          TARGET: ${{ inputs.target_channel }}
+        run: |
+          set -euo pipefail
+          test "$SOURCE:$TARGET" = "edge:candidate" -o "$SOURCE:$TARGET" = "candidate:stable"
+
+  prepare:
+    needs: validate
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: matrix
+        shell: bash
+        run: |
+          echo "value=$(jq -c '{include: [.images[] | {name: .name}]}' oci/mirrors.json)" >> "$GITHUB_OUTPUT"
+
+  promote:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - uses: imjasonh/setup-crane@v0.4
+      - name: Login to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: crane auth login ghcr.io -u "${{ github.actor }}" -p "$GH_TOKEN"
+      - id: source
+        name: Resolve immutable source digest
+        env:
+          SOURCE_CHANNEL: ${{ inputs.source_channel }}
+          NAME: ${{ matrix.name }}
+        run: |
+          repository="ghcr.io/opensphere-platform/mirror/$NAME"
+          digest="$(crane digest "$repository:$SOURCE_CHANNEL")"
+          echo "repository=$repository" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Reject critical or high known vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.source.outputs.repository }}@${{ steps.source.outputs.digest }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+      - name: Promote without rebuilding and verify digest identity
+        env:
+          REPOSITORY: ${{ steps.source.outputs.repository }}
+          DIGEST: ${{ steps.source.outputs.digest }}
+          TARGET_CHANNEL: ${{ inputs.target_channel }}
+        run: |
+          set -euo pipefail
+          crane tag "$REPOSITORY@$DIGEST" "$TARGET_CHANNEL"
+          test "$(crane digest "$REPOSITORY:$TARGET_CHANNEL")" = "$DIGEST"
+          echo "- \`$REPOSITORY:$TARGET_CHANNEL\` → \`$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"

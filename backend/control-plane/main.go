@@ -35,6 +35,9 @@ type config struct {
 	sambaImage          string // (deprecated 2026-07-06) samba operand는 plugin이 소유 — 미사용, arg 호환 위해 잔존
 	sambaPluginSvc      string // samba operand 선언 제공 plugin svc(self-contained) — GET /operand/manifests
 	pgImage             string
+	psmdbImage          string
+	valkeyImage         string
+	rustfsImage         string
 	opensearchImage     string
 	defaultStorageClass string // HostRequirements 기본값(§1.2) — Basic StorageClass 이름의 단일 선언점
 }
@@ -51,13 +54,15 @@ func main() {
 	// [[ghcr-image-mirror-policy]]: 원본 레지스트리 직접참조 폐지, ghcr.io/opensphere-platform/mirror/* 경유로 조달.
 	flag.StringVar(&cfg.collectorImage, "collector-image", "ghcr.io/opensphere-platform/mirror/opentelemetry-collector-contrib:0.111.0", "observability collector operand 이미지(GHCR 미러, origin=otel/opentelemetry-collector-contrib:0.111.0)")
 	flag.StringVar(&cfg.keycloakImage, "keycloak-image", "ghcr.io/opensphere-platform/mirror/keycloak:26.0", "identity Keycloak operand 이미지(GHCR 미러, origin=quay.io/keycloak/keycloak:26.0)")
-	flag.StringVar(&cfg.sambaImage, "samba-image", "ghcr.io/opensphere-platform/mirror/samba-domain:20260706", "(deprecated) samba operand는 plugin이 소유·렌더 — 이 플래그는 미사용(arg 호환)")
+	flag.StringVar(&cfg.sambaImage, "samba-image", "ghcr.io/opensphere-platform/mirror/samba-domain:20260701025204", "(deprecated) samba operand는 plugin이 소유·렌더 — 이 플래그는 미사용(arg 호환)")
 	flag.StringVar(&cfg.sambaPluginSvc, "samba-plugin-svc", "samba-ad.opensphere-system.svc:8080", "samba operand 선언 제공 plugin svc(self-contained, GET /operand/manifests)")
-	// pg-image: 원본이 이미 GHCR(cloudnative-pg org) 호스팅 — mirror(missing, opensphere-platform 산하 미보유). CNPG operator 설치(Phase 0) 후 재검토.
-	flag.StringVar(&cfg.pgImage, "pg-image", "ghcr.io/cloudnative-pg/postgresql:17", "data PostgreSQL operand 이미지(CloudNativePG Cluster) — image-source: ghcr-mirror(missing, upstream org)")
+	flag.StringVar(&cfg.pgImage, "pg-image", "ghcr.io/opensphere-platform/mirror/postgresql:19beta2-standard-trixie", "data PostgreSQL 19 beta operand 이미지(CloudNativePG Cluster) — image-source: OpenSphere curated GHCR mirror")
+	flag.StringVar(&cfg.psmdbImage, "psmdb-image", "ghcr.io/opensphere-platform/mirror/percona-server-mongodb:8.0", "data PSMDB operand image(GHCR mirror)")
+	flag.StringVar(&cfg.valkeyImage, "valkey-image", "ghcr.io/opensphere-platform/mirror/valkey:9.1.0-alpine", "data Valkey operand image(GHCR mirror)")
+	flag.StringVar(&cfg.rustfsImage, "rustfs-image", "ghcr.io/opensphere-platform/mirror/rustfs:1.0.0-beta.10", "data RustFS operand image(GHCR mirror)")
 	// HostRequirements(§1.2 "Basic은 요구만 선언") 기본값 — 클러스터 실측 StorageClass 이름(rancher.io/local-path 기반 "standard").
 	flag.StringVar(&cfg.defaultStorageClass, "default-storage-class", "standard", "PVC가 참조할 Basic StorageClass 기본값(FoundationModel.spec.parameters.hostRequirements.storageClass로 모델별 override 가능)")
-	flag.StringVar(&cfg.opensearchImage, "opensearch-image", "ghcr.io/opensphere-platform/mirror/opensearch:2.17.0", "data OpenSearch operand image(GHCR mirror, origin=opensearchproject/opensearch:2.17.0)")
+	flag.StringVar(&cfg.opensearchImage, "opensearch-image", "ghcr.io/opensphere-platform/mirror/opensearch:3.7.0", "data OpenSearch operand image(GHCR mirror, origin=opensearchproject/opensearch:3.7.0)")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New())

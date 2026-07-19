@@ -1,9 +1,10 @@
 import { Phase, State } from '../modules/postgres/cnpg.types';
+import { PluginSurfaceContract } from './plugin-surface.contract';
 
 // Foundation이 호스팅하는 plugin = '등록된 관리 대상'(메뉴 항목이 아님, §2.7).
 // nav·카드·트리는 모두 이 레지스트리의 파생물(§3.3 메뉴=실재의 투영). 역이 아니다.
 export interface HostedPlugin {
-  id: 'postgres' | 'opensearch' | 'rustfs' | 'keycloak' | 'samba';
+  id: string;
   name: string;
   icon: 'db' | 'search' | 'storage' | 'key' | 'users';
   kind: 'plugin';                 // leaf — host(foundation subShell)와 구분
@@ -12,7 +13,10 @@ export interface HostedPlugin {
   capabilityLabel: string;        // '관계형 DB' 등 — 칩 표시용
   desc: string;
   consumePoint: string;           // 백킹서비스 소비 엔드포인트(이 plugin이 '제공하는 것')
-  healthRef: 'cnpg' | 'os' | 'rustfs' | 'keycloak' | 'samba'; // ⬅ probe() 대체. 어느 서비스가 이 plugin의 health 진실인가
+  healthRef: 'cnpg' | 'data-engine' | 'os' | 'rustfs' | 'keycloak' | 'samba' | 'declared'; // ⬅ probe() 대체. 어느 서비스가 이 plugin의 health 진실인가
+  model: 'data' | 'identity' | 'ai' | 'communication' | 'observability' | 'backup' | 'delivery';
+  dataEngineId?: 'psmdb' | 'valkey';
+  surface: PluginSurfaceContract; // 모든 plugin은 PostgreSQL 수준 관리 표면 계약을 충족해야 등록 가능
   view: { module: string };       // ViewRouter.setModule 대상(메뉴=등록의 파생)
   activation?: {
     packageId: string;

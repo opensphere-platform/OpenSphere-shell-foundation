@@ -40,6 +40,87 @@ func configuredSambaRealm(fm *unstructured.Unstructured) string {
 	return "OPENSPHERE.LOCAL"
 }
 
+type identityEngineOpts struct {
+	version, profile, resourceProfile                string
+	cpuRequest, memoryRequest, cpuLimit, memoryLimit string
+	ingressMode, databaseMode                        string
+	replicas                                         int64
+	monitoring                                       bool
+}
+
+func keycloakParams(fm *unstructured.Unstructured) identityEngineOpts {
+	o := identityEngineOpts{
+		version: "26.0", profile: "development", resourceProfile: "small", replicas: 1,
+		cpuRequest: "250m", memoryRequest: "512Mi", cpuLimit: "1", memoryLimit: "1536Mi",
+		ingressMode: "cluster-internal", databaseMode: "embedded-h2",
+	}
+	p, _, _ := unstructured.NestedMap(fm.Object, "spec", "parameters", "identityEngines", "keycloak")
+	if p == nil {
+		return o
+	}
+	o.version = pStr(p, "version", o.version)
+	// 미러 가용성이 검증된 버전만 허용한다. 임의 태그를 control-plane에서 pull하지 않는다.
+	if o.version != "26.0" {
+		o.version = "26.0"
+	}
+	o.profile = pStr(p, "profile", o.profile)
+	o.resourceProfile = pStr(p, "resourceProfile", o.resourceProfile)
+	o.cpuRequest = pStr(p, "cpuRequest", o.cpuRequest)
+	o.memoryRequest = pStr(p, "memoryRequest", o.memoryRequest)
+	o.cpuLimit = pStr(p, "cpuLimit", o.cpuLimit)
+	o.memoryLimit = pStr(p, "memoryLimit", o.memoryLimit)
+	o.ingressMode = pStr(p, "ingressMode", o.ingressMode)
+	o.databaseMode = pStr(p, "databaseMode", o.databaseMode)
+	o.replicas = pInt(p, "replicas", o.replicas)
+	if o.replicas < 1 {
+		o.replicas = 1
+	}
+	if o.replicas > 5 {
+		o.replicas = 5
+	}
+	// The currently verified bundle runs Keycloak with the embedded H2 store.
+	// H2 cannot provide a shared durable store, so advertising multiple replicas
+	// would create an invalid topology even if Kubernetes accepts the Deployment.
+	if o.databaseMode == "embedded-h2" {
+		o.replicas = 1
+	}
+	o.monitoring = pBool(p, "monitoring", false)
+	return o
+}
+
+func applyKeycloakParams(objs []*unstructured.Unstructured, cfg *config, fm *unstructured.Unstructured) {
+	o := keycloakParams(fm)
+	for _, obj := range objs {
+		if obj.GetKind() != "Deployment" || obj.GetName() != keycloakName {
+			continue
+		}
+		_ = unstructured.SetNestedField(obj.Object, o.replicas, "spec", "replicas")
+		containers, found, _ := unstructured.NestedSlice(obj.Object, "spec", "template", "spec", "containers")
+		if !found || len(containers) == 0 {
+			continue
+		}
+		container, ok := containers[0].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		container["image"] = imageWithTag(cfg.keycloakImage, o.version)
+		container["resources"] = map[string]interface{}{
+			"requests": map[string]interface{}{"cpu": o.cpuRequest, "memory": o.memoryRequest},
+			"limits":   map[string]interface{}{"cpu": o.cpuLimit, "memory": o.memoryLimit},
+		}
+		containers[0] = container
+		_ = unstructured.SetNestedSlice(obj.Object, containers, "spec", "template", "spec", "containers")
+		annotations := obj.GetAnnotations()
+		if annotations == nil {
+			annotations = map[string]string{}
+		}
+		annotations["foundation.opensphere.io/profile"] = o.profile
+		annotations["foundation.opensphere.io/monitoring"] = boolStr(o.monitoring)
+		annotations["foundation.opensphere.io/ingress-mode"] = o.ingressMode
+		obj.SetAnnotations(annotations)
+	}
+}
+
 // engineEnabled — 엔진별 설치옵션(FoundationModel.spec.parameters.engines.<engine>). 기본 enabled;
 // 명시적 "disabled"만 끔(정직: 알 수 없는 값은 enabled로 취급하지 않고 그대로 켜짐 — fail-open 설치옵션).
 func engineEnabled(fm *unstructured.Unstructured, engine string) bool {
@@ -56,6 +137,7 @@ func buildIdentityBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstruc
 	if err != nil {
 		return nil, err
 	}
+	applyKeycloakParams(objs, cfg, fm)
 	out := objs[:0]
 	for _, o := range objs {
 		if !engineEnabled(fm, "keycloak") && strings.HasPrefix(o.GetName(), keycloakName) {
@@ -144,7 +226,10 @@ func observeIdentity(ctx context.Context, r *modelReconciler, fm *unstructured.U
 	sm := engineUp("samba_up", sambaName, engineEnabled(fm, "samba"))
 	login := map[string]interface{}{"id": "oidc_login_success_ratio", "unit": "ratio", "value": "n/a", "healthy": false, "source": "observability(D-7)", "note": "실 로그인 데이터 없음(D-7 연동)"}
 	scim := map[string]interface{}{"id": "scim_sync_lag_s", "unit": "s", "value": "n/a", "healthy": false, "source": "Syncope SCIM(D-7)", "note": "Syncope SCIM endpoint/connector 미구현(D-7)"}
-	return []interface{}{kc, sm, login, scim}, nil
+	ko := keycloakParams(fm)
+	kv := map[string]interface{}{"id": "keycloak_version", "unit": "", "value": ko.version, "healthy": true, "source": "spec.parameters.identityEngines.keycloak.version"}
+	kr := map[string]interface{}{"id": "keycloak_replicas", "unit": "count", "value": fmt.Sprintf("%d", ko.replicas), "healthy": true, "source": "spec.parameters.identityEngines.keycloak.replicas"}
+	return []interface{}{kc, kv, kr, sm, login, scim}, nil
 }
 
 // extraIdentity — OIDC issuer + LDAP 디렉터리 좌표를 status에 노출(소비자·UI가 읽는 연결 정본).
@@ -154,6 +239,8 @@ func extraIdentity(cfg *config, o *unstructured.Unstructured) {
 	setNested(o, issuerURL(cfg.managedNS)+"/protocol/openid-connect/certs", "status", "jwksURL")
 	setNested(o, ldapURL(cfg.managedNS), "status", "ldapURL")
 	setNested(o, configuredSambaRealm(o), "status", "directoryRealm")
+	setNested(o, keycloakParams(o).version, "status", "keycloakVersion")
+	setNested(o, keycloakParams(o).profile, "status", "keycloakProfile")
 }
 
 // bundleSpec — 모델별 operand 번들 정의. modelReconciler가 레지스트리로 일반화 처리(observability 동작 불변).
@@ -210,7 +297,7 @@ var bundles = map[string]bundleSpec{
 		gone:       dataGone,
 		nsOf:       dataNS,       // 설치옵션 NS
 		endpointFM: dataEndpoint, // 설치 NS의 -rw 서비스
-		engines:    []string{"opensearch"},
+		engines:    []string{"postgres", "psmdb", "valkey", "rustfs", "opensearch"},
 		probeFM:    dataProbe,
 	},
 }

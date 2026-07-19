@@ -5,33 +5,34 @@ apiVersion: plugins.opensphere.io/v1alpha1
 kind: UIPluginPackage
 metadata:
   name: foundation
-  namespace: opensphere-system
+  namespace: opensphere-console
 spec:
   kind: subShell
   hostRef: main
   hostApiVersion: "1.0.0"
   hostCompat: ">=1.0.0 <2.0.0"
-  displayName: "Foundation"
-  owner: platform-experience
-  version: 0.1.0
-  description: "Foundation — OpenSphere subShell (SDK 표준 골격)"
+  displayName: "Platform Foundation Service Stack"
+  owner: opensphere-platform
+  version: 0.2.0-edge.8
+  description: "OpenSphere PFS lifecycle and foundation service module host; may be staged before Platform Support Profile admission."
   serviceAccountName: opensphere-foundation
   image:
-    repository: foundation
-    digest: sha256:ee2059102f781b8d1e798dd835014c9e888e5fb5a8865fa8cb62f1bf3ad081a0
+    repository: ghcr.io/opensphere-platform/opensphere-shell-foundation
+    digest: sha256:a87bec7344fd41f15315333880c74c56de912bb6e795b30169bdb08e9c6831cd
   nav:
     band: "운영 Operate"
     label: "Foundation"
   manifest:
     path: /plugins/ui-shell.manifest.json
-    sha256: "9e7aeea64b106918482c1ea9bb00e232c0b3b347b0f341ed0f89fd07d0248967"
+    sha256: "19ba289955e72c3584d625ee235f35258a8e6bd8af04442dca4203dda06a1fb8"
     signaturePath: /plugins/ui-shell.manifest.json.sig
   trust:
-    keyId: opensphere-plugins-v2
+    keyId: opensphere-plugins-v1
   shellCompat: ">=0.2.0 <0.9.0"
   permissions:
     - page:register
     - api:proxy
+    - manual:contribute
   api:
     basePath: /api/plugins/foundation
   contributions:
@@ -39,7 +40,7 @@ spec:
     navigation: { enabled: false, mode: none, reason: "Foundation owns navigation inside its page" }
     api: { enabled: true, basePath: /api/plugins/foundation }
     cli: { enabled: false, reason: "Foundation CLI manifest is not published" }
-    manual: { enabled: false, mode: none, reason: "Foundation Manual contribution is not published" }
+    manual: { enabled: true, sourceId: "plugin:foundation", mode: runtime }
     search: { enabled: false, mode: none, reason: "Foundation search is page-local" }
     notification: { enabled: true, frontend: false, backend: true }
     observability: { enabled: true, logs: true, metrics: false, traces: false, reason: "Metrics and traces are pending; structured logs are available" }
@@ -48,7 +49,7 @@ apiVersion: plugins.opensphere.io/v1alpha1
 kind: UIPluginRegistration
 metadata:
   name: foundation
-  namespace: opensphere-system
+  namespace: opensphere-console
 spec:
   packageRef:
     name: foundation
@@ -56,7 +57,7 @@ spec:
   installPolicy:
     createWorkload: true
     createProxyRoute: false
-    exposeInNavigation: true
+    exposeInNavigation: false
   approval:
     requestedBy: cmars
-    reason: "Foundation subShell (SDK 표준 골격)"
+    reason: "Stage the PFS subShell before Platform Support Profile admission"

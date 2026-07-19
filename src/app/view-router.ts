@@ -11,6 +11,8 @@ import { Injectable, signal } from '@angular/core';
 export class ViewRouter {
   readonly module = signal<string>('overview');
   readonly tab = signal<string>('overview');
+  /** PFS 모듈 카탈로그 안의 세부 관리 탭. /modules/<engine>/<surface> 4단 경로를 보존한다. */
+  readonly detail = signal<string>('overview');
 
   constructor() {
     this.read();
@@ -24,8 +26,10 @@ export class ViewRouter {
       const i = parts.indexOf('foundation');
       const m = i >= 0 ? (parts[i + 1] ?? '') : '';
       const t = i >= 0 ? (parts[i + 2] ?? '') : '';
+      const d = i >= 0 ? (parts[i + 3] ?? '') : '';
       this.module.set(m || 'overview');
       this.tab.set(t || 'overview');
+      this.detail.set(d || 'overview');
     } catch { /* noop */ }
   }
 
@@ -33,12 +37,20 @@ export class ViewRouter {
     if (this.module() === m) { return; }
     this.module.set(m);
     this.tab.set('overview');
+    this.detail.set('overview');
     this.write();
   }
 
   setTab(t: string): void {
     if (this.tab() === t) { return; }
     this.tab.set(t);
+    this.detail.set('overview');
+    this.write();
+  }
+
+  setDetail(d: string): void {
+    if (this.detail() === d) { return; }
+    this.detail.set(d);
     this.write();
   }
 
@@ -46,10 +58,11 @@ export class ViewRouter {
   private write(): void {
     try {
       const m = this.module();
-      const hasTabs = m === 'postgres' || m === 'opensearch' || m === 'bss' || m === 'engines';
+      const hasTabs = ['postgres', 'psmdb', 'valkey', 'rustfs', 'opensearch', 'keycloak', 'modules', 'delivery'].includes(m);
       const t = this.tab();
       let next = '/p/foundation';
       if (m && m !== 'overview') next += hasTabs && t && t !== 'overview' ? `/${m}/${t}` : `/${m}`;
+      if ((m === 'modules' || m === 'delivery') && t && t !== 'overview' && this.detail() !== 'overview') next += `/${this.detail()}`;
       const target = next + location.search + location.hash;
       if (location.pathname !== next) history.pushState(history.state, '', target);
     } catch { /* noop */ }

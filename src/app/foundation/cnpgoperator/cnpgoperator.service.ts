@@ -24,6 +24,8 @@ export class CnpgOperatorService {
   readonly deployState = signal<State>('loading');
   readonly pods = signal<any[]>([]);
   readonly clusters = signal<ClusterRow[]>([]);
+  readonly installerState = signal<'loading' | 'ready' | 'missing' | 'noperm' | 'error'>('loading');
+  readonly installerReason = signal('PFS Control Plane 설치 상태를 확인 중입니다.');
 
   readonly selectedChart = signal<string>(CNPG_VERSIONS[0].chart);
   readonly lastSync = signal<string>('');
@@ -52,9 +54,43 @@ export class CnpgOperatorService {
 
   async refresh(): Promise<void> {
     this.busy.set(true);
-    await Promise.allSettled([this.loadDeploy(), this.loadPods(), this.loadClusters()]);
+    await Promise.allSettled([this.loadInstaller(), this.loadDeploy(), this.loadPods(), this.loadClusters()]);
     this.busy.set(false);
     try { this.lastSync.set(new Date().toLocaleTimeString()); } catch { /* noop */ }
+  }
+
+  private async loadInstaller(): Promise<void> {
+    try {
+      const [crd, provider, config] = await Promise.all([
+        hostFetch(this.k('apis/apiextensions.k8s.io/v1/customresourcedefinitions/releases.helm.crossplane.io')),
+        hostFetch(this.k('apis/pkg.crossplane.io/v1/providers/provider-helm')),
+        hostFetch(this.k('apis/helm.crossplane.io/v1beta1/providerconfigs/default')),
+      ]);
+      if ([crd, provider, config].some((r) => r.status === 403)) {
+        this.installerState.set('noperm');
+        this.installerReason.set('PFS Control Plane 상태를 확인할 권한이 없습니다.');
+        return;
+      }
+      if (!crd.ok || !provider.ok || !config.ok) {
+        this.installerState.set('missing');
+        this.installerReason.set('Crossplane provider-helm과 ProviderConfig/default를 먼저 준비해야 합니다.');
+        return;
+      }
+      const body = await provider.json();
+      const conditions: any[] = body?.status?.conditions ?? [];
+      const installed = conditions.some((c) => c.type === 'Installed' && c.status === 'True');
+      const healthy = conditions.some((c) => c.type === 'Healthy' && c.status === 'True');
+      if (!installed || !healthy) {
+        this.installerState.set('missing');
+        this.installerReason.set('Crossplane provider-helm이 아직 Healthy 상태가 아닙니다.');
+        return;
+      }
+      this.installerState.set('ready');
+      this.installerReason.set('Crossplane provider-helm이 CloudNativePG chart를 선언형으로 설치할 준비가 되었습니다.');
+    } catch {
+      this.installerState.set('error');
+      this.installerReason.set('PFS Control Plane 상태 확인 중 네트워크 오류가 발생했습니다.');
+    }
   }
 
   private async loadDeploy(): Promise<void> {
@@ -94,7 +130,8 @@ export class CnpgOperatorService {
     if (!this.installed()) { return '미설치'; }
     return this.ready() ? 'Running' : '기동 중';
   });
-  readonly canInstall = computed<boolean>(() => !this.installed());
+  readonly installerReady = computed<boolean>(() => this.installerState() === 'ready');
+  readonly canInstall = computed<boolean>(() => !this.installed() && this.installerReady());
 
   readonly plan = computed<InstallPlan>(() => {
     const v = this.versions.find((x) => x.chart === this.selectedChart()) ?? this.versions[0];

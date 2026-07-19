@@ -17,7 +17,7 @@
 
 ## OpenSearch 0-Stage Flow
 
-1. Admin opens Foundation FSS engine catalog.
+1. Admin opens the Foundation PFS module catalog.
 2. Admin selects OpenSearch.
 3. Foundation control-plane sets `FoundationModel/data.spec.engines.opensearch=enabled`.
 4. Control-plane reconciles OpenSearch StatefulSet and Service in `opensphere-foundation`.
@@ -35,4 +35,3 @@
 - Registry publishes `opensearch` and `samba-ad` with `keyId=opensphere-plugins-v2`.
 - OpenSearch plugin `/healthz`: `200 ok`
 - Samba-AD plugin `/healthz`: `200 ok`
-

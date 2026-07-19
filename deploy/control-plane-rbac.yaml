@@ -1,8 +1,44 @@
-# foundation-control-plane의 관리 번들 배포 권한(opensphere-foundation ns 한정 Role).
+# foundation-control-plane의 계약 watch/status 및 관리 번들 배포 권한.
 # 2026-07-06: 라이브에만 있던 Role을 리포 정본화(drift 해소 — 감사 S2와 동일 원칙) +
 #   Samba-AD operand 편입(identity 번들)으로 persistentvolumeclaims 추가.
 #   ⚠️ PVC verbs에 delete/deletecollection 미포함 — withdraw 회수에서도 AD 데이터(SAM DB) 보존
 #   (identity_bundle.yaml PVC 주석·bundleKinds와 동일 정책).
+apiVersion: v1
+kind: Namespace
+metadata: { name: opensphere-system }
+---
+apiVersion: v1
+kind: Namespace
+metadata: { name: opensphere-foundation }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: foundation-control-plane, namespace: opensphere-system }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: foundation-control-plane-core }
+rules:
+  - apiGroups: ["foundation.opensphere.io"]
+    resources: [foundationmodels, foundationclaims, foundationbindings]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: ["foundation.opensphere.io"]
+    resources: [foundationmodels/status, foundationclaims/status, foundationbindings/status]
+    verbs: [get, update, patch]
+  - apiGroups: ["foundation.opensphere.io"]
+    resources: [foundationclaims/finalizers, foundationbindings/finalizers]
+    verbs: [update]
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: foundation-control-plane-core }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: foundation-control-plane-core }
+subjects:
+  - { kind: ServiceAccount, name: foundation-control-plane, namespace: opensphere-system }
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -27,6 +63,16 @@ rules:
   - apiGroups: ["postgresql.cnpg.io"]
     resources: [clusters, poolers, databases]
     verbs: [get, list, watch, create, patch, delete, deletecollection]
+  - apiGroups: ["psmdb.percona.com"]
+    resources: [perconaservermongodbs]
+    verbs: [get, list, watch, create, patch, delete, deletecollection]
   - apiGroups: [""]
     resources: [secrets]
     verbs: [get, list, watch, create, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: { name: foundation-control-plane-deployer, namespace: opensphere-foundation }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: foundation-control-plane-deployer }
+subjects:
+  - { kind: ServiceAccount, name: foundation-control-plane, namespace: opensphere-system }

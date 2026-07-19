@@ -5,16 +5,17 @@
   "hostRef": "main",
   "hostApiVersion": "1.0.0",
   "hostCompat": ">=1.0.0 <2.0.0",
-  "version": "0.1.0",
-  "title": "Foundation",
-  "description": "OpenSphere Foundation subShell.",
+  "version": "0.2.0-edge.8",
+  "title": "Platform Foundation Service Stack",
+  "description": "OpenSphere PFS lifecycle and foundation service module host.",
   "entry": "ui-shell.plugin.js",
-  "entrySha256": "f8fcc1a39f47a60eda8579b55d9309216ede5efdab0c3e7a1d4ca1ab373a5022",
+  "entrySha256": "461cc4838485b8d55024f5f3310fa7447ef2992a9f6e71d52dba1b9dbc5bf10f",
   "shellCompat": ">=0.2.0 <0.9.0",
-  "sdkVersion": "0.3.6",
+  "sdkVersion": "0.2.0",
   "permissions": [
     "page:register",
-    "api:proxy"
+    "api:proxy",
+    "manual:contribute"
   ],
   "nav": {
     "band": "운영 Operate",
@@ -41,9 +42,9 @@
       "reason": "Foundation CLI manifest is not published"
     },
     "manual": {
-      "enabled": false,
-      "mode": "none",
-      "reason": "Foundation Manual contribution is not published"
+      "enabled": true,
+      "sourceId": "plugin:foundation",
+      "mode": "runtime"
     },
     "search": {
       "enabled": false,

@@ -11,7 +11,9 @@ export const OTEL_VERSIONS: OtelVersion[] = [
   { chart: '0.111.0', app: '0.111.0', note: '기존 배선 이미지와 동일 태그' },
 ];
 
-const NS = 'opensphere-otel-collector';
+// PFS member operands share one ownership and policy boundary. The Helm operator
+// itself remains external, but the Collector workload belongs here.
+const NS = 'opensphere-foundation';
 
 export interface InstallPlan { chart: string; app: string; namespace: string; image: string; imageOrigin: string }
 
@@ -89,8 +91,8 @@ export class OtelService {
     const v = this.versions.find((x) => x.chart === this.selectedChart()) ?? this.versions[0];
     return {
       chart: v.chart, app: v.app, namespace: NS,
-      image: 'ghcr.io/opensphere-platform/mirror/opentelemetry-collector-contrib:0.111.0',
-      imageOrigin: 'otel/opentelemetry-collector-contrib:0.111.0 (기존 배선 이미지 재사용 — 별도 미러 불필요)',
+      image: `ghcr.io/opensphere-platform/mirror/opentelemetry-collector-contrib:${v.app}`,
+      imageOrigin: `otel/opentelemetry-collector-contrib:${v.app} (OpenSphere curated GHCR mirror)`,
     };
   });
 
@@ -128,7 +130,7 @@ export class OtelService {
           values: {
             mode: 'deployment',
             command: { name: 'otelcol-contrib' },
-            image: { repository: 'ghcr.io/opensphere-platform/mirror/opentelemetry-collector-contrib', tag: '0.111.0' },
+            image: { repository: 'ghcr.io/opensphere-platform/mirror/opentelemetry-collector-contrib', tag: v.app },
             imagePullSecrets: [{ name: 'ghcr-pull' }],
           },
         },

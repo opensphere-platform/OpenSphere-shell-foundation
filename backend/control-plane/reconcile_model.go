@@ -254,5 +254,6 @@ func bundleKinds() []schema.GroupVersionKind {
 		{Group: "networking.k8s.io", Version: "v1", Kind: "NetworkPolicy"},
 		cnpgClusterGVK, // data hybrid-wrap: CloudNativePG Cluster CR(라벨 회수)
 		cnpgPoolerGVK,  // data: PgBouncer Pooler CR(라벨 회수)
+		psmdbGVK,       // data: PerconaServerMongoDB CR(라벨 회수)
 	}
 }

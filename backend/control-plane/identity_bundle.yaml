@@ -68,6 +68,8 @@ spec:
     spec:
       serviceAccountName: foundation-identity-keycloak
       automountServiceAccountToken: false   # Keycloak은 k8s API 불필요 — 토큰 미마운트(블래스트 반경 축소)
+      imagePullSecrets:
+        - name: opensphere-ghcr-pull
       securityContext: { runAsNonRoot: true }
       containers:
         - name: keycloak

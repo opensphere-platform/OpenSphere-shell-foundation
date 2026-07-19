@@ -8,11 +8,12 @@ import Rule16 from '@carbon/icons/es/rule/16';
 import FlowConnection16 from '@carbon/icons/es/flow--connection/16';
 import CloudServiceManagement16 from '@carbon/icons/es/cloud--service-management/16';
 import WarningAlt16 from '@carbon/icons/es/warning--alt/16';
+import { PluginPageHeaderComponent, PluginPageHeaderModel } from '../shared/plugin-page-shell.component';
 
 @Component({
   selector: 'app-control-plane',
   standalone: true,
-  imports: [CommonModule, ClarityModule, CarbonIcon],
+  imports: [CommonModule, ClarityModule, CarbonIcon, PluginPageHeaderComponent],
   styles: [`
     .cp-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1rem; }
     .cp-title { display:flex; align-items:center; gap:.45rem; }
@@ -56,17 +57,8 @@ import WarningAlt16 from '@carbon/icons/es/warning--alt/16';
     @media (max-width: 980px) { .cp-strip, .cp-grid, .cp-admin { grid-template-columns:1fr; } .cp-head { flex-direction:column; } }
   `],
   template: `
+    <osp-plugin-page-header [model]="headerModel()" headingId="foundation-control-plane-title" />
     <div class="cp-head">
-      <div>
-        <div class="cp-title">
-          <os-cicon [icon]="iFlow" [size]="20"></os-cicon>
-          <h2>Control Plane <span class="label label-info">Foundation authority</span></h2>
-        </div>
-        <p class="cp-sub">
-          Foundation control-plane은 FSS 엔진 사이의 Claim, Binding, reconciler, write-path 상태를 책임진다.
-          이 화면은 Samba-AD 같은 provider가 왜 설치 전 BLOCK 되는지와 누가 처리해야 하는지를 표시한다.
-        </p>
-      </div>
       <div class="cp-actions">
         <button class="btn btn-sm" type="button" [disabled]="svc.busy()" (click)="svc.refresh()">
           <span class="spinner spinner-inline" *ngIf="svc.busy()"></span>
@@ -199,6 +191,16 @@ export class ControlPlaneComponent {
   readonly iWarn = WarningAlt16;
 
   ngOnInit(): void { this.svc.start(); }
+
+  headerModel(): PluginPageHeaderModel {
+    const blocked = this.svc.blockers().length;
+    return {
+      name: 'Control Plane', logo: '', monogram: 'CP', capability: 'platform.authority',
+      description: 'PFS 모듈 사이의 Claim, Binding, reconciler와 GitOps/Crossplane write-path 상태를 관리합니다.',
+      lifecycle: blocked ? 'Blocked' : 'Ready', lifecycleClass: blocked ? 'label-danger' : 'label-success',
+      version: 'contract v1', profile: 'authoritative', namespace: 'opensphere-system',
+    };
+  }
 
   stateLabel(s: CpState): string {
     return { pass: 'Ready', warn: 'Warning', fail: 'Blocked', loading: 'Loading' }[s];

@@ -18,7 +18,7 @@ import (
 const (
 	pgClusterName = "foundation-data-pg"
 	pgPoolerName  = "foundation-data-pg-pooler"
-	pgDefaultRepo = "ghcr.io/cloudnative-pg/postgresql"
+	pgDefaultRepo = "ghcr.io/opensphere-platform/mirror/postgresql"
 )
 
 var (
@@ -184,79 +184,103 @@ func buildDataBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructure
 	o := dataParams(fm, cfg)
 	owner := fm.GetName()
 	ns := pgNS(fm, cfg)
+	objs := []*unstructured.Unstructured{}
 
-	storage := map[string]interface{}{"size": o.storageSize, "storageClass": o.storageClass}
-	spec := map[string]interface{}{
-		"instances":             o.instances,
-		"imageName":             o.image,
-		"storage":               storage,
-		"enableSuperuserAccess": o.superuser,
-		"bootstrap":             map[string]interface{}{"initdb": map[string]interface{}{"database": "appdb", "owner": "appuser"}},
-		"postgresql":            map[string]interface{}{"parameters": o.pgParams},
-		"monitoring":            map[string]interface{}{"enablePodMonitor": o.monitoring},
-	}
-	if o.walSize != "" {
-		spec["walStorage"] = map[string]interface{}{"size": o.walSize, "storageClass": o.storageClass}
-	}
-	if o.resources != nil {
-		spec["resources"] = o.resources
-	}
-	if o.backup.enabled {
-		// CNPG barmanObjectStore — S3 대상은 명시 선언(spec.parameters.backup)에서만 온다.
-		// Backbone RustFS 재사용 여부(§8 D-02)를 이 컨트롤러가 대신 결정하지 않는다 — 자격증명은
-		// 기존 Secret(secretName)을 참조만 하고 생성하지 않는다(크리덴셜 발급은 범위 밖).
-		spec["backup"] = map[string]interface{}{
-			"retentionPolicy": o.backup.retentionPolicy,
-			"barmanObjectStore": map[string]interface{}{
-				"destinationPath": o.backup.destinationPath,
-				"endpointURL":     o.backup.endpointURL,
-				"s3Credentials": map[string]interface{}{
-					"accessKeyId":     map[string]interface{}{"name": o.backup.secretName, "key": "ACCESS_KEY_ID"},
-					"secretAccessKey": map[string]interface{}{"name": o.backup.secretName, "key": "ACCESS_SECRET_KEY"},
+	if engineEnabled(fm, "postgres") {
+		storage := map[string]interface{}{"size": o.storageSize, "storageClass": o.storageClass}
+		spec := map[string]interface{}{
+			"instances":             o.instances,
+			"imageName":             o.image,
+			"storage":               storage,
+			"enableSuperuserAccess": o.superuser,
+			"bootstrap":             map[string]interface{}{"initdb": map[string]interface{}{"database": "appdb", "owner": "appuser"}},
+			"postgresql":            map[string]interface{}{"parameters": o.pgParams},
+			"monitoring":            map[string]interface{}{"enablePodMonitor": o.monitoring},
+		}
+		if o.walSize != "" {
+			spec["walStorage"] = map[string]interface{}{"size": o.walSize, "storageClass": o.storageClass}
+		}
+		if o.resources != nil {
+			spec["resources"] = o.resources
+		}
+		if o.backup.enabled {
+			// CNPG barmanObjectStore — S3 대상은 명시 선언(spec.parameters.backup)에서만 온다.
+			// Backbone RustFS 재사용 여부(§8 D-02)를 이 컨트롤러가 대신 결정하지 않는다 — 자격증명은
+			// 기존 Secret(secretName)을 참조만 하고 생성하지 않는다(크리덴셜 발급은 범위 밖).
+			spec["backup"] = map[string]interface{}{
+				"retentionPolicy": o.backup.retentionPolicy,
+				"barmanObjectStore": map[string]interface{}{
+					"destinationPath": o.backup.destinationPath,
+					"endpointURL":     o.backup.endpointURL,
+					"s3Credentials": map[string]interface{}{
+						"accessKeyId":     map[string]interface{}{"name": o.backup.secretName, "key": "ACCESS_KEY_ID"},
+						"secretAccessKey": map[string]interface{}{"name": o.backup.secretName, "key": "ACCESS_SECRET_KEY"},
+					},
 				},
-			},
+			}
+		}
+		cluster := &unstructured.Unstructured{Object: map[string]interface{}{
+			"apiVersion": "postgresql.cnpg.io/v1", "kind": "Cluster",
+			"metadata": map[string]interface{}{"name": pgClusterName, "namespace": ns},
+			"spec":     spec,
+		}}
+		stampLabels(cluster, "data", owner)
+		objs = append(objs, cluster)
+
+		// 풀러(PgBouncer) — 선언형 Pooler CR(enable 시).
+		if o.poolerEnabled {
+			pooler := &unstructured.Unstructured{Object: map[string]interface{}{
+				"apiVersion": "postgresql.cnpg.io/v1", "kind": "Pooler",
+				"metadata": map[string]interface{}{"name": pgPoolerName, "namespace": ns},
+				"spec": map[string]interface{}{
+					"cluster":   map[string]interface{}{"name": pgClusterName},
+					"instances": o.poolerInstances,
+					"type":      "rw",
+					"pgbouncer": map[string]interface{}{"poolMode": o.poolerMode},
+				},
+			}}
+			stampLabels(pooler, "data", owner)
+			objs = append(objs, pooler)
+		}
+
+		// 확장: CNPG Database CR로 appdb에 선언형 부여(CREATE EXTENSION을 execInPod 대신 CR로 — INV-1).
+		if len(o.exts) > 0 {
+			extList := make([]interface{}, 0, len(o.exts))
+			for _, e := range o.exts {
+				extList = append(extList, map[string]interface{}{"name": e, "ensure": "present"})
+			}
+			db := &unstructured.Unstructured{Object: map[string]interface{}{
+				"apiVersion": "postgresql.cnpg.io/v1", "kind": "Database",
+				"metadata": map[string]interface{}{"name": pgClusterName + "-appdb", "namespace": ns},
+				"spec": map[string]interface{}{
+					"cluster": map[string]interface{}{"name": pgClusterName},
+					"name":    "appdb", "owner": "appuser", "ensure": "present", "extensions": extList,
+				},
+			}}
+			stampLabels(db, "data", owner)
+			objs = append(objs, db)
 		}
 	}
-	cluster := &unstructured.Unstructured{Object: map[string]interface{}{
-		"apiVersion": "postgresql.cnpg.io/v1", "kind": "Cluster",
-		"metadata": map[string]interface{}{"name": pgClusterName, "namespace": ns},
-		"spec":     spec,
-	}}
-	stampLabels(cluster, "data", owner)
-	objs := []*unstructured.Unstructured{cluster}
-
-	// 풀러(PgBouncer) — 선언형 Pooler CR(enable 시).
-	if o.poolerEnabled {
-		pooler := &unstructured.Unstructured{Object: map[string]interface{}{
-			"apiVersion": "postgresql.cnpg.io/v1", "kind": "Pooler",
-			"metadata": map[string]interface{}{"name": pgPoolerName, "namespace": ns},
-			"spec": map[string]interface{}{
-				"cluster":   map[string]interface{}{"name": pgClusterName},
-				"instances": o.poolerInstances,
-				"type":      "rw",
-				"pgbouncer": map[string]interface{}{"poolMode": o.poolerMode},
-			},
-		}}
-		stampLabels(pooler, "data", owner)
-		objs = append(objs, pooler)
-	}
-
-	// 확장: CNPG Database CR로 appdb에 선언형 부여(CREATE EXTENSION을 execInPod 대신 CR로 — INV-1).
-	if len(o.exts) > 0 {
-		extList := make([]interface{}, 0, len(o.exts))
-		for _, e := range o.exts {
-			extList = append(extList, map[string]interface{}{"name": e, "ensure": "present"})
+	if engineEnabled(fm, "psmdb") {
+		x, err := buildPSMDBBundle(cfg, fm)
+		if err != nil {
+			return nil, err
 		}
-		db := &unstructured.Unstructured{Object: map[string]interface{}{
-			"apiVersion": "postgresql.cnpg.io/v1", "kind": "Database",
-			"metadata": map[string]interface{}{"name": pgClusterName + "-appdb", "namespace": ns},
-			"spec": map[string]interface{}{
-				"cluster": map[string]interface{}{"name": pgClusterName},
-				"name":    "appdb", "owner": "appuser", "ensure": "present", "extensions": extList,
-			},
-		}}
-		stampLabels(db, "data", owner)
-		objs = append(objs, db)
+		objs = append(objs, x...)
+	}
+	if engineEnabled(fm, "valkey") {
+		x, err := buildValkeyBundle(cfg, fm)
+		if err != nil {
+			return nil, err
+		}
+		objs = append(objs, x...)
+	}
+	if engineEnabled(fm, "rustfs") {
+		x, err := buildRustFSBundle(cfg, fm)
+		if err != nil {
+			return nil, err
+		}
+		objs = append(objs, x...)
 	}
 	if engineEnabled(fm, "opensearch") {
 		osObjs, err := buildOpenSearchBundle(cfg, fm)
@@ -276,16 +300,24 @@ func (r *modelReconciler) getPGCluster(ctx context.Context, ns string) (*unstruc
 
 // dataReady — CNPG Cluster status.readyInstances >= spec.instances(전 인스턴스 Ready). 설치 NS 기준.
 func dataReady(ctx context.Context, r *modelReconciler, fm *unstructured.Unstructured) bool {
-	c, err := r.getPGCluster(ctx, pgNS(fm, r.cfg))
-	if err != nil {
-		return false
+	ready := true
+	if engineEnabled(fm, "postgres") {
+		c, err := r.getPGCluster(ctx, pgNS(fm, r.cfg))
+		if err != nil {
+			return false
+		}
+		inst, _, _ := unstructured.NestedInt64(c.Object, "spec", "instances")
+		rdy, _, _ := unstructured.NestedInt64(c.Object, "status", "readyInstances")
+		if inst <= 0 {
+			inst = 1
+		}
+		ready = ready && rdy >= inst
 	}
-	inst, _, _ := unstructured.NestedInt64(c.Object, "spec", "instances")
-	rdy, _, _ := unstructured.NestedInt64(c.Object, "status", "readyInstances")
-	if inst <= 0 {
-		inst = 1
+	for _, id := range []string{"psmdb", "valkey", "rustfs"} {
+		if engineEnabled(fm, id) {
+			ready = ready && engineWorkloadReady(ctx, r, fm, id)
+		}
 	}
-	ready := rdy >= inst
 	if engineEnabled(fm, "opensearch") {
 		ready = ready && opensearchReady(ctx, r, fm)
 	}
@@ -294,13 +326,22 @@ func dataReady(ctx context.Context, r *modelReconciler, fm *unstructured.Unstruc
 
 // dataGone — Cluster CR 소멸(NotFound) 확인(회수 완료 판정). 설치 NS 기준.
 func dataGone(ctx context.Context, r *modelReconciler, fm *unstructured.Unstructured) bool {
-	_, err := r.getPGCluster(ctx, pgNS(fm, r.cfg))
-	pgGone := apierrors.IsNotFound(err)
+	pgGone := true
+	if engineEnabled(fm, "postgres") {
+		_, err := r.getPGCluster(ctx, pgNS(fm, r.cfg))
+		pgGone = apierrors.IsNotFound(err)
+	}
+	otherGone := true
+	for _, id := range []string{"psmdb", "valkey", "rustfs"} {
+		if engineEnabled(fm, id) {
+			otherGone = otherGone && engineWorkloadGone(ctx, r, fm, id)
+		}
+	}
 	osGone := true
 	if engineEnabled(fm, "opensearch") {
 		osGone = opensearchGone(ctx, r, fm)
 	}
-	return pgGone && osGone
+	return pgGone && otherGone && osGone
 }
 
 // observeData — 전부 Cluster.status/spec 실측(위조 0). 옵션 적용 결과를 라이브로 노출.
@@ -361,23 +402,31 @@ func observeData(ctx context.Context, r *modelReconciler, fm *unstructured.Unstr
 	}
 	rtt := mk("connection_rtt_ms", "ms", "n/a", false, "PgClaim→Binding probe(P6)")
 	rtt["note"] = "PgClaim 연결 시 측정"
-	observed := []interface{}{
-		up,
-		mk("pg_namespace", "", pgNS(fm, r.cfg), true, "spec.parameters.namespace"),
-		mk("pg_topology", "", topo, inst >= 1, "Cluster.spec.instances"),
-		mk("pg_instances", "count", fmt.Sprintf("%d", inst), inst >= 1, "Cluster.spec.instances"),
-		mk("pg_ready_instances", "count", fmt.Sprintf("%d", rdy), rdy >= 1, "Cluster.status.readyInstances"),
-		st,
-		mk("pg_version", "", imageTag(image), image != "", "Cluster.spec.imageName"),
-		mk("pg_storage", "", storVal, true, "Cluster.spec.storage"),
-		mk("pg_resources", "", resVal, true, "Cluster.spec.resources"),
-		mk("pg_tuning", "", strings.Join(tuneParts, ", "), true, "Cluster.spec.postgresql.parameters"),
-		mk("pg_pooler", "", poolVal, true, "Pooler CR"),
-		mk("pg_superuser", "bool", boolStr(o.superuser), true, "Cluster.spec.enableSuperuserAccess"),
-		mk("pg_monitoring", "bool", boolStr(o.monitoring), true, "Cluster.spec.monitoring"),
-		mk("pg_extensions", "", extVal, true, "spec.parameters.extensions→Database CR"),
-		mk("bind_ready_ratio", "ratio", ratioVal, healthyRatio, "readyInstances/spec.instances"),
-		rtt,
+	observed := []interface{}{}
+	if engineEnabled(fm, "postgres") {
+		observed = append(observed,
+			up,
+			mk("pg_namespace", "", pgNS(fm, r.cfg), true, "spec.parameters.namespace"),
+			mk("pg_topology", "", topo, inst >= 1, "Cluster.spec.instances"),
+			mk("pg_instances", "count", fmt.Sprintf("%d", inst), inst >= 1, "Cluster.spec.instances"),
+			mk("pg_ready_instances", "count", fmt.Sprintf("%d", rdy), rdy >= 1, "Cluster.status.readyInstances"),
+			st,
+			mk("pg_version", "", imageTag(image), image != "", "Cluster.spec.imageName"),
+			mk("pg_storage", "", storVal, true, "Cluster.spec.storage"),
+			mk("pg_resources", "", resVal, true, "Cluster.spec.resources"),
+			mk("pg_tuning", "", strings.Join(tuneParts, ", "), true, "Cluster.spec.postgresql.parameters"),
+			mk("pg_pooler", "", poolVal, true, "Pooler CR"),
+			mk("pg_superuser", "bool", boolStr(o.superuser), true, "Cluster.spec.enableSuperuserAccess"),
+			mk("pg_monitoring", "bool", boolStr(o.monitoring), true, "Cluster.spec.monitoring"),
+			mk("pg_extensions", "", extVal, true, "spec.parameters.extensions→Database CR"),
+			mk("bind_ready_ratio", "ratio", ratioVal, healthyRatio, "readyInstances/spec.instances"),
+			rtt,
+		)
+	} else {
+		observed = append(observed, mk("pg_up", "bool", "n/a", false, "spec.parameters.engines.postgres"))
+	}
+	for _, id := range []string{"psmdb", "valkey", "rustfs"} {
+		observed = append(observed, observeDataEngine(ctx, r, fm, id)...)
 	}
 	observed = append(observed, observeOpenSearch(ctx, r, fm)...)
 	return observed, nil

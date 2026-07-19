@@ -158,8 +158,21 @@ pg-metric { display: block; height: 100%; }
 .stack-def-h { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .stack-def-h h3 { margin: 0; font-size: 1rem; font-weight: 600; color: var(--os-ink); }
 .stack-def p { margin: 0 0 12px; color: var(--os-text-sec); font-size: 0.82rem; line-height: 1.5; }
-.stack-def--bss { border-top: 3px solid var(--os-brand-500); }
-.stack-def--fss { border-top: 3px solid var(--os-success); }
+.stack-def--his { border-top: 3px solid var(--os-brand-500); cursor: default; }
+.stack-def--his:hover { border-color: var(--os-border); box-shadow: none; }
+.stack-def--pfs { border-top: 3px solid var(--os-success); }
+.stack-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.his-req { margin: 0 0 16px; background: #fff; border: 1px solid var(--os-border); border-radius: 6px; overflow: hidden; }
+.his-req-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--os-border); }
+.his-req-head strong { color: var(--os-ink); }
+.his-req-head span { margin-left: 8px; color: var(--os-muted); font-size: 0.76rem; }
+.his-req-row { display: grid; grid-template-columns: minmax(10rem, 1.1fr) 7rem 8rem 6rem minmax(14rem, 1.5fr); gap: 10px; align-items: center; min-height: 2.7rem; padding: 8px 14px; border-top: 1px solid #eef0f3; font-size: 0.78rem; }
+.his-req-row:first-of-type { border-top: 0; }
+.his-req-row--head { min-height: 2.1rem; background: #f4f4f4; color: var(--os-text-sec); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
+.his-req-name { font-weight: 600; color: var(--os-ink); }
+.his-req-message { color: var(--os-text-sec); line-height: 1.35; }
+.his-req-empty { padding: 14px; color: var(--os-text-sec); font-size: 0.8rem; }
+.his-req-error { padding: 10px 14px; background: #fff1f1; border-top: 1px solid #da1e28; color: #a2191f; font-size: 0.8rem; }
 .stack-inline { display: grid; grid-template-columns: minmax(18rem, 0.9fr) minmax(0, 1.1fr); gap: 14px; align-items: center; margin: 0 0 12px; padding: 14px 16px; background: #fff; border: 1px solid var(--os-border); border-radius: 6px; }
 .stack-inline strong { display: block; margin: 2px 0 4px; color: var(--os-ink); font-size: 0.92rem; }
 .stack-inline p { margin: 0; color: var(--os-text-sec); font-size: 0.78rem; line-height: 1.45; }
@@ -169,7 +182,7 @@ pg-metric { display: block; height: 100%; }
 
 @media (max-width: 1100px) { .ov-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ov-reg-row { grid-template-columns: minmax(8rem, 1fr) minmax(8rem, 1fr) 6rem 7rem 6rem; } .ov-reg-row .os-mono, .ov-reg-head span:nth-child(5) { display: none; } }
 @media (max-width: 900px) { .ov-hero { grid-template-columns: 1fr; } .ov-domains { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 760px) { .stack-defs, .stack-inline { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .stack-defs, .stack-inline { grid-template-columns: 1fr; } .his-req-row { grid-template-columns: 1fr 1fr; } .his-req-row--head { display: none; } .his-req-message { grid-column: 1 / -1; } }
 @media (max-width: 620px) { .ov-domains, .ov-steps { grid-template-columns: 1fr; } .ov-reg-row { grid-template-columns: 1fr; align-items: start; } .ov-reg-head { display: none; } .ov-reg-actions { justify-self: start; } }
 
 /* ── Host 연결(Connectivity) 카탈로그 — ArtifactHub식 로고 카드 ── */
@@ -201,6 +214,29 @@ pg-metric { display: block; height: 100%; }
 .hc-card.hc-clickable { cursor: pointer; }
 .hc-card.hc-clickable:hover { border-color: var(--os-brand-500); }
 .hc-open { font-size: 0.72rem; font-weight: 600; color: var(--os-brand-500); margin-left: 8px; white-space: nowrap; }
+.delivery-card { width: 100%; color: inherit; font: inherit; text-align: left; }
+
+/* Foundation 전 섹터 Phase 1 관리 표면 — plugin별 콘텐츠는 달라도 머리·탭·작업영역은 동일하다. */
+.rm-back { margin: 0 0 8px; padding-left: 0; min-width: 0; }
+.rm-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+.rm-panel, .rm-work { background: #fff; border: 1px solid var(--os-border); border-radius: 6px; padding: 16px 18px; }
+.rm-panel h2, .rm-work h2 { margin: 0 0 10px; color: var(--os-ink); font-size: 1rem; font-weight: 600; }
+.rm-panel h3 { margin: 0 0 6px; color: var(--os-ink); font-size: 0.88rem; font-weight: 600; }
+.rm-panel p, .rm-work p { margin: 0 0 12px; color: var(--os-text-sec); font-size: 0.8rem; line-height: 1.5; }
+.rm-panel dl { display: grid; grid-template-columns: 5rem 1fr; gap: 6px 10px; margin: 12px 0 0; font-size: 0.76rem; }
+.rm-panel dt { color: var(--os-muted); } .rm-panel dd { margin: 0; color: var(--os-ink); }
+.rm-list { margin: 0 0 12px; padding-left: 1.1rem; color: var(--os-text-sec); font-size: 0.78rem; line-height: 1.65; }
+.rm-work { margin: 14px 0; }
+.rm-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 0 0 14px; }
+.rm-form label { display: flex; flex-direction: column; gap: 5px; color: var(--os-text-sec); font-size: 0.74rem; font-weight: 600; }
+.rm-form input, .rm-form select { min-height: 2rem; padding: 5px 8px; border: 1px solid var(--os-border); background: #f4f4f4; color: var(--os-text-sec); }
+.rm-topology { display: grid; gap: 1px; background: var(--os-border); border: 1px solid var(--os-border); }
+.rm-topology article { display: flex; align-items: center; justify-content: space-between; min-height: 3rem; padding: 9px 12px; background: #fff; }
+.rm-node { color: var(--os-ink); font-size: 0.82rem; font-weight: 600; }
+.rm-empty { display: flex; flex-direction: column; gap: 4px; min-height: 8rem; align-items: center; justify-content: center; background: #fafbfd; color: var(--os-muted); text-align: center; }
+.rm-empty b { color: var(--os-ink); }
+
+@media (max-width: 900px) { .rm-grid, .rm-form { grid-template-columns: 1fr; } }
 
 @media (max-width: 620px) { .hc-section-head, .hc-grid { grid-template-columns: 1fr; } }
 
@@ -285,3 +321,112 @@ pg-metric { display: block; height: 100%; }
 .vl-log-empty { color: #6b8a99; }
 
 @media (max-width: 760px) { .vl-hero { grid-template-columns: 1fr; } .vl-hero__art { display: none; } .vl-tile-grid { grid-template-columns: 1fr; } }
+
+/* ── 모든 PFS plugin 공통 머리/탭 — PostgreSQL 수준 단일 표면 계약 ── */
+.pgp-head, .pfs-plugin-head { display: grid; grid-template-columns: minmax(24rem, 1fr) auto; gap: 28px; align-items: center; min-height: 6rem;
+  margin: 0 -0.2rem; padding: 0 0.2rem 18px; background: #fff; border-bottom: 1px solid var(--os-border); }
+.pgp-brand, .pfs-plugin-brand { display: flex; align-items: center; gap: 18px; min-width: 0; }
+.pgp-brand > div:last-child, .pfs-plugin-brand > div:last-child { min-width: 0; }
+.pgp-logo, .pfs-plugin-logo { width: 68px; height: 68px; flex: 0 0 68px; display: grid; place-items: center; border: 1px solid #b9c6dd; border-radius: 18px; background: #fff; }
+.pgp-logo img, .pfs-plugin-logo img { width: 50px; height: 50px; object-fit: contain; }
+.pfs-plugin-monogram { color: var(--os-brand-500); font-size: 1rem; font-weight: 700; letter-spacing: -0.02em; }
+.pgp-brand h1, .pfs-plugin-brand h1 { margin: 2px 0 3px; color: var(--os-ink); font-size: 1.75rem; font-weight: 400; line-height: 1.12; }
+.pgp-brand p, .pfs-plugin-brand p { margin: 0; max-width: 45rem; color: var(--os-text-sec); font-size: 0.8rem; line-height: 1.45; white-space: normal; }
+.pgp-release, .pfs-plugin-release { display: grid; grid-template-columns: repeat(4, minmax(7.5rem, auto)); margin: 0; }
+.pgp-release div, .pfs-plugin-release div { min-height: 3.4rem; padding: 0 14px; border-left: 1px solid var(--os-border); }
+.pgp-release dt, .pfs-plugin-release dt { margin-bottom: 8px; color: var(--os-muted); font-size: 0.68rem; }
+.pgp-release dd, .pfs-plugin-release dd { margin: 0; color: var(--os-ink); font-size: 0.82rem; }
+
+.pgp-tabs, .pfs-plugin-tabs { display: flex; gap: 0; overflow-x: auto; margin: 0 0 18px; background: #fff; border-bottom: 1px solid var(--os-border); }
+.pgp-tab, .pfs-plugin-tab { display: inline-flex; align-items: center; gap: 6px; min-height: 2.55rem; padding: 0 12px; border: 0; border-bottom: 2px solid transparent;
+  background: transparent; color: var(--os-text-sec); font: inherit; font-size: 0.78rem; white-space: nowrap; cursor: pointer; }
+.pgp-tab:hover:not(:disabled), .pfs-plugin-tab:hover:not(:disabled) { color: var(--os-ink); background: #f7f8fb; }
+.pgp-tab.active, .pfs-plugin-tab.active { color: var(--os-ink); border-bottom-color: var(--os-brand-500); font-weight: 600; }
+.pgp-tab:disabled, .pfs-plugin-tab:disabled { color: #a8a8a8; cursor: not-allowed; }
+
+/* PostgreSQL pilot: identity, release metadata, and local navigation are one page surface. */
+.pgp-page-frame { margin: 0 0 18px; overflow: hidden; background: #fff; border: 0; box-shadow: none; }
+.pgp-page-frame .pfs-plugin-head { min-height: 6rem; margin: 0; padding: 14px 10px 16px; border: 0; }
+.pgp-page-frame .pfs-plugin-logo { border: 0; border-radius: 0; background: transparent; }
+.pgp-page-frame .pfs-plugin-logo img { width: 55px; height: 55px; }
+.pgp-page-frame .pfs-plugin-tabs { margin: 0; padding: 0; background: transparent; border-top: 0; border-bottom: 1px solid var(--os-border); }
+.pgp-page-frame .pfs-plugin-tab { min-height: 2.65rem; }
+.pgp-page-frame .pfs-plugin-tab:hover:not(:disabled) { background: transparent; }
+.pgp-page-frame .pfs-plugin-tab.active { background: transparent; }
+
+.pgp-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 0 0 16px; background: var(--os-border); border: 1px solid var(--os-border); }
+.pgp-step { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; min-height: 4.35rem; padding: 10px 14px; border: 0; text-align: left; background: #fff; color: var(--os-ink); cursor: pointer; }
+.pgp-step:hover:not(:disabled) { background: #f7f9ff; }
+.pgp-step:disabled { cursor: not-allowed; color: #8d8d8d; }
+.pgp-step-n { display: grid; place-items: center; width: 1.7rem; height: 1.7rem; border-radius: 50%; background: #e8ebf3; color: #525252; font-size: 0.72rem; font-weight: 700; }
+.pgp-step.done .pgp-step-n { background: #defbe6; color: #0e6027; }
+.pgp-step.current { box-shadow: inset 0 -3px 0 var(--os-brand-500); }
+.pgp-step.current .pgp-step-n { background: var(--os-brand-500); color: #fff; }
+.pgp-step b { display: block; margin-bottom: 3px; font-size: 0.82rem; font-weight: 600; }
+.pgp-step small { display: block; color: var(--os-muted); font-size: 0.7rem; line-height: 1.35; }
+
+.pgp-dashboard { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.pgp-panel { min-height: 17rem; padding: 16px 18px; background: #fff; border: 1px solid var(--os-border); box-shadow: 0 2px 0 rgba(15,23,42,0.08); }
+.pgp-panel h2, .pgp-description h2 { margin: 0 0 8px; color: var(--os-ink); font-size: 1rem; font-weight: 600; }
+.pgp-panel > p, .pgp-description p { margin: 0 0 14px; color: var(--os-text-sec); font-size: 0.76rem; line-height: 1.5; }
+.pgp-status-list { display: grid; margin: 0 0 16px; border-top: 1px solid #eef0f3; }
+.pgp-status-list div, .pgp-policy-grid div { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 2.35rem; border-bottom: 1px solid #eef0f3; font-size: 0.76rem; }
+.pgp-status-list span, .pgp-policy-grid span { color: var(--os-text-sec); }
+.pgp-status-list b, .pgp-policy-grid b { color: #8d8d8d; font-weight: 600; text-align: right; }
+.pgp-status-list b.ok, .pgp-policy-grid b.ok { color: #198038; }
+.pgp-health { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 2px 10px; margin: 16px 0 18px; }
+.pgp-health strong { font-size: 2.5rem; font-weight: 300; color: var(--os-ink); }
+.pgp-health span { color: var(--os-muted); font-size: 0.72rem; }
+.pgp-health progress { grid-column: 1 / -1; width: 100%; height: 0.6rem; accent-color: #24a148; }
+.pgp-description { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(18rem, 0.6fr); gap: 32px; margin: 0 0 18px; padding: 14px 0 18px; border-bottom: 1px solid var(--os-border); }
+.pgp-description a, .pgp-description button { display: block; width: fit-content; margin: 3px 0; color: var(--os-brand-500); font-size: 0.76rem; }
+
+.pgp-workspace { max-width: 82rem; }
+.pgp-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.pgp-section-head h2 { margin: 3px 0 0; color: var(--os-ink); font-size: 1.45rem; font-weight: 400; }
+.pgp-operator-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.pgp-big { display: block; margin-bottom: 6px; color: var(--os-ink); font-size: 2.4rem; font-weight: 300; }
+.pgp-install-box { display: grid; grid-template-columns: minmax(16rem, 0.65fr) minmax(22rem, 1fr) auto; gap: 18px; align-items: end; padding: 18px; background: #fff; border: 1px solid var(--os-border); }
+.pgp-install-box .btn { display: inline-flex; align-items: center; gap: 6px; }
+
+.pgp-form { display: grid; gap: 14px; }
+.pgp-form fieldset { margin: 0; padding: 16px 18px 18px; background: #fff; border: 1px solid var(--os-border); }
+.pgp-form legend { padding: 0 6px; color: var(--os-ink); font-size: 0.86rem; font-weight: 600; }
+.pgp-form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.pgp-form label { display: flex; flex-direction: column; gap: 5px; color: var(--os-text-sec); font-size: 0.72rem; }
+.pgp-form label > span { font-weight: 600; }
+.pgp-form input:not([type=checkbox]), .pgp-form select { min-width: 0; width: 100%; min-height: 2rem; padding: 4px 7px; border: 0; border-bottom: 1px solid #8d8d8d; background: transparent; color: var(--os-ink); font: inherit; font-size: 0.78rem; }
+.pgp-form input:focus, .pgp-form select:focus { outline: 2px solid var(--os-brand-500); outline-offset: 1px; }
+.pgp-form input:disabled, .pgp-form select:disabled { color: #8d8d8d; background: #f4f4f4; }
+.pgp-form small { min-height: 2em; color: var(--os-muted); font-size: 0.66rem; line-height: 1.35; }
+.pgp-check-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.pgp-check-grid label { flex-direction: row; align-items: center; min-height: 2.4rem; padding: 8px 10px; border: 1px solid var(--os-border); background: #fafbfd; }
+.pgp-check-grid input { accent-color: var(--os-brand-500); }
+.pgp-progress-error { background: #da1e28; }
+
+@media (max-width: 1180px) {
+  .pgp-head, .pfs-plugin-head { grid-template-columns: 1fr; min-height: 11rem; }
+  .pgp-page-frame .pfs-plugin-head { min-height: 11rem; }
+  .pgp-release, .pfs-plugin-release { grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }
+  .pgp-brand p, .pgp-release dd, .pfs-plugin-brand p, .pfs-plugin-release dd { overflow-wrap: anywhere; }
+  .pgp-release dd, .pfs-plugin-release dd { min-width: 0; }
+  .pgp-release .label, .pfs-plugin-release .label { display: inline-flex; max-width: 100%; white-space: normal; text-align: center; }
+  .pgp-release .os-mono, .pfs-plugin-release .os-mono { white-space: normal; }
+  .pgp-dashboard { grid-template-columns: 1fr 1fr; }
+  .pgp-panel:last-child { grid-column: 1 / -1; min-height: auto; }
+  .pgp-form-grid, .pgp-check-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pgp-install-box { grid-template-columns: 1fr; align-items: start; }
+}
+@media (max-width: 760px) {
+  .pgp-brand, .pfs-plugin-brand { align-items: flex-start; }
+  .pgp-logo, .pfs-plugin-logo { width: 52px; height: 52px; flex-basis: 52px; border-radius: 12px; }
+  .pgp-logo img, .pfs-plugin-logo img { width: 38px; height: 38px; }
+  .pgp-head, .pfs-plugin-head { min-height: 15rem; gap: 16px; }
+  .pgp-page-frame .pfs-plugin-head { min-height: 15rem; padding: 14px 0; }
+  .pgp-page-frame .pfs-plugin-logo img { width: 42px; height: 42px; }
+  .pgp-page-frame .pfs-plugin-tabs { padding: 0; }
+  .pgp-release, .pfs-plugin-release { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pgp-steps, .pgp-dashboard, .pgp-description, .pgp-operator-grid, .pgp-form-grid, .pgp-check-grid { grid-template-columns: 1fr; }
+  .pgp-release div, .pfs-plugin-release div { border-left: 0; border-top: 1px solid var(--os-border); padding: 8px 6px; }
+  .pgp-panel:last-child { grid-column: auto; }
+}

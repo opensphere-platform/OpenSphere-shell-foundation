@@ -1,13 +1,13 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, ViewEncapsulation, computed, inject, signal } from '@angular/core';
 import { ClarityModule } from '@clr/angular';
-import { PostgresComponent } from './modules/postgres/postgres.component';
-import { RustfsComponent } from './modules/rustfs/rustfs.component';
+import { PostgresPluginComponent } from './modules/postgres/postgres-plugin.component';
+import { DataEnginePluginComponent } from './modules/data-engine/data-engine-plugin.component';
 import { KeycloakComponent } from './modules/identity/keycloak.component';
 import { FoundationOverviewComponent } from './foundation/overview.component';
-import { FoundationConnectivityComponent } from './foundation/connectivity.component';
 import { FoundationEnginesComponent } from './foundation/engines.component';
 import { ControlPlaneComponent } from './foundation/control-plane.component';
+import { FoundationDeliveryComponent } from './foundation/delivery.component';
 import { PluginOutletComponent } from './foundation/plugin-outlet.component';
 import { FoundationRegistryService } from './registry/foundation-registry.service';
 import { ViewRouter } from './view-router';
@@ -19,19 +19,18 @@ import UserMultiple16 from '@carbon/icons/es/user--multiple/16';
 import Search16 from '@carbon/icons/es/search/16';
 import ObjectStorage16 from '@carbon/icons/es/object-storage/16';
 import Password16 from '@carbon/icons/es/password/16';
-import Network416 from '@carbon/icons/es/network--4/16';
 import Cube16 from '@carbon/icons/es/cube/16';
 import FlowConnection16 from '@carbon/icons/es/flow--connection/16';
 
 // 좌 내비 아이콘 키 → Carbon 16px 디스크립터(os-cicon). AI Hub/shell-template/shell-base와 동일 방식
 // (@carbon/icons SVG 디스크립터 + CarbonIcon 렌더러. cds-icon 웹컴포넌트가 아니라 크래시와 무관).
 const ICON: Record<string, any> = {
-  overview: Home16, bss: Network416, engines: Cube16, control: FlowConnection16,
+  overview: Home16, modules: Cube16, control: FlowConnection16,
   data: Db2Database16, db: Db2Database16, search: Search16, storage: ObjectStorage16,
   identity: UserMultiple16, users: UserMultiple16, key: Password16,
 };
 
-interface NavChild { id: string; name: string; planned?: boolean }
+interface NavChild { id: string; name: string; planned?: boolean; module?: string; tab?: string }
 interface NavGroup { id: string; label: string; iconKey: string; children: NavChild[]; planned?: boolean }
 
 // AI/Comm은 아직 FOUNDATION_PLUGINS registry에 등록되지 않은 로드맵 도메인이라 정적 목록으로 노출.
@@ -52,7 +51,7 @@ interface NavGroup { id: string; label: string; iconKey: string; children: NavCh
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, ClarityModule, CarbonIcon, PostgresComponent, RustfsComponent, KeycloakComponent, FoundationOverviewComponent, FoundationConnectivityComponent, FoundationEnginesComponent, ControlPlaneComponent, PluginOutletComponent],
+  imports: [CommonModule, ClarityModule, CarbonIcon, PostgresPluginComponent, DataEnginePluginComponent, KeycloakComponent, FoundationOverviewComponent, FoundationEnginesComponent, ControlPlaneComponent, FoundationDeliveryComponent, PluginOutletComponent],
   encapsulation: ViewEncapsulation.ShadowDom,
   styleUrls: ['./app.component.css'],
   styles: [`
@@ -86,6 +85,13 @@ interface NavGroup { id: string; label: string; iconKey: string; children: NavCh
     .cc-crumb-link { color: #4c6fff; text-decoration: none; cursor: pointer; }
     .cc-crumb-link:hover { text-decoration: underline; }
     .cc-crumb.is-cur { color: #525252; } .cc-crumb-sep { color: #8c8c8c; }
+
+    @media (max-width: 760px) {
+      .os-shell { grid-template-columns: minmax(0, 1fr); }
+      .cm-nav { display: none; }
+      .os-content { padding: 0.85rem 0.8rem 1.5rem; }
+      .cc-crumbs { margin: -0.85rem -0.8rem 0.75rem; padding: 0.4rem 0.8rem; }
+    }
   `],
   template: `
     <div class="os-shell">
@@ -95,16 +101,20 @@ interface NavGroup { id: string; label: string; iconKey: string; children: NavCh
         <a clrVerticalNavLink [class.active]="vr.module() === 'overview'" (click)="go('overview')" (keydown.enter)="go('overview')">
           <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['overview']" [size]="16" />Overview
         </a>
-        <a clrVerticalNavLink [class.active]="vr.module() === 'bss'" (click)="go('bss')" (keydown.enter)="go('bss')">
-          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['bss']" [size]="16" />BSS (Host 연결)
-        </a>
-        <a clrVerticalNavLink [class.active]="vr.module() === 'engines'" (click)="go('engines')" (keydown.enter)="go('engines')">
-          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['engines']" [size]="16" />FSS 엔진
+        <a clrVerticalNavLink [class.active]="vr.module() === 'modules'" (click)="go('modules')" (keydown.enter)="go('modules')">
+          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['modules']" [size]="16" />PFS 모듈
         </a>
 
         <a clrVerticalNavLink [class.active]="vr.module() === 'control-plane'" (click)="go('control-plane')" (keydown.enter)="go('control-plane')">
           <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['control']" [size]="16" />Control Plane
         </a>
+
+        <clr-vertical-nav-group [clrVerticalNavGroupExpanded]="vr.module()==='delivery' || isOpen('delivery')" (clrVerticalNavGroupExpandedChange)="setOpen('delivery', $event)">
+          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['control']" [size]="16" />Platform Delivery
+          <clr-vertical-nav-group-children>
+            <a *ngFor="let c of deliveryNav" clrVerticalNavLink [class.active]="childActive(c)" (click)="goChild(c)" (keydown.enter)="goChild(c)">{{c.name}}<span class="cm-roadmap-tag" *ngIf="c.planned"> Phase 1</span></a>
+          </clr-vertical-nav-group-children>
+        </clr-vertical-nav-group>
 
         <clr-vertical-nav-group *ngFor="let g of groups()"
             [clrVerticalNavGroupExpanded]="isOpen(g.id)" (clrVerticalNavGroupExpandedChange)="setOpen(g.id, $event)">
@@ -112,7 +122,7 @@ interface NavGroup { id: string; label: string; iconKey: string; children: NavCh
           <clr-vertical-nav-group-children>
             <!-- 깊이 1(그룹 자식)은 아이콘 없이 들여쓴 텍스트 — shell-template/AI Hub 표준(아이콘=깊이 0만). -->
             <a *ngFor="let c of g.children" clrVerticalNavLink
-               [class.active]="vr.module() === c.id" (click)="go(c.id)" (keydown.enter)="go(c.id)">{{ c.name }}<span class="cm-roadmap-tag" *ngIf="c.planned"> 예정</span></a>
+               [class.active]="childActive(c)" (click)="goChild(c)" (keydown.enter)="goChild(c)">{{ c.name }}<span class="cm-roadmap-tag" *ngIf="c.planned"> Phase 1</span></a>
           </clr-vertical-nav-group-children>
         </clr-vertical-nav-group>
       </clr-vertical-nav>
@@ -122,21 +132,31 @@ interface NavGroup { id: string; label: string; iconKey: string; children: NavCh
           <ng-container *ngFor="let c of crumbs(); let last = last">
             <a *ngIf="c.link === 'home'" class="cc-crumb cc-crumb-link" href="/">{{ c.label }}</a>
             <a *ngIf="c.link === 'overview'" class="cc-crumb cc-crumb-link" (click)="go('overview')">{{ c.label }}</a>
+            <a *ngIf="c.link === 'delivery'" class="cc-crumb cc-crumb-link" (click)="goDeliveryOverview()">{{ c.label }}</a>
             <span *ngIf="!c.link" class="cc-crumb is-cur">{{ c.label }}</span>
             <span class="cc-crumb-sep" *ngIf="!last">/</span>
           </ng-container>
         </nav>
 
         <app-foundation-overview *ngIf="vr.module() === 'overview'"></app-foundation-overview>
-        <app-foundation-connectivity *ngIf="vr.module() === 'bss'"></app-foundation-connectivity>
-        <app-foundation-engines *ngIf="vr.module() === 'engines'"></app-foundation-engines>
+        <app-foundation-engines *ngIf="vr.module() === 'modules' && !activePlugin()"></app-foundation-engines>
         <app-control-plane *ngIf="vr.module() === 'control-plane'"></app-control-plane>
+        <app-foundation-delivery *ngIf="vr.module() === 'delivery' && !activePlugin()"></app-foundation-delivery>
         <app-plugin-outlet *ngIf="activePlugin() as p" [plugin]="p"></app-plugin-outlet>
-        <app-postgres *ngIf="vr.module() === 'postgres' && reg.isEnabled('postgres')"></app-postgres>
-        <app-rustfs *ngIf="vr.module() === 'rustfs' && reg.isEnabled('rustfs')"></app-rustfs>
-        <app-keycloak *ngIf="vr.module() === 'keycloak' && reg.isEnabled('keycloak')"></app-keycloak>
+        <app-postgres-plugin *ngIf="vr.module() === 'postgres' && !activePlugin()"></app-postgres-plugin>
+        <app-data-engine-plugin *ngIf="vr.module() === 'psmdb' && !activePlugin()" engine="psmdb"></app-data-engine-plugin>
+        <app-data-engine-plugin *ngIf="vr.module() === 'valkey' && !activePlugin()" engine="valkey"></app-data-engine-plugin>
+        <app-data-engine-plugin *ngIf="vr.module() === 'rustfs' && !activePlugin()" engine="rustfs"></app-data-engine-plugin>
+        <app-data-engine-plugin *ngIf="vr.module() === 'opensearch' && !activePlugin()" engine="opensearch"></app-data-engine-plugin>
+        <app-keycloak *ngIf="vr.module() === 'keycloak' && !activePlugin()"></app-keycloak>
         <clr-alert *ngIf="disabledModule()" clrAlertType="warning" [clrAlertClosable]="false">
-          <clr-alert-item><span class="alert-text">이 plugin은 비활성 상태입니다. FSS 엔진 카탈로그에서 설치 상태를 확인하세요.</span></clr-alert-item>
+          <clr-alert-item><span class="alert-text">이 plugin은 비활성 상태입니다. PFS 모듈 화면에서 설치 상태를 확인하세요.</span></clr-alert-item>
+        </clr-alert>
+        <clr-alert *ngIf="unknownModule()" clrAlertType="warning" [clrAlertClosable]="false">
+          <clr-alert-item>
+            <span class="alert-text">존재하지 않는 Foundation 경로입니다. 폐기된 BSS 경로는 더 이상 제공하지 않습니다.</span>
+            <div class="alert-actions"><button class="btn alert-action" type="button" (click)="go('overview')">Overview로 이동</button></div>
+          </clr-alert-item>
         </clr-alert>
       </section>
     </div>
@@ -146,70 +166,98 @@ export class AppComponent implements OnInit, OnDestroy {
   readonly vr = inject(ViewRouter);
   readonly reg = inject(FoundationRegistryService);
   readonly ICON = ICON;
+  readonly deliveryNav: NavChild[] = [
+    {id:'delivery-overview',name:'개요',module:'delivery',tab:'overview'},
+    {id:'argocd',name:'Argo CD',planned:true,module:'delivery',tab:'argocd'},
+    {id:'crossplane',name:'Crossplane',module:'delivery',tab:'crossplane'},
+  ];
 
   private readonly openState = signal<Record<string, boolean>>({ data: true, identity: true });
 
-  /** capability 모듈 트리 — 엔진(플러그인)을 capability 접두사로 그룹핑(활성만). Data/Identity 그룹. */
+  /** 설치 전 관리도 lifecycle의 일부다. 모든 PFS 섹터를 상시 노출하고 미구현 모듈은 Phase 1 표면으로 진입시킨다. */
   readonly groups = computed<NavGroup[]>(() => {
-    const en = this.reg.enabledPlugins();
-    const pick = (prefix: string) => en.filter((p) => p.capability.startsWith(prefix));
-    const out: NavGroup[] = [];
-    const data = pick('data.');
-    const identity = pick('identity.');
-    if (data.length) out.push({ id: 'data', label: 'Data', iconKey: 'data', children: data });
-    if (identity.length) out.push({ id: 'identity', label: 'Identity', iconKey: 'identity', children: identity });
-    return out;
+    const pick = (prefix: string): NavChild[] => this.reg.all
+      .filter((p) => p.capability.startsWith(prefix))
+      .map((p) => ({ id:this.routeId(p.id), name:p.name }));
+    const catalog = (id:string,name:string,phase1=true):NavChild => ({id,name,planned:phase1,module:'modules',tab:id});
+    return [
+      { id:'identity', label:'Identity', iconKey:'identity', children:[...pick('identity.'), catalog('syncope','Apache Syncope'), catalog('opa','OPA')] },
+      { id:'data', label:'Data', iconKey:'data', children:pick('data.') },
+      { id:'ai', label:'AI / Retrieval', iconKey:'search', planned:true, children:[catalog('litellm','LiteLLM'),catalog('langfuse','Langfuse')] },
+      { id:'comm', label:'Communication', iconKey:'users', planned:true, children:[catalog('stalwart','Stalwart'),catalog('novu','Novu'),catalog('mattermost','Mattermost')] },
+      { id:'observability', label:'Observability', iconKey:'control', children:[catalog('otel','OpenTelemetry Collector',false),catalog('tempo','Grafana Tempo'),catalog('loki','Grafana Loki'),catalog('grafana-operator','Grafana Operator')] },
+      { id:'backup', label:'Backup / Restore', iconKey:'storage', planned:true, children:[catalog('ptm','.ptm')] },
+    ];
   });
 
-  isOpen(id: string): boolean { return !!this.openState()[id]; }
+  isOpen(id: string): boolean {
+    if (this.openState()[id]) { return true; }
+    const group = this.groups().find((g) => g.id === id);
+    return !!group?.children.some((child) => this.childActive(child));
+  }
   setOpen(id: string, v: boolean): void { this.openState.update((m) => ({ ...m, [id]: v })); }
 
   ngOnInit(): void {
     this.reg.start();
     if (this.vr.module() === 'plugins') {
-      this.vr.setModule('engines');
+      this.vr.setModule('modules');
     }
   }
   ngOnDestroy(): void { this.reg.stop(); }
 
   go(id: string): void {
-    if (id === 'opensearch' && this.reg.modelOf('opensearch') !== 'Installed') {
-      this.openOpenSearchInstaller();
-      return;
-    }
     this.vr.setModule(id);
   }
 
+  goChild(child: NavChild): void {
+    this.vr.setModule(child.module ?? child.id);
+    if (child.tab) { this.vr.setTab(child.tab); }
+  }
+
+  goDeliveryOverview(): void {
+    this.vr.setModule('delivery');
+    this.vr.setTab('overview');
+  }
+
+  childActive(child: NavChild): boolean {
+    return this.vr.module() === (child.module ?? child.id) && (!child.tab || this.vr.tab() === child.tab);
+  }
+
   activePlugin(): HostedPlugin | undefined {
-    const id = this.vr.module();
+    const route = this.vr.module();
+    const id = this.pluginId(route === 'modules' || route === 'delivery' ? this.vr.tab() : route);
     const p = this.reg.all.find((x) => x.id === id && !!x.activation);
     if (!p) { return undefined; }
     // Samba-AD owns a lifecycle-aware Preflight/Install surface. It must be reachable
-    // from the FSS engine catalog before the operand is installed, while left-nav
+    // from the PFS module catalog before the operand is installed, while left-nav
     // exposure still remains driven by installed engines only.
     if (p.id === 'samba') { return p; }
-    return this.reg.isEnabled(p.id) ? p : undefined;
-  }
-
-  private openOpenSearchInstaller(): void {
-    this.vr.setModule('engines');
-    this.vr.setTab('opensearch');
+    return p.activation?.element && customElements.get(p.activation.element) ? p : undefined;
   }
 
   disabledModule(): boolean {
+    return false;
+  }
+
+  unknownModule(): boolean {
     const m = this.vr.module();
-    return ['postgres', 'opensearch', 'rustfs', 'keycloak'].includes(m) && !this.reg.isEnabled(m);
+    if (['overview', 'modules', 'control-plane', 'delivery'].includes(m)) { return false; }
+    return !this.reg.all.some((p) => this.routeId(p.id) === m);
   }
 
   /** 로드맵 모듈(AI/Comm) 페이지에 넘길 메타 — 해당 모듈이 아니면 undefined(placeholder 미표시). */
   private label(id: string): string {
     if (id === 'overview') return 'Overview';
-    if (id === 'bss') return 'BSS (Host 연결)';
-    if (id === 'engines') return 'FSS 엔진';
+    if (id === 'modules') return 'PFS 모듈';
     if (id === 'control-plane') return 'Control Plane';
-    const p = this.reg.all.find((x) => x.id === id);
+    if (id === 'delivery') return 'Platform Delivery';
+    const p = this.reg.all.find((x) => x.id === this.pluginId(id));
     return p ? p.name : id;
   }
+
+  /** Package/engine identity는 samba로 유지하되 사용자 주소 공간은 AD DC 의미의 addc를 사용한다. */
+  private routeId(pluginId: string): string { return pluginId === 'samba' ? 'addc' : pluginId; }
+  private pluginId(routeId: string): string { return routeId === 'addc' ? 'samba' : routeId; }
 
   /** 그룹 라벨(모듈이 어느 capability 그룹인지) — breadcrumb 3단용. */
   private groupLabel(id: string): string | null {
@@ -218,11 +266,17 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   /** 페이지 경로 — OpenSphere / Foundation / [Data|Identity] / <현재>. */
-  readonly crumbs = computed<{ label: string; link: 'home' | 'overview' | null }[]>(() => {
+  readonly crumbs = computed<{ label: string; link: 'home' | 'overview' | 'delivery' | null }[]>(() => {
     const id = this.vr.module();
-    const out: { label: string; link: 'home' | 'overview' | null }[] = [{ label: 'OpenSphere', link: 'home' }];
+    const out: { label: string; link: 'home' | 'overview' | 'delivery' | null }[] = [{ label: 'OpenSphere', link: 'home' }];
     if (id === 'overview') { out.push({ label: 'Foundation', link: null }); return out; }
     out.push({ label: 'Foundation', link: 'overview' });
+    if (id === 'delivery') {
+      out.push({ label: 'Platform Delivery', link: this.vr.tab() === 'overview' ? null : 'delivery' });
+      if (this.vr.tab() === 'argocd') out.push({ label: 'Argo CD', link: null });
+      if (this.vr.tab() === 'crossplane') out.push({ label: 'Crossplane', link: null });
+      return out;
+    }
     const g = this.groupLabel(id);
     if (g) out.push({ label: g, link: null });
     out.push({ label: this.label(id), link: null });

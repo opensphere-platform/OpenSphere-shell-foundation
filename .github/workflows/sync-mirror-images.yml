@@ -1,0 +1,96 @@
+name: Sync curated operand images
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - oci/mirrors.json
+      - .github/workflows/sync-mirror-images.yml
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+concurrency:
+  group: foundation-curated-mirrors
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: matrix
+        shell: bash
+        run: |
+          value="$(jq -c '{include: [.images[] as $image | $image.versions[] | {name: $image.name, source: .source, version: .version, edge: (.version == $image.edgeVersion), platforms: ($image.platforms // ["linux/amd64","linux/arm64"])}]}' oci/mirrors.json)"
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
+  mirror:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - uses: imjasonh/setup-crane@v0.4
+      - name: Login to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: crane auth login ghcr.io -u "${{ github.actor }}" -p "$GH_TOKEN"
+      - name: Copy exact upstream manifest and advance edge when selected
+        id: copy
+        shell: bash
+        env:
+          SOURCE: ${{ matrix.source }}
+          NAME: ${{ matrix.name }}
+          VERSION: ${{ matrix.version }}
+          EDGE: ${{ matrix.edge }}
+          EXPECTED_PLATFORMS: ${{ toJSON(matrix.platforms) }}
+        run: |
+          set -euo pipefail
+          repository="ghcr.io/opensphere-platform/mirror/$NAME"
+          target="$repository:$VERSION"
+          source_digest="$(crane digest "$SOURCE")"
+          source_manifest="$(crane manifest "$SOURCE@$source_digest")"
+          for platform in $(jq -r '.[]' <<<"$EXPECTED_PLATFORMS"); do
+            os="${platform%/*}"; architecture="${platform#*/}"
+            jq -e --arg os "$os" --arg architecture "$architecture" \
+              '.manifests[] | select(.platform.os == $os and .platform.architecture == $architecture)' \
+              <<<"$source_manifest" >/dev/null
+          done
+          crane copy "$SOURCE" "$target"
+          target_digest="$(crane digest "$target")"
+          test "$target_digest" = "$source_digest"
+          if [[ "$EDGE" = "true" ]]; then
+            crane tag "$repository@$target_digest" edge
+            test "$(crane digest "$repository:edge")" = "$target_digest"
+          fi
+          echo "repository=$repository" >> "$GITHUB_OUTPUT"
+          echo "digest=$target_digest" >> "$GITHUB_OUTPUT"
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          image: ${{ steps.copy.outputs.repository }}@${{ steps.copy.outputs.digest }}
+          format: spdx-json
+          output-file: ${{ runner.temp }}/${{ matrix.name }}-${{ matrix.version }}.spdx.json
+          upload-artifact: false
+      - name: Attest mirror provenance
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.copy.outputs.repository }}
+          subject-digest: ${{ steps.copy.outputs.digest }}
+          push-to-registry: true
+      - name: Attest SPDX SBOM
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.copy.outputs.repository }}
+          subject-digest: ${{ steps.copy.outputs.digest }}
+          sbom-path: ${{ runner.temp }}/${{ matrix.name }}-${{ matrix.version }}.spdx.json
+          push-to-registry: true

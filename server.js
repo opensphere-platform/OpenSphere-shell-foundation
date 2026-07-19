@@ -26,7 +26,10 @@ function requestToken(req) {
 const PORT = process.env.PORT || 8080;
 const PLUGINS = process.env.PLUGINS_DIR || '/app/plugins';
 const WWW = process.env.WWW_DIR || '/app/www';
-const VERSION = process.env.APP_VERSION || '0.1.0';
+const VERSION = process.env.APP_VERSION || (() => {
+  try { return JSON.parse(fs.readFileSync(path.join(PLUGINS, 'module-package.json'), 'utf8')).version; }
+  catch { return 'unknown'; }
+})();
 const SA = '/var/run/secrets/kubernetes.io/serviceaccount';
 const APISERVER = 'https://kubernetes.default.svc';
 const tok = () => fs.readFileSync(`${SA}/token`, 'utf8').trim();
@@ -44,6 +47,7 @@ const KANIDM_AZP = process.env.KANIDM_AZP || 'opensphere-console';
 const KANIDM_CA_PATH = process.env.KANIDM_CA_PATH || '/etc/kanidm-ca/ca.crt';
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const FND_NS = process.env.FOUNDATION_NS || 'opensphere-foundation';
+const CLUSTER_MANAGER_URL = process.env.CLUSTER_MANAGER_URL || 'http://cluster-manager.opensphere-console.svc.cluster.local:8080';
 const SAMBA_BOOTSTRAP_SECRET = process.env.SAMBA_BOOTSTRAP_SECRET || 'foundation-identity-samba-creds';
 const SAMBA_BOOTSTRAP_SECRET_KEY = 'domain-password';
 // Kanidm JWKS — 자체서명 CA를 명시적 'ca' 옵션으로 신뢰(TLS 검증 비활성화 금지, NODE_EXTRA_CA_CERTS 미접촉).
@@ -151,6 +155,30 @@ async function saveSambaBootstrapSecret(req, res) {
   return jsonRes(res, 200, { ok: true, secretRef: { namespace: FND_NS, name: SAMBA_BOOTSTRAP_SECRET, key: SAMBA_BOOTSTRAP_SECRET_KEY } });
 }
 
+// HIS의 운영·판정 소유자는 Cluster Manager다. Foundation은 자신의 승인된 API base 안에서
+// 이 read-only projection만 제공하고, 브라우저가 다른 subShell API를 직접 호출하지 않게 한다.
+// 신원 토큰은 Main Shell hostFetch → Foundation → Cluster Manager로 전달되며 최종 검증은
+// HIS 정본 API가 수행한다. 쓰기·임의 경로·무인증 SA 폴백은 허용하지 않는다.
+async function hisStatusProxy(req, res) {
+  if (req.method !== 'GET') return jsonRes(res, 405, { error: 'read-only proxy' });
+  const authorization = String(req.headers.authorization || '');
+  if (!/^Bearer\s+\S+/i.test(authorization)) return jsonRes(res, 401, { error: 'authorization required' });
+  try {
+    const r = await fetch(`${CLUSTER_MANAGER_URL.replace(/\/$/, '')}/api/his/status`, {
+      headers: { authorization, accept: 'application/json' },
+      signal: AbortSignal.timeout(15000),
+    });
+    const text = await r.text();
+    res.writeHead(r.status, {
+      'content-type': r.headers.get('content-type') || 'application/json',
+      'cache-control': 'no-store',
+    });
+    res.end(text);
+  } catch (e) {
+    jsonRes(res, 502, { error: `Cluster Manager HIS status unavailable: ${String(e && (e.message || e))}` });
+  }
+}
+
 const MIME = {
   '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
   '.html': 'text/html; charset=utf-8', '.svg': 'image/svg+xml', '.woff': 'font/woff', '.woff2': 'font/woff2',
@@ -184,7 +212,7 @@ async function nodes() {
 // 시작/노드 경고를 콘솔 인박스에 발행 = subShell이 콘솔 알림 core와 '유기적' 작동.
 // best-effort: 발행 실패해도 foundation 본 기능엔 영향 없음. (manifest 권한 불요 — 백엔드 in-cluster 호출)
 // 발행 입구는 projected ServiceAccount token을 Controller가 TokenReview하여 source와 대조한다.
-const CONTROLLER = process.env.OSP_CONTROLLER || 'http://dupa-registry-controller.opensphere-system.svc.cluster.local:8080';
+const CONTROLLER = process.env.OSP_CONTROLLER || 'http://opensphere-console-dupa-controller.opensphere-console.svc.cluster.local:8080';
 let _notifyWarned = false;
 function warnNotifyOnce(msg) {
   if (_notifyWarned) return;
@@ -353,9 +381,9 @@ async function opensearchProxy(req, res, rawUrl) {
 }
 
 // ── Foundation 모듈: Prometheus(kube-prometheus-stack) 읽기 프록시 ──
-// /api/prometheus/<질의경로> → kps-prometheus.monitoring.svc:9090 (읽기 전용, query/query_range/targets만 허용).
+// /api/prometheus/<질의경로> → kube-prometheus-stack Prometheus (읽기 전용, query/query_range/targets만 허용).
 async function prometheusProxy(req, res, rawUrl) {
-  const PROM = process.env.PROMETHEUS_URL || 'http://kps-prometheus.monitoring.svc:9090';
+  const PROM = process.env.PROMETHEUS_URL || 'http://kube-prometheus-stack-prometheus.monitoring.svc:9090';
   if (req.method !== 'GET' && req.method !== 'HEAD') return jsonRes(res, 405, { error: 'read-only proxy' });
   let path;
   try { path = decodeURIComponent(rawUrl.slice('/api/prometheus'.length).split('?')[0]); }
@@ -390,6 +418,7 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ user: actor.username }));
     }
     if (p === '/api/foundation/samba/bootstrap-secret') return saveSambaBootstrapSecret(req, res);
+    if (p === '/api/foundation/his-status') return hisStatusProxy(req, res);
     if (p.startsWith('/api/k8s/')) return k8sProxy(req, res, req.url);
     if (p.startsWith('/api/opensearch')) return opensearchProxy(req, res, req.url);
     if (p.startsWith('/api/prometheus')) return prometheusProxy(req, res, req.url);

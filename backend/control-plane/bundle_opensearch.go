@@ -28,6 +28,9 @@ type opensearchOpts struct {
 	storageSize  string
 	javaOpts     string
 	image        string
+	replicas     int64
+	resources    map[string]interface{}
+	monitoring   bool
 }
 
 func opensearchParams(fm *unstructured.Unstructured, cfg *config) opensearchOpts {
@@ -36,22 +39,33 @@ func opensearchParams(fm *unstructured.Unstructured, cfg *config) opensearchOpts
 		storageSize:  "5Gi",
 		javaOpts:     "-Xms512m -Xmx512m",
 		image:        cfg.opensearchImage,
+		replicas:     1,
+		resources:    resReq("500m", "1Gi", "2", "2Gi"),
+		monitoring:   false,
 	}
-	p, _, _ := unstructured.NestedMap(fm.Object, "spec", "parameters", "opensearch")
+	p := nestedDataEngineParams(fm, "opensearch")
+	if p == nil {
+		p, _, _ = unstructured.NestedMap(fm.Object, "spec", "parameters", "opensearch")
+	}
 	if p == nil {
 		return o
 	}
 	o.storageClass = pStr(p, "storageClass", o.storageClass)
 	o.storageSize = pStr(p, "storageSize", o.storageSize)
 	o.javaOpts = pStr(p, "javaOpts", o.javaOpts)
+	o.javaOpts = pStr(p, "heap", o.javaOpts)
+	o.image = imageWithTag(o.image, pStr(p, "version", ""))
 	o.image = pStr(p, "image", o.image)
+	o.replicas = pInt(p, "replicas", o.replicas)
+	o.resources = resourceProfile(pStr(p, "resourceProfile", "small"), p)
+	o.monitoring = pBool(p, "monitoring", false)
 	return o
 }
 
 func buildOpenSearchBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructured.Unstructured, error) {
 	ns := opensearchNS(cfg, fm)
 	o := opensearchParams(fm, cfg)
-	labels := map[string]interface{}{"app": osStatefulSetName}
+	labels := engineLabels("opensearch", osStatefulSetName)
 
 	sts := &unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": "apps/v1",
@@ -62,27 +76,20 @@ func buildOpenSearchBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstr
 		},
 		"spec": map[string]interface{}{
 			"serviceName": osStatefulSetName,
-			"replicas":    int64(1),
+			"replicas":    o.replicas,
 			"selector": map[string]interface{}{
 				"matchLabels": labels,
 			},
 			"template": map[string]interface{}{
 				"metadata": map[string]interface{}{"labels": labels},
 				"spec": map[string]interface{}{
-					"initContainers": []interface{}{
-						map[string]interface{}{
-							"name":    "sysctl",
-							"image":   "ghcr.io/opensphere-platform/mirror/busybox:1.36",
-							"command": []interface{}{"sh", "-c", "sysctl -w vm.max_map_count=262144 || true"},
-							"securityContext": map[string]interface{}{
-								"privileged": true,
-							},
-						},
-					},
+					"imagePullSecrets": []interface{}{map[string]interface{}{"name": "opensphere-ghcr-pull"}},
+					"securityContext":  map[string]interface{}{"runAsNonRoot": true, "runAsUser": int64(1000), "fsGroup": int64(1000)},
 					"containers": []interface{}{
 						map[string]interface{}{
-							"name":  "opensearch",
-							"image": o.image,
+							"name":            "opensearch",
+							"image":           o.image,
+							"securityContext": map[string]interface{}{"allowPrivilegeEscalation": false, "runAsNonRoot": true, "runAsUser": int64(1000), "runAsGroup": int64(1000), "capabilities": map[string]interface{}{"drop": []interface{}{"ALL"}}},
 							"env": []interface{}{
 								map[string]interface{}{"name": "cluster.name", "value": osStatefulSetName},
 								map[string]interface{}{"name": "node.name", "value": osStatefulSetName + "-0"},
@@ -96,10 +103,7 @@ func buildOpenSearchBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstr
 								map[string]interface{}{"name": "http", "containerPort": int64(9200)},
 								map[string]interface{}{"name": "transport", "containerPort": int64(9300)},
 							},
-							"resources": map[string]interface{}{
-								"requests": map[string]interface{}{"cpu": "500m", "memory": "1Gi"},
-								"limits":   map[string]interface{}{"memory": "2Gi"},
-							},
+							"resources": o.resources,
 							"readinessProbe": map[string]interface{}{
 								"httpGet":             map[string]interface{}{"path": "/_cluster/health", "port": int64(9200)},
 								"initialDelaySeconds": int64(25),
@@ -149,7 +153,8 @@ func buildOpenSearchBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstr
 	stampLabels(svc, "data", fm.GetName())
 	markEngine(svc, "opensearch")
 
-	return []*unstructured.Unstructured{sts, svc}, nil
+	np := engineNetworkPolicy("opensearch", osStatefulSetName, ns, fm.GetName(), 9200)
+	return []*unstructured.Unstructured{sts, svc, np}, nil
 }
 
 func markEngine(u *unstructured.Unstructured, engine string) {

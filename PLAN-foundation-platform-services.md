@@ -1,5 +1,6 @@
-# OpenSphere Foundation 구현 계획서 — 공용 백킹서비스 subShell (PostgreSQL · OpenSearch + 확장)
+# Platform Foundation Service Stack (PFS) 구현 계획서 — 공용 backing capability와 Foundation Shell
 
+> **문서 레벨**: L1/L2 구현 계획. HIS·CBS·PFS 명칭/경계, 설치 순서, Support Profile과 PFS `Established` 판정은 `../_DOCS_/01-CONSTITUTION/CONSTITUTION-0004-PLATFORM-BOOTSTRAP-SUPPORT-FOUNDATION-LIFECYCLE.md`가 유일하게 소유한다.
 > 작성 2026-06-27 (4-에이전트 병렬 조사 + 합성). GitLab/Help-Center 등 **상위 서비스보다 먼저** 잡는 데이터/인프라 기반.
 > 대상 = `OpenSphere-shell-foundation`(V2, 실재 subShell) + 부모 리포의 provisioning CRD/컨트롤러·GitOps 자산.
 

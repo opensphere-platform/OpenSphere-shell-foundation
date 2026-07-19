@@ -9,7 +9,7 @@ import Misuse20 from '@carbon/icons/es/misuse/20';
 import Download16 from '@carbon/icons/es/download/16';
 import ArrowLeft16 from '@carbon/icons/es/arrow--left/16';
 
-const LOGO = 'https://cdn.statically.io/gh/openplatform-labs/images@main/logos/postgresql.svg';
+const LOGO = 'https://logos.opl.io.kr/i/postgresql';
 
 // CloudNativePG 오퍼레이터 전용 페이지 — Velero 페이지와 동일한 설치·상태 패턴 + 관리 중인 Cluster 목록.
 @Component({
@@ -18,7 +18,7 @@ const LOGO = 'https://cdn.statically.io/gh/openplatform-labs/images@main/logos/p
   imports: [CommonModule, ClarityModule, CarbonIcon, BarChart],
   template: `
     <a class="vl-back" (click)="back()" (keydown.enter)="back()" role="button" tabindex="0">
-      <os-cicon [icon]="iBack" [size]="16" /> FSS 엔진
+      <os-cicon [icon]="iBack" [size]="16" /> PFS 모듈
     </a>
 
     <section class="vl-hero">

@@ -471,11 +471,9 @@ export class AppComponent {
   readonly showRequest = signal(false);
 
   // ── PG 설치 레벨 옵션(B) — FoundationModel.spec.parameters로 기록 → control-plane이 CNPG로 매핑 ──
-  // 버전은 자유입력(아래는 레지스트리 실재 태그 제안 — 하드코딩 제한 아님. 어떤 태그든 입력 가능, 예: 19beta1-trixie).
+  // PostgreSQL 플러그인은 19 beta만 제공한다. 이전 major 버전은 설치 선택지에 노출하지 않는다.
   readonly PG_VERSION_SUGGEST = [
-    '18', '18.3', '18-standard-trixie', '18-minimal-trixie', '18-standard-bookworm', '18beta2',
-    '17', '17.6', '17-standard-trixie', '17-minimal-trixie', '17-standard-bookworm',
-    '16', '16-standard-trixie', '16-standard-bookworm', '15', '15-standard-trixie', '14', '13',
+    '19beta2-standard-trixie',
   ];
   readonly PG_EXT_CHOICES = ['pgcrypto', 'uuid-ossp', 'pg_trgm', 'btree_gin', 'btree_gist', 'hstore', 'citext', 'ltree', 'intarray', 'unaccent', 'fuzzystrmatch', 'pg_stat_statements'];
   readonly PG_SC_SUGGEST = ['standard', 'hostpath'];
@@ -483,7 +481,7 @@ export class AppComponent {
   private pgDefaults() {
     return {
       namespace: 'opensphere-foundation',
-      instances: 1, imageTag: '17', storageClass: 'standard', storageSize: '1Gi', walStorageSize: '',
+      instances: 1, imageTag: '19beta2-standard-trixie', storageClass: 'standard', storageSize: '1Gi', walStorageSize: '',
       resourceProfile: 'small', cpuRequest: '100m', memoryRequest: '256Mi', cpuLimit: '500m', memoryLimit: '512Mi',
       max_connections: '100', shared_buffers: '', work_mem: '',
       poolerEnabled: false, poolerMode: 'transaction', poolerInstances: 1,
@@ -499,7 +497,10 @@ export class AppComponent {
   readonly pgVersionTags = signal<string[]>([]);
   readonly pgTagsMeta = signal<{ repo?: string; totalTags?: number; count?: number; fetchedAt?: string; error?: string } | null>(null);
   private pgTagsLoading = false;
-  versionOptions() { const t = this.pgVersionTags(); return t.length ? t : this.PG_VERSION_SUGGEST; }
+  versionOptions() {
+    const only19 = this.pgVersionTags().filter((tag) => tag.startsWith('19'));
+    return only19.length ? only19 : this.PG_VERSION_SUGGEST;
+  }
   readonly pgVerCustom = signal(false);
   // 단일 목록(select)이 보여줄 옵션 — 현재 값이 목록에 없으면(커스텀/프리필) 맨 앞에 포함해 항상 선택 표시.
   versionOptionsWithCurrent() { const list = this.versionOptions(); const cur = this.pgOpts().imageTag; return (cur && !list.includes(cur)) ? [cur, ...list] : list; }

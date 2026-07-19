@@ -89,6 +89,30 @@ export class KcService extends WorkloadHealth {
   // identity 번들(D-3)은 start-dev(H2 내장) — Foundation PG 소비는 후속(정직 표기).
   readonly db = 'H2(내장, start-dev — 번들 D-3)';
   readonly admin = '미설정(번들에 admin bootstrap 없음 — Syncope 권위 D-7)';
+  readonly fm = signal<any>(null);
+  readonly events = signal<any[]>([]);
+  protected override extraLoads(): Promise<void>[] { return [this.loadFm(), this.loadEvents()]; }
+  private async loadFm(): Promise<void> {
+    if (!this.backoff.due('kc-fm')) return;
+    try {
+      const r = await fetch(this.k('apis/foundation.opensphere.io/v1alpha1/foundationmodels/identity'));
+      this.backoff.report('kc-fm', r.ok ? 'ok' : r.status === 404 ? 'nocrd' : 'error');
+      this.fm.set(r.ok ? await r.json() : null);
+    } catch { this.backoff.report('kc-fm', 'error'); }
+  }
+  private async loadEvents(): Promise<void> {
+    if (!this.backoff.due('kc-events')) return;
+    try {
+      const fs = encodeURIComponent(`involvedObject.name=${this.name}`);
+      const r = await fetch(this.k(`api/v1/namespaces/${this.ns}/events?fieldSelector=${fs}&limit=30`));
+      this.backoff.report('kc-events', r.ok ? 'ok' : 'error');
+      const items = r.ok ? ((await r.json()).items || []) : [];
+      items.sort((a: any, b: any) => String(b.lastTimestamp || b.eventTime || '').localeCompare(String(a.lastTimestamp || a.eventTime || '')));
+      this.events.set(items);
+    } catch { this.backoff.report('kc-events', 'error'); }
+  }
+  readonly issuer = computed<string>(() => this.fm()?.status?.issuerURL || `http://${this.http}/realms/opensphere-workforce`);
+  readonly jwks = computed<string>(() => this.fm()?.status?.jwksURL || `${this.issuer()}/protocol/openid-connect/certs`);
 }
 
 @Injectable({ providedIn: 'root' })

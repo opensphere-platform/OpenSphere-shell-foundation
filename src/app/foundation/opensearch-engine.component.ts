@@ -20,15 +20,15 @@ interface InstallStep {
   imports: [CommonModule, ClarityModule],
   template: `
     <div class="os-title-row">
-      <h2 class="os-h2">OpenSearch <span class="label label-info">FSS data engine</span></h2>
+      <h2 class="os-h2">OpenSearch <span class="label label-info">PFS data module</span></h2>
       <div class="os-actions">
-        <button class="btn btn-sm" (click)="back()">Back to FSS Engines</button>
+        <button class="btn btn-sm" (click)="back()">Back to PFS Modules</button>
         <button class="btn btn-sm btn-primary" (click)="openPlugin()" [disabled]="!installed()">Open Plugin</button>
       </div>
     </div>
 
     <p class="os-sub">
-      OpenSearch is installed from the FSS engine catalog. The management page becomes meaningful only after
+      OpenSearch is installed from the PFS module catalog. The management page becomes meaningful only after
       this engine is declared in <code>FoundationModel/data.spec.parameters.engines.opensearch</code> and the
       control-plane prepares the shared search endpoint.
     </p>
@@ -102,7 +102,7 @@ interface InstallStep {
               <clr-dg-row>
                 <clr-dg-cell>OpenSearch workload</clr-dg-cell>
                 <clr-dg-cell><span class="label" [ngClass]="livePill()">{{ liveLabel() }}</span></clr-dg-cell>
-                <clr-dg-cell>StatefulSet <code>opensphere-search</code> observed by the FSS engine catalog.</clr-dg-cell>
+                <clr-dg-cell>StatefulSet <code>opensphere-search</code> observed by the PFS module catalog.</clr-dg-cell>
               </clr-dg-row>
               <clr-dg-row>
                 <clr-dg-cell>Crossplane path</clr-dg-cell>

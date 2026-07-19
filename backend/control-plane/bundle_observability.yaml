@@ -114,7 +114,7 @@ spec:
         - { protocol: TCP, port: 8889 }
         - { protocol: TCP, port: 13133 }
 ---
-# Basic Service Stack 소비계약(§1.1 "소비 계약"=/metrics+ServiceMonitor) 실제 배선.
+# HIS 소비계약(CONSTITUTION-0004 §2.0.1: /metrics + ServiceMonitor) 실제 배선.
 # kube-prometheus-stack이 serviceMonitorSelectorNilUsesHelmValues=false + 빈 셀렉터로 전 ns를 스크레이프하므로
 # 라벨 없이도 자동 발견됨(monitoring-values.yaml 실측).
 apiVersion: monitoring.coreos.com/v1

@@ -22,12 +22,14 @@ spec:
         app: foundation-control-plane
     spec:
       serviceAccountName: foundation-control-plane
+      imagePullSecrets:
+        - name: opensphere-ghcr-pull
       securityContext:
         runAsNonRoot: true
       containers:
         - name: manager
           # image-source: ghcr-mirror(ok, 자체빌드) — 다이제스트 핀(2026-06-27 빌드와 동일 콘텐츠, 태그만 정정)
-          image: ghcr.io/opensphere-platform/foundation-control-plane@sha256:ea80998b1955871534f8f5296343f22dcd9ee5e9f670c699b9c1a29d027c5976
+          image: ghcr.io/opensphere-platform/foundation-control-plane@sha256:b1275c9315c48580629afe16fad7a81e16e0a666bfc3903f31a865066aa83db4
           imagePullPolicy: IfNotPresent
           args:
             - --managed-namespace=opensphere-foundation
@@ -35,11 +37,13 @@ spec:
             - --collector-image=ghcr.io/opensphere-platform/mirror/opentelemetry-collector-contrib:0.111.0
             # image-source: ghcr-mirror(ok) origin=quay.io/keycloak/keycloak:26.0
             - --keycloak-image=ghcr.io/opensphere-platform/mirror/keycloak:26.0
-            # image-source: ghcr-mirror(missing, upstream org=cloudnative-pg) — CNPG operator 미설치라 재검토 보류
-            - --pg-image=ghcr.io/cloudnative-pg/postgresql:17
-            # --default-storage-class 미포함: 현재 고정된 다이제스트(2026-06-27 빌드)는 이 세션에서 추가한
-            # host_requirements.go 이전 바이너리라 그 플래그가 없음(crash: "flag provided but not defined").
-            # 새 바이너리를 빌드·푸시하고 여기 digest를 갱신한 뒤에만 추가할 것. [[basic-foundation-connector-gap]]
+            # image-source: OpenSphere curated GHCR mirror, origin=ghcr.io/cloudnative-pg/postgresql:19beta2-standard-trixie
+            - --pg-image=ghcr.io/opensphere-platform/mirror/postgresql:19beta2-standard-trixie
+            - --psmdb-image=ghcr.io/opensphere-platform/mirror/percona-server-mongodb:8.0
+            - --valkey-image=ghcr.io/opensphere-platform/mirror/valkey:9.1.0
+            - --rustfs-image=ghcr.io/opensphere-platform/mirror/rustfs:1.0.0-beta.10
+            - --opensearch-image=ghcr.io/opensphere-platform/mirror/opensearch:3.7.0
+            - --default-storage-class=standard
           env:
             - name: FOUNDATION_DIRECT_APPLY
               value: "true"

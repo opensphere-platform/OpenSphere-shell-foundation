@@ -11,7 +11,73 @@ import { apiBase, hostFetch, writeHeaders } from '../api-base';
 // FoundationModel CR(foundation.opensphere.io/v1alpha1, Cluster-scope) — 수명주기의 클러스터 정본.
 const FM_PATH = 'apis/foundation.opensphere.io/v1alpha1/foundationmodels';
 type EngineState = 'Installed' | 'Disabled';
-interface DomainCRView { desired: string; engines: Record<string, string> }
+interface DomainCRView { desired: string; engines: Record<string, string>; parameters: Record<string, unknown> }
+
+export interface PostgresInstallParameters {
+  instances: number;
+  imageTag: string;
+  namespace: string;
+  storageClass: string;
+  storageSize: string;
+  walStorageSize?: string;
+  resourceProfile: string;
+  cpuRequest: string;
+  memoryRequest: string;
+  cpuLimit: string;
+  memoryLimit: string;
+  poolerEnabled: boolean;
+  poolerMode: 'session' | 'transaction';
+  poolerInstances: number;
+  enableSuperuserAccess: boolean;
+  monitoring: boolean;
+  extensions: string[];
+  backup: {
+    enabled: boolean;
+    s3Endpoint: string;
+    destinationPath: string;
+    secretName: string;
+    retentionPolicy: string;
+  };
+}
+
+export interface DataEngineInstallParameters {
+  version: string;
+  namespace: string;
+  replicas: number;
+  storageClass: string;
+  storageSize: string;
+  resourceProfile: string;
+  cpuRequest: string;
+  memoryRequest: string;
+  cpuLimit: string;
+  memoryLimit: string;
+  monitoring: boolean;
+  tls: boolean;
+  authSecret: string;
+  heap?: string;
+  persistenceMode?: string;
+  backup: {
+    enabled: boolean;
+    s3Endpoint: string;
+    destinationPath: string;
+    secretName: string;
+    retentionPolicy: string;
+  };
+}
+
+export interface IdentityEngineInstallParameters {
+  version: string;
+  profile: 'development' | 'production' | 'custom';
+  replicas: number;
+  resourceProfile: string;
+  cpuRequest: string;
+  memoryRequest: string;
+  cpuLimit: string;
+  memoryLimit: string;
+  monitoring: boolean;
+  ingressMode: 'cluster-internal' | 'private-ingress';
+  databaseMode: 'embedded-h2';
+}
 
 // Foundation(host)의 plugin 거버넌스 — 등록(registry)·상태(health 어댑트)·수명주기(enable/disable)·모니터링 소유.
 // ⚠️ health는 fetch하지 않는다. healthRef가 가리키는 기존 폴러(CnpgService/OsService)의 computed를 소비만 한다.
@@ -44,7 +110,7 @@ export class FoundationRegistryService {
   /** plugin의 소속 도메인 — capability 접두(HostedPlugin 자기기술)에서 도출. */
   private domainOf(id: string): string {
     const p = this.all.find((x) => x.id === id);
-    return p?.capability.startsWith('identity.') ? 'identity' : 'data';
+    return p?.model ?? 'data';
   }
 
   async refreshModels(): Promise<void> {
@@ -60,6 +126,7 @@ export class FoundationRegistryService {
         map[n] = {
           desired: String(item?.spec?.desiredState ?? ''),
           engines: (item?.spec?.parameters?.['engines'] as Record<string, string>) ?? {},
+          parameters: (item?.spec?.parameters as Record<string, unknown>) ?? {},
         };
       }
       this.domains.set(map);
@@ -81,6 +148,11 @@ export class FoundationRegistryService {
     const m = this.domains();
     if (m === null) { return false; }
     return this.modelOf(id) === 'Installed';
+  }
+
+  parametersOf(id: string): Record<string, unknown> {
+    const domain = this.domains()?.[this.domainOf(id)];
+    return domain?.parameters ?? {};
   }
 
   /** 엔진 수명주기 전이 — 도메인 CR의 parameters.engines.<id>를 merge-PATCH(404 시 도메인 CR 생성). */
@@ -114,6 +186,107 @@ export class FoundationRegistryService {
     }
   }
 
+  /** PostgreSQL plugin 설치 선언 — Operator가 아니라 data FoundationModel이 Cluster 수명주기를 소유한다. */
+  async configurePostgres(parameters: PostgresInstallParameters): Promise<boolean> {
+    this.lastError.set('');
+    const domain = 'data';
+    const specPatch = {
+      desiredState: 'Installed',
+      parameters: {
+        ...parameters,
+        engines: { postgres: 'enabled' },
+      },
+    };
+    try {
+      const res = await hostFetch(this.k(`${FM_PATH}/${domain}`), {
+        method: 'PATCH',
+        headers: { ...writeHeaders(), 'content-type': 'application/merge-patch+json' },
+        body: JSON.stringify({ spec: specPatch }),
+      });
+      if (res.status === 404) {
+        const create = await hostFetch(this.k(FM_PATH), {
+          method: 'POST',
+          headers: writeHeaders(),
+          body: JSON.stringify({
+            apiVersion: 'foundation.opensphere.io/v1alpha1', kind: 'FoundationModel',
+            metadata: { name: domain },
+            spec: { model: domain, ...specPatch },
+          }),
+        });
+        if (!create.ok) { throw new Error(`PostgreSQL 설치 선언 생성 실패 HTTP ${create.status}`); }
+      } else if (!res.ok) {
+        throw new Error(`PostgreSQL 설치 선언 실패 HTTP ${res.status}${res.status === 401 ? ' (로그인 토큰 만료)' : res.status === 403 ? ' (foundation-models-manage 권한 없음)' : ''}`);
+      }
+      await this.refreshModels();
+      return true;
+    } catch (e) {
+      this.lastError.set(String((e as Error)?.message ?? e));
+      return false;
+    }
+  }
+
+  /** 비-PG data engine 설치·운영 선언. 엔진별 옵션은 dataEngines.<id> 아래 격리해 상호 덮어쓰지 않는다. */
+  async configureDataEngine(id: 'psmdb' | 'valkey' | 'rustfs' | 'opensearch', parameters: DataEngineInstallParameters): Promise<boolean> {
+    this.lastError.set('');
+    const domain = 'data';
+    const specPatch = {
+      desiredState: 'Installed',
+      parameters: {
+        engines: { [id]: 'enabled' },
+        dataEngines: { [id]: parameters },
+      },
+    };
+    try {
+      const res = await hostFetch(this.k(`${FM_PATH}/${domain}`), {
+        method: 'PATCH',
+        headers: { ...writeHeaders(), 'content-type': 'application/merge-patch+json' },
+        body: JSON.stringify({ spec: specPatch }),
+      });
+      if (res.status === 404) {
+        const create = await hostFetch(this.k(FM_PATH), {
+          method: 'POST', headers: writeHeaders(),
+          body: JSON.stringify({ apiVersion: 'foundation.opensphere.io/v1alpha1', kind: 'FoundationModel', metadata: { name: domain }, spec: { model: domain, ...specPatch } }),
+        });
+        if (!create.ok) throw new Error(`${id} 설치 선언 생성 실패 HTTP ${create.status}`);
+      } else if (!res.ok) {
+        throw new Error(`${id} 설치 선언 실패 HTTP ${res.status}${res.status === 401 ? ' (로그인 토큰 만료)' : res.status === 403 ? ' (foundation-models-manage 권한 없음)' : ''}`);
+      }
+      await this.refreshModels();
+      return true;
+    } catch (e) {
+      this.lastError.set(String((e as Error)?.message ?? e));
+      return false;
+    }
+  }
+
+  /** Identity plugin 설치·운영 선언. 엔진별 설정은 identityEngines 아래 격리한다. */
+  async configureIdentityEngine(id: 'keycloak', parameters: IdentityEngineInstallParameters): Promise<boolean> {
+    this.lastError.set('');
+    const specPatch = {
+      desiredState: 'Installed',
+      parameters: { engines: { [id]: 'enabled' }, identityEngines: { [id]: parameters } },
+    };
+    try {
+      const res = await hostFetch(this.k(`${FM_PATH}/identity`), {
+        method: 'PATCH', headers: { ...writeHeaders(), 'content-type': 'application/merge-patch+json' }, body: JSON.stringify({ spec: specPatch }),
+      });
+      if (res.status === 404) {
+        const create = await hostFetch(this.k(FM_PATH), {
+          method: 'POST', headers: writeHeaders(),
+          body: JSON.stringify({ apiVersion: 'foundation.opensphere.io/v1alpha1', kind: 'FoundationModel', metadata: { name: 'identity' }, spec: { model: 'identity', ...specPatch } }),
+        });
+        if (!create.ok) throw new Error(`Keycloak 설치 선언 생성 실패 HTTP ${create.status}`);
+      } else if (!res.ok) {
+        throw new Error(`Keycloak 설치 선언 실패 HTTP ${res.status}${res.status === 401 ? ' (로그인 토큰 만료)' : res.status === 403 ? ' (foundation-models-manage 권한 없음)' : ''}`);
+      }
+      await this.refreshModels();
+      return true;
+    } catch (e) {
+      this.lastError.set(String((e as Error)?.message ?? e));
+      return false;
+    }
+  }
+
   // 좌 nav·본문 마운트가 소비하는 '실재의 투영' — 도메인 CR(engines 설치옵션)의 파생. CR 0건이면 0개(클러스터 진실).
   readonly enabledPlugins = computed<HostedPlugin[]>(() => {
     this.domains(); // 반응성 트리거
@@ -126,9 +299,20 @@ export class FoundationRegistryService {
       case 'cnpg': return this.pgHealth();
       case 'os': return this.osHealth();
       case 'rustfs': return this.rsHealth();
+      case 'data-engine': return this.declaredDataHealth(p);
       case 'keycloak': return this.wlHealth(this.kc, [{ val: 'PG', lab: 'Database' }, { val: ':8080', lab: 'HTTP' }]);
-      default: return this.wlHealth(this.samba, [{ val: this.samba.realm(), lab: 'Realm' }, { val: ':389', lab: 'LDAP' }]);
+      case 'samba': return this.wlHealth(this.samba, [{ val: this.samba.realm(), lab: 'Realm' }, { val: ':389', lab: 'LDAP' }]);
+      default: return this.declaredDataHealth(p);
     }
+  }
+
+  private declaredDataHealth(p: HostedPlugin): PluginHealth {
+    const installed = this.modelOf(p.id) === 'Installed';
+    return {
+      phase: installed ? 'warn' : '', pill: installed ? PILL.warn : '', state: installed ? 'ok' : 'nocrd', ready: false,
+      label: installed ? 'Declared · runtime 확인 필요' : '미설치',
+      metrics: [{ val: p.capabilityLabel, lab: 'Capability' }, { val: p.dataEngineId ?? p.id, lab: 'Engine' }],
+    };
   }
 
   // Deployment 워크로드(Keycloak·Samba) 공통 health — WorkloadHealth signal 소비.
@@ -220,4 +404,4 @@ export class FoundationRegistryService {
   }
 }
 
-function shorten(s: string): string { return s ? s.replace('opensphere-pg-', '#') : '—'; }
+function shorten(s: string): string { return s ? s.replace('foundation-data-pg-', '#') : '—'; }

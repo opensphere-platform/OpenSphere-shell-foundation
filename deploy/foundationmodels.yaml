@@ -8,7 +8,7 @@
 # 엔진(내부 plugin) 단위 수명주기 = spec.parameters.engines.<engineId>: enabled | disabled
 #   · UI(plugins-admin)의 Enable/Disable은 이 필드를 PATCH한다("메뉴=실재의 투영").
 #   · identity 번들(control-plane)은 engines.{keycloak,samba}를 실제로 게이트한다(disabled → operand 미배포).
-#   · data 번들은 현재 CNPG(postgres)만 실구현 — opensearch/rustfs 게이트는 번들 편입 시 적용(정직).
+#   · data 번들은 PostgreSQL(CNPG), PSMDB, Valkey, RustFS, OpenSearch를 동일 desired-state로 관리한다.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata: { name: foundation-models-manage }
@@ -35,10 +35,10 @@ spec:
   desiredState: Installed
   parameters:
     engines:
-      keycloak: enabled
-      samba: enabled
+      keycloak: disabled
+      samba: disabled
 ---
-# ── data 모듈 (엔진: postgres=CNPG 실구현 · opensearch/rustfs=번들 편입 대기) ──
+# ── data 모듈 (엔진은 개별 plugin 화면에서 계획·활성화) ──
 apiVersion: foundation.opensphere.io/v1alpha1
 kind: FoundationModel
 metadata:
@@ -48,7 +48,9 @@ spec:
   desiredState: Installed
   parameters:
     engines:
-      postgres: enabled
+      postgres: disabled
+      psmdb: disabled
+      valkey: disabled
       opensearch: disabled
       rustfs: disabled
 ---
@@ -69,7 +71,7 @@ spec:
   operator:
     capability: ["identity.iam.workspace", "identity.directory.ad"]
     chartRef: { name: "control-plane identity_bundle (SSA — chart 아님, 정직 표기)" }
-    image: "ghcr.io/opensphere-platform/mirror/keycloak:26.0 + ghcr.io/opensphere-platform/mirror/samba-domain:20260706"
+    image: "ghcr.io/opensphere-platform/mirror/keycloak:26.0 + ghcr.io/opensphere-platform/mirror/samba-domain:20260701025204"
   relations:
     consumed: []
     consumers:

@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 1,
+  "registry": "ghcr.io/opensphere-platform/mirror",
+  "images": [
+    {
+      "name": "busybox",
+      "edgeVersion": "1.36",
+      "versions": [
+        { "version": "1.36", "source": "docker.io/library/busybox:1.36" }
+      ]
+    },
+    {
+      "name": "cloudnative-pg",
+      "edgeVersion": "1.30.0",
+      "versions": [
+        { "version": "1.30.0", "source": "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0" },
+        { "version": "1.28.1", "source": "ghcr.io/cloudnative-pg/cloudnative-pg:1.28.1" }
+      ]
+    },
+    {
+      "name": "keycloak",
+      "edgeVersion": "26.0",
+      "versions": [
+        { "version": "26.0", "source": "quay.io/keycloak/keycloak:26.0" }
+      ]
+    },
+    {
+      "name": "opensearch",
+      "edgeVersion": "3.7.0",
+      "versions": [
+        { "version": "3.7.0", "source": "docker.io/opensearchproject/opensearch:3.7.0" }
+      ]
+    },
+    {
+      "name": "opentelemetry-collector-contrib",
+      "edgeVersion": "0.154.0",
+      "versions": [
+        { "version": "0.154.0", "source": "docker.io/otel/opentelemetry-collector-contrib:0.154.0" },
+        { "version": "0.111.0", "source": "docker.io/otel/opentelemetry-collector-contrib:0.111.0" }
+      ]
+    },
+    {
+      "name": "percona-server-mongodb",
+      "edgeVersion": "8.0",
+      "versions": [
+        { "version": "8.0", "source": "docker.io/percona/percona-server-mongodb:8.0" }
+      ]
+    },
+    {
+      "name": "percona-server-mongodb-operator",
+      "edgeVersion": "1.22.0",
+      "versions": [
+        { "version": "1.22.0", "source": "docker.io/percona/percona-server-mongodb-operator:1.22.0" }
+      ]
+    },
+    {
+      "name": "postgresql",
+      "edgeVersion": "19beta2-standard-trixie",
+      "versions": [
+        { "version": "19beta2-standard-trixie", "source": "ghcr.io/cloudnative-pg/postgresql:19beta2-standard-trixie" }
+      ]
+    },
+    {
+      "name": "rustfs",
+      "edgeVersion": "1.0.0-beta.10",
+      "versions": [
+        { "version": "1.0.0-beta.10", "source": "docker.io/rustfs/rustfs:1.0.0-beta.10" }
+      ]
+    },
+    {
+      "name": "samba-domain",
+      "edgeVersion": "20260701025204",
+      "versions": [
+        { "version": "20260701025204", "source": "docker.io/nowsci/samba-domain:20260701025204" }
+      ]
+    },
+    {
+      "name": "valkey",
+      "edgeVersion": "9.1.0-alpine",
+      "versions": [
+        { "version": "9.1.0-alpine", "source": "docker.io/valkey/valkey:9.1.0-alpine" }
+      ]
+    },
+    {
+      "name": "apache-syncope",
+      "edgeVersion": "4.1.1",
+      "versions": [
+        { "version": "4.1.1", "source": "docker.io/apache/syncope:4.1.1" }
+      ]
+    },
+    {
+      "name": "opa",
+      "edgeVersion": "1.18.2-static",
+      "versions": [
+        { "version": "1.18.2-static", "source": "docker.io/openpolicyagent/opa:1.18.2-static" }
+      ]
+    },
+    {
+      "name": "litellm",
+      "edgeVersion": "1.93.0",
+      "versions": [
+        { "version": "1.93.0", "source": "ghcr.io/berriai/litellm:v1.93.0" }
+      ]
+    },
+    {
+      "name": "langfuse",
+      "edgeVersion": "3.221.1",
+      "versions": [
+        { "version": "3.221.1", "source": "docker.io/langfuse/langfuse:3.221.1" }
+      ]
+    },
+    {
+      "name": "langfuse-worker",
+      "edgeVersion": "3.221.1",
+      "versions": [
+        { "version": "3.221.1", "source": "docker.io/langfuse/langfuse-worker:3.221.1" }
+      ]
+    },
+    {
+      "name": "clickhouse-server",
+      "edgeVersion": "25.8.28.1-alpine",
+      "versions": [
+        { "version": "25.8.28.1-alpine", "source": "docker.io/clickhouse/clickhouse-server:25.8.28.1-alpine" }
+      ]
+    },
+    {
+      "name": "stalwart",
+      "edgeVersion": "0.16.13",
+      "versions": [
+        { "version": "0.16.13", "source": "docker.io/stalwartlabs/stalwart:v0.16.13" }
+      ]
+    },
+    {
+      "name": "novu-api",
+      "edgeVersion": "3.18.0",
+      "versions": [
+        { "version": "3.18.0", "source": "ghcr.io/novuhq/novu/api:3.18.0" }
+      ]
+    },
+    {
+      "name": "novu-worker",
+      "edgeVersion": "3.18.0",
+      "versions": [
+        { "version": "3.18.0", "source": "ghcr.io/novuhq/novu/worker:3.18.0" }
+      ]
+    },
+    {
+      "name": "novu-ws",
+      "edgeVersion": "3.18.0",
+      "versions": [
+        { "version": "3.18.0", "source": "ghcr.io/novuhq/novu/ws:3.18.0" }
+      ]
+    },
+    {
+      "name": "novu-dashboard",
+      "edgeVersion": "3.18.0",
+      "versions": [
+        { "version": "3.18.0", "source": "ghcr.io/novuhq/novu/dashboard:3.18.0" }
+      ]
+    },
+    {
+      "name": "mattermost-team-edition",
+      "edgeVersion": "11.9.0",
+      "platforms": ["linux/amd64"],
+      "versions": [
+        { "version": "11.9.0", "source": "docker.io/mattermost/mattermost-team-edition:11.9.0" }
+      ]
+    },
+    {
+      "name": "grafana-tempo",
+      "edgeVersion": "3.0.2",
+      "versions": [
+        { "version": "3.0.2", "source": "docker.io/grafana/tempo:3.0.2" }
+      ]
+    },
+    {
+      "name": "grafana-loki",
+      "edgeVersion": "3.7.3",
+      "versions": [
+        { "version": "3.7.3", "source": "docker.io/grafana/loki:3.7.3" }
+      ]
+    },
+    {
+      "name": "grafana-operator",
+      "edgeVersion": "5.24.0",
+      "versions": [
+        { "version": "5.24.0", "source": "ghcr.io/grafana/grafana-operator:v5.24.0" }
+      ]
+    },
+    {
+      "name": "velero",
+      "edgeVersion": "1.18.2",
+      "versions": [
+        { "version": "1.18.2", "source": "docker.io/velero/velero:v1.18.2" }
+      ]
+    },
+    {
+      "name": "argocd",
+      "edgeVersion": "3.4.5",
+      "versions": [
+        { "version": "3.4.5", "source": "quay.io/argoproj/argocd:v3.4.5" }
+      ]
+    },
+    {
+      "name": "crossplane",
+      "edgeVersion": "2.3.3",
+      "versions": [
+        { "version": "2.3.3", "source": "xpkg.crossplane.io/crossplane/crossplane:v2.3.3" }
+      ]
+    },
+    {
+      "name": "crossplane-provider-helm",
+      "edgeVersion": "1.3.0",
+      "versions": [
+        { "version": "1.3.0", "source": "xpkg.crossplane.io/crossplane-contrib/provider-helm:v1.3.0" }
+      ]
+    }
+  ]
+}

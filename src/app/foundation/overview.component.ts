@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject } from '@angular/core';
 import { FoundationRegistryService } from '../registry/foundation-registry.service';
 import { EnginesService } from './engines.service';
-import { ConnectivityService } from './connectivity.service';
+import { HisRequirementItem, HisRequirementsService, HisState } from './his-requirements.service';
 import { ViewRouter } from '../view-router';
 import { CarbonIcon } from '../carbon-icon';
 import { HostedPlugin } from '../registry/hosted-plugin';
@@ -22,9 +22,9 @@ const DOMAIN_ICON: Record<string, any> = {
 interface DomainCard {
   id: string; label: string; icon: any; desc: string; live: boolean;
   count: number; healthy: number; degraded: boolean; modules: string; firstModule: string;
-  opNote?: string;    // 로드맵 도메인 중 실제 설치 진행이 있는 엔진의 실시간 상태(BSS/FSS 카탈로그 실측)
+  opNote?: string;    // 로드맵 도메인 중 실제 설치 진행이 있는 PFS 모듈의 실시간 상태
   linkTab?: string;   // opNote가 있으면 클릭 시 이동할 탭(예: 'velero')
-  linkModule?: 'bss' | 'engines'; // linkTab이 속한 모듈 — Velero=bss, OTel=engines(2026-07-04 재확정)
+  linkModule?: 'modules';
   plannedNote?: string; // live 도메인 안에도 아직 미구현인 엔진이 있을 때(예: Identity의 Syncope) 표시
 }
 
@@ -37,15 +37,15 @@ interface SetupStep {
   tab?: string;
 }
 
-// FS 구축계획서(§3.2 모듈 카탈로그, 정본: _DOCS_/Foundation/FS-구축계획서-2026-07-02.md) 기준 계획 제품명.
+// CONSTITUTION-0004 §2.0.4 PFS core module 기준 계획 제품명.
 // 아직 capability 서비스(FOUNDATION_PLUGINS)로 등록되지 않은 4개 도메인도 정확한 제품명을 명시한다.
-// liveKey가 있으면 실제 카탈로그(BSS host 연결 또는 FS 구현 엔진)의 실측 상태를 그대로 반영한다(하드코딩 금지).
-// FS 정본 멤버는 제품명이 아니라 identity/data/ai/comm/observability/backup capability 모듈이다.
-const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: string; linkTab?: string; linkModule?: 'bss' | 'engines' }> = {
+// liveKey가 있으면 PFS 구현 모듈의 실측 상태를 그대로 반영한다(하드코딩 금지).
+// PFS 정본 멤버는 제품명이 아니라 identity/data/ai/comm/observability/backup capability 모듈이다.
+const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: string; linkTab?: string; linkModule?: 'modules' }> = {
   ai: { modules: 'LiteLLM · Langfuse · Vector Retrieval' },
   comm: { modules: 'Stalwart(JMAP) · Novu · Mattermost' },
-  observability: { modules: 'OpenTelemetry Collector · Prometheus(Basic 위임) · Tempo · Loki · Grafana', liveKey: 'otel', liveLabel: 'OpenTelemetry Collector', linkTab: 'otel', linkModule: 'engines' },
-  backup: { modules: 'Velero', liveKey: 'velero', liveLabel: 'Velero', linkTab: 'velero', linkModule: 'bss' },
+  observability: { modules: 'OpenTelemetry Collector · Tempo · Loki · Grafana Operator', liveKey: 'otel', liveLabel: 'OpenTelemetry Collector', linkTab: 'otel', linkModule: 'modules' },
+  backup: { modules: 'BackupPolicy · Restore · Object/Volume protection' },
 };
 
 // Foundation Overview — subShell home(개요). 정체성(10 Perspective의 기둥) + capability 6-도메인 현황
@@ -59,14 +59,14 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
     <!-- Hero: 정체성 + at-a-glance -->
     <section class="ov-hero">
       <div class="ov-hero-copy">
-        <span class="ov-eyebrow">Foundation Service Stack</span>
+        <span class="ov-eyebrow">Platform Foundation Service Stack</span>
         <h1 class="ov-h1">플랫폼 운영의 기둥</h1>
         <p class="ov-lead">
           사원·고객 신원과 모든 시스템 운영을 관장하는 Foundation. OpenSphere 10개 Perspective를 지탱하는
           <strong>capability 모듈</strong>을 설치·운영하고, 다른 subShell이 소비할 백킹서비스를 호스팅합니다.
         </p>
         <div class="ov-hero-actions">
-          <button class="btn btn-primary" (click)="go('engines')">FSS 엔진 설치</button>
+          <button class="btn btn-primary" (click)="go('modules')">PFS 모듈 관리</button>
         </div>
       </div>
       <div class="ov-hero-stat">
@@ -80,36 +80,62 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
       </div>
     </section>
 
-    <!-- BSS/FSS 개념 정의: _DOCS_/Foundation/FS-구축계획서-2026-07-02.md §1.1, §3.1 기준 -->
-    <div class="os-sech">BSS / FSS 정의 <span class="os-dim">— FS 구축계획서 §1.1 · §3.1 정본</span></div>
+    <!-- HIS/PFS 소유권 경계의 현행 권위: CONSTITUTION-0004 §2.0 -->
+    <div class="os-sech">HIS / PFS 소유권 경계 <span class="os-dim">— CONSTITUTION-0004 §2.0</span></div>
     <section class="stack-defs">
-      <article class="stack-def stack-def--bss" (click)="go('bss')" role="button" tabindex="0" (keydown.enter)="go('bss')">
+      <article class="stack-def stack-def--his">
         <div class="stack-def-h">
-          <span class="label label-info">BSS</span>
-          <h3>Basic Service Stack</h3>
+          <span class="label label-info">HIS</span>
+          <h3>Host Infrastructure Service Stack</h3>
+          <span class="label os-ml-auto" [ngClass]="statePill(his.status()?.state)">{{ his.status()?.state || '확인 중' }}</span>
         </div>
         <p>
-          k8s에서 범용 제공하는 클러스터 공유 인프라입니다. 소비자는 클러스터 전체이며,
-          Foundation은 이 자원을 소유하지 않고 필요한 요구만 선언해 소비합니다.
+          클러스터 전체가 소비하는 호스트 공통 인프라입니다. Cluster Manager가 진단과 lifecycle을 소유하며,
+          Foundation은 PFS 설립에 필요한 상태를 읽기 전용으로 소비합니다.
         </p>
         <div class="stack-members">
-          <span *ngFor="let m of bssMembers" class="stack-chip">{{ m }}</span>
+          <span class="stack-chip">{{ his.status()?.summary?.coreReady || 0 }}/{{ his.status()?.summary?.coreTotal || 0 }} core ready</span>
+          <span class="stack-chip">{{ his.status()?.summary?.selectedProfilesReady || 0 }}/{{ his.status()?.summary?.selectedProfilesTotal || 0 }} profile ready</span>
+        </div>
+        <div class="stack-actions">
+          <a class="btn btn-sm" href="/p/cluster-manager/his/his">Cluster Manager에서 HIS 관리</a>
+          <span class="os-dim">Foundation에서는 변경할 수 없습니다.</span>
         </div>
       </article>
 
-      <article class="stack-def stack-def--fss" (click)="go('engines')" role="button" tabindex="0" (keydown.enter)="go('engines')">
+      <article class="stack-def stack-def--pfs" (click)="go('modules')" role="button" tabindex="0" (keydown.enter)="go('modules')">
         <div class="stack-def-h">
-          <span class="label label-success">FSS</span>
-          <h3>Foundation Service Stack</h3>
+          <span class="label label-success">PFS</span>
+          <h3>Platform Foundation Service Stack</h3>
         </div>
         <p>
           사용자(사원·고객) 관리와 이를 위한 모든 시스템 운영 관리 서비스입니다.
-          10 Perspective를 지탱하는 기둥이며, capability 모듈이 FS의 정본 멤버입니다.
+          10 Perspective를 지탱하며, Foundation subShell이 capability 모듈의 lifecycle을 소유합니다.
         </p>
         <div class="stack-members">
-          <span *ngFor="let m of fssMembers" class="stack-chip">{{ m }}</span>
+          <span *ngFor="let m of pfsMembers" class="stack-chip">{{ m }}</span>
         </div>
       </article>
+    </section>
+
+    <div class="os-sech">HIS 요구조건 <span class="os-dim">— Cluster Manager 단일 read model · 읽기 전용</span></div>
+    <section class="his-req">
+      <div class="his-req-head">
+        <div><strong>PFS 선행 인프라</strong><span *ngIf="his.lastSync()">마지막 확인 {{ his.lastSync() }}</span></div>
+        <button class="btn btn-sm" type="button" (click)="his.refresh()" [disabled]="his.busy()">{{ his.busy() ? '확인 중…' : '새로고침' }}</button>
+      </div>
+      <div class="his-req-row his-req-row--head">
+        <span>Capability</span><span>Mode</span><span>Ownership</span><span>State</span><span>Evidence</span>
+      </div>
+      <div class="his-req-row" *ngFor="let item of requiredHisItems()">
+        <span class="his-req-name">{{ item.displayName }}</span>
+        <span>{{ item.mode }}</span>
+        <span>{{ item.ownership }}</span>
+        <span><span class="label" [ngClass]="statePill(item.check.state)">{{ item.check.state }}</span></span>
+        <span class="his-req-message">{{ item.check.message || item.check.reason }}<small *ngIf="item.check.observedVersion"> · {{ item.check.observedVersion }}</small></span>
+      </div>
+      <div class="his-req-empty" *ngIf="!his.busy() && !his.error() && requiredHisItems().length === 0">선택된 HIS 요구조건이 없습니다.</div>
+      <div class="his-req-error" *ngIf="his.error()">{{ his.error() }} · PFS 준비 완료로 간주하지 않습니다.</div>
     </section>
 
     <!-- Capability 6-도메인 현황 -->
@@ -168,7 +194,7 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
         </span>
       </div>
       <div class="ov-empty" *ngIf="installedPlugins().length === 0">
-        설치된 FSS plugin이 없습니다. <button class="btn btn-link" type="button" (click)="go('engines')">FSS 엔진</button>에서 설치할 모듈을 선택하세요.
+        설치된 PFS plugin이 없습니다. <button class="btn btn-link" type="button" (click)="go('modules')">PFS 모듈</button>에서 설치할 모듈을 선택하세요.
       </div>
     </div>
   `,
@@ -176,26 +202,25 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
 export class FoundationOverviewComponent {
   readonly reg = inject(FoundationRegistryService);
   readonly engines = inject(EnginesService);
-  readonly conn = inject(ConnectivityService);
+  readonly his = inject(HisRequirementsService);
   private vr = inject(ViewRouter);
   readonly s = this.reg.summary;
   readonly installedPlugins = this.reg.enabledPlugins;
-  readonly bssMembers = ['kube-prometheus-stack', 'storage(local-path)', 'ingress'];
-  readonly fssMembers = ['identity', 'data', 'ai', 'comm', 'observability', 'backup'];
+  readonly pfsMembers = ['identity', 'data', 'ai', 'comm', 'observability', 'backup'];
   readonly setupSteps: SetupStep[] = [
     {
       n: '0',
-      title: 'BSS 확인',
-      body: 'host 공유 인프라와 Foundation 요구 상태를 먼저 확인합니다.',
-      action: 'BSS',
-      module: 'bss',
+      title: 'HIS 요구조건 확인',
+      body: 'Cluster Manager가 제공하는 host 공통 인프라의 준비 상태를 확인합니다.',
+      action: 'Cluster Manager',
+      module: 'his',
     },
     {
       n: '1',
-      title: 'FSS 엔진 선언',
-      body: 'OpenSearch, PostgreSQL(CloudNativePG), Crossplane 같은 구현 엔진을 설치 선언합니다.',
+      title: 'PFS 모듈 선언',
+      body: 'OpenSearch, PostgreSQL(CloudNativePG) 같은 capability 구현 엔진을 설치 선언합니다.',
       action: 'Engines',
-      module: 'engines',
+      module: 'modules',
     },
     {
       n: '2',
@@ -214,7 +239,11 @@ export class FoundationOverviewComponent {
     },
   ];
 
-  ngOnInit(): void { this.engines.start(); this.conn.start(); }
+  ngOnInit(): void { this.engines.start(); this.his.start(); }
+
+  readonly requiredHisItems = computed<HisRequirementItem[]>(() =>
+    (this.his.status()?.items ?? []).filter((item) => item.effectiveRequired ?? item.required ?? item.profileSelected),
+  );
 
   readonly domains = computed<DomainCard[]>(() => {
     const roll = (prefix: string): Omit<DomainCard, 'id' | 'label' | 'icon' | 'desc' | 'live'> => {
@@ -232,11 +261,9 @@ export class FoundationOverviewComponent {
       const p = PLANNED[id];
       const base = { count: 0, healthy: 0, degraded: false, modules: p.modules, firstModule: 'overview' };
       if (!p.liveKey) { return base; }
-      const svc = p.linkModule === 'bss' ? this.conn : this.engines;
-      const state = svc.liveState(p.liveKey);
+      const state = this.engines.liveState(p.liveKey);
       if (state === 'loading') { return base; } // 확인 중엔 아무 것도 단정하지 않음(플리커 방지)
-      const catalogLabel = p.linkModule === 'bss' ? 'BSS' : 'FSS 엔진';
-      const opNote = state === 'ok' ? `${p.liveLabel} 설치·운영중 — ${catalogLabel}에서 상태 확인` : `${p.liveLabel} 미설치 — ${catalogLabel}에서 설치 가능`;
+      const opNote = state === 'ok' ? `${p.liveLabel} 설치·운영중 — PFS 모듈에서 상태 확인` : `${p.liveLabel} 미설치 — PFS 모듈에서 설치 가능`;
       return { ...base, opNote, linkTab: p.linkTab, linkModule: p.linkModule };
     };
     return [
@@ -253,12 +280,13 @@ export class FoundationOverviewComponent {
 
   go(id: string): void { this.vr.setModule(id); }
   goStep(step: SetupStep): void {
+    if (step.module === 'his') { window.location.assign('/p/cluster-manager/his/his'); return; }
     this.vr.setModule(step.module);
     if (step.tab) { this.vr.setTab(step.tab); }
   }
   goDomain(d: DomainCard): void {
     if (d.live) { this.go(d.firstModule); return; }
-    if (d.linkTab) { this.vr.setModule(d.linkModule ?? 'engines'); this.vr.setTab(d.linkTab); }
+    if (d.linkTab) { this.vr.setModule(d.linkModule ?? 'modules'); this.vr.setTab(d.linkTab); }
   }
   openPlugin(p: HostedPlugin): void { this.vr.setModule(p.view.module); }
   preparePlugin(p: HostedPlugin): void {
@@ -281,5 +309,12 @@ export class FoundationOverviewComponent {
     if (s === 'Disabled') { return 'label-warning'; }
     if (s === null) { return ''; }
     return 'label-info';
+  }
+
+  statePill(state?: HisState): string {
+    if (state === 'Ready') { return 'label-success'; }
+    if (state === 'Blocked') { return 'label-danger'; }
+    if (state === 'Degraded') { return 'label-warning'; }
+    return '';
   }
 }

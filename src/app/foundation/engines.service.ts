@@ -2,8 +2,8 @@ import { Injectable, signal } from '@angular/core';
 import { apiBase } from '../api-base';
 import { State } from '../modules/postgres/cnpg.types';
 
-// FSS 엔진 카탈로그의 라이브 상태.
-// 정본(_DOCS_/Foundation/FS-구축계획서-2026-07-02.md §3.2): FS 멤버는 identity/data/ai/comm/observability/backup.
+// PFS 모듈 카탈로그의 라이브 상태.
+// 정본(CONSTITUTION-0004 §2.0.4): PFS core는 identity/data/ai-substrate/comm/observability/backup.
 // 이 service는 정본 멤버 자체가 아니라 그 모듈을 구현·조달하는 엔진 후보의 live 상태를 조회한다.
 @Injectable({ providedIn: 'root' })
 export class EnginesService {
@@ -38,7 +38,7 @@ export class EnginesService {
     this.busy.set(true);
     await Promise.allSettled([
       // OTel Collector는 자체 CRD가 없어 실제 Deployment 존재로 직접 확인.
-      this.probe('otel', 'apis/apps/v1/namespaces/opensphere-otel-collector/deployments/otel-collector-opentelemetry-collector'),
+      this.probe('otel', 'apis/apps/v1/namespaces/opensphere-foundation/deployments/otel-collector-opentelemetry-collector'),
       this.probe('cnpg', 'apis/apiextensions.k8s.io/v1/customresourcedefinitions/clusters.postgresql.cnpg.io'),
       this.probe('argocd', 'apis/apps/v1/namespaces/argocd/deployments/argocd-server'),
       this.probe('crossplane', 'apis/apiextensions.k8s.io/v1/customresourcedefinitions/compositions.apiextensions.crossplane.io'),
