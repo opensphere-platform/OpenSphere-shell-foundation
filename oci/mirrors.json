@@ -70,6 +70,7 @@
     {
       "name": "samba-domain",
       "edgeVersion": "20260701025204",
+      "platforms": ["linux/amd64"],
       "versions": [
         { "version": "20260701025204", "source": "docker.io/nowsci/samba-domain:20260701025204" }
       ]
