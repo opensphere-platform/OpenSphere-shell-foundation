@@ -29,7 +29,10 @@ permissions:
   artifact-metadata: write
 
 concurrency:
-  group: foundation-edge-images
+  # v2 rotates the lease after a GitHub-hosted QEMU runner ignored both the
+  # normal and force-cancel requests. A cancelled v1 run cannot reach the
+  # atomic publish-edge job; all current releases remain serialized here.
+  group: foundation-edge-images-v2
   cancel-in-progress: false
 
 env:
