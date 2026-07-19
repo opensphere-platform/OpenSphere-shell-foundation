@@ -4,7 +4,10 @@ import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
-const readWorkspace = (path) => readFileSync(resolve(root, '..', path), 'utf8');
+const sambaRoot = process.env.SAMBA_PLUGIN_ROOT
+  ? resolve(root, process.env.SAMBA_PLUGIN_ROOT)
+  : resolve(root, '..', 'OpenSphere-plugin-samba-ad');
+const readSamba = (path) => readFileSync(resolve(sambaRoot, path), 'utf8');
 
 const surfaces = [
   ['PostgreSQL', 'src/app/modules/postgres/postgres-plugin.component.ts'],
@@ -27,7 +30,7 @@ for (const [name, file] of surfaces) {
 
 // Samba-AD는 Foundation 안층에 마운트되지만 독립 서명 plugin이므로 Angular 공통
 // component 대신 동일 CSS 계약과 동일한 capability tab 집합을 light DOM으로 구현한다.
-const samba = readWorkspace('OpenSphere-plugin-samba-ad/ui-shell/ui-shell.plugin.js');
+const samba = readSamba('ui-shell/ui-shell.plugin.js');
 assert.match(samba, /pgp-page-frame/, 'Samba-AD: PostgreSQL 공통 page frame 누락');
 assert.match(samba, /pfs-plugin-head/, 'Samba-AD: 공통 header 누락');
 assert.match(samba, /pfs-plugin-tabs/, 'Samba-AD: 공통 tabs 누락');
@@ -70,6 +73,6 @@ for (const file of ['src/app/modules/data-engine/data-engine.spec.ts', 'src/app/
 }
 assert.match(read('src/app/api-base.ts'), /FND_NS = 'opensphere-foundation'/, 'Foundation API namespace 정본 누락');
 assert.match(read('src/app/modules/identity/identity.services.ts'), /readonly ns = FND_NS/, 'Identity member가 Foundation namespace 정본을 사용하지 않습니다.');
-assert.match(readWorkspace('OpenSphere-plugin-samba-ad/server.js'), /FOUNDATION_NS \|\| 'opensphere-foundation'/, 'Samba-AD operand namespace가 Foundation에 수렴하지 않았습니다.');
+assert.match(readSamba('server.js'), /FOUNDATION_NS \|\| 'opensphere-foundation'/, 'Samba-AD operand namespace가 Foundation에 수렴하지 않았습니다.');
 
 console.log(`Foundation PostgreSQL-level surface contract: passed (${surfaces.length + 1} implementations, ${manualCount} manuals)`);
