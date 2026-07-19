@@ -380,6 +380,22 @@ jobs:
             "$RUNNER_TEMP/foundation-bom.json" > "$RUNNER_TEMP/foundation-bom.next.json"
           mv "$RUNNER_TEMP/foundation-bom.next.json" "$RUNNER_TEMP/foundation-bom.json"
 
+          # Samba-AD is governed in its own signed package repository, so its
+          # operand is not present in plugins/catalog.json. It is nevertheless
+          # part of the installable Foundation release and must be digest-pinned
+          # in the same BOM as the plugin package.
+          samba_operand_repository='mirror/samba-domain'
+          samba_operand_digest="$(crane digest "$REGISTRY/$samba_operand_repository:edge")"
+          samba_operand_platforms="$(jq -c '.images[] | select(.name == "samba-domain") | .platforms' oci/mirrors.json)"
+          test -n "$samba_operand_platforms"
+          test "$samba_operand_platforms" != "null"
+          jq --arg repository "$samba_operand_repository" \
+            --arg image "$REGISTRY/$samba_operand_repository@$samba_operand_digest" \
+            --argjson platforms "$samba_operand_platforms" \
+            '.operands["samba-domain"]={repository:$repository,image:$image,channel:"edge",platforms:$platforms,governance:"samba-ad-separate-signed-package"}' \
+            "$RUNNER_TEMP/foundation-bom.json" > "$RUNNER_TEMP/foundation-bom.next.json"
+          mv "$RUNNER_TEMP/foundation-bom.next.json" "$RUNNER_TEMP/foundation-bom.json"
+
           while IFS= read -r operand; do
             name="${operand#mirror/}"; name="${name%:edge}"
             repository="mirror/$name"
@@ -392,7 +408,7 @@ jobs:
           done < <(jq -r '[.plugins[].operands[]] | unique[]' plugins/catalog.json)
 
           jq -e '.kind == "OpenSphereFoundationReleaseBOM" and .status == "Active" and
-            (.components | length) == 23 and (.operands | length) == 28 and
+            (.components | length) == 23 and (.operands | length) == 29 and
             .components.shell.image and .components["control-plane"].image' \
             "$RUNNER_TEMP/foundation-bom.json" >/dev/null
           echo "anchor-digest=$SHELL_DIGEST" >> "$GITHUB_OUTPUT"
