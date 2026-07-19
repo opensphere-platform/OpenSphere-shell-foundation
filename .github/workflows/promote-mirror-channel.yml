@@ -57,8 +57,8 @@ jobs:
       - uses: imjasonh/setup-crane@v0.4
       - name: Login to GHCR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: crane auth login ghcr.io -u "${{ github.actor }}" -p "$GH_TOKEN"
+          GHCR_TOKEN: ${{ secrets.GHCR_PAT }}
+        run: crane auth login ghcr.io -u "opensphere-platform" -p "$GHCR_TOKEN"
       - id: source
         name: Resolve immutable source digest
         env:

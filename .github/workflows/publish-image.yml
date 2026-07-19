@@ -110,7 +110,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GHCR_PAT }}
       - id: package
         shell: bash
         run: |
@@ -173,7 +173,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GHCR_PAT }}
       - id: meta
         uses: docker/metadata-action@v5
         with:
@@ -252,7 +252,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GHCR_PAT }}
       - id: package
         shell: bash
         env: { PLUGIN_ID: "${{ matrix.id }}" }
@@ -312,8 +312,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: imjasonh/setup-crane@v0.4
       - name: Login to GHCR
-        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        run: crane auth login ghcr.io -u "${{ github.actor }}" -p "$GH_TOKEN"
+        env: { GHCR_TOKEN: "${{ secrets.GHCR_PAT }}" }
+        run: crane auth login ghcr.io -u "opensphere-platform" -p "$GHCR_TOKEN"
       - id: release
         name: Verify exact artifacts and create Foundation BOM
         shell: bash
