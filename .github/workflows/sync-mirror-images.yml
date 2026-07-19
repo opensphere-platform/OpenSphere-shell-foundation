@@ -59,12 +59,20 @@ jobs:
           target="$repository:$VERSION"
           source_digest="$(crane digest "$SOURCE")"
           source_manifest="$(crane manifest "$SOURCE@$source_digest")"
-          for platform in $(jq -r '.[]' <<<"$EXPECTED_PLATFORMS"); do
-            os="${platform%/*}"; architecture="${platform#*/}"
-            jq -e --arg os "$os" --arg architecture "$architecture" \
-              '.manifests[] | select(.platform.os == $os and .platform.architecture == $architecture)' \
-              <<<"$source_manifest" >/dev/null
-          done
+          if jq -e '.manifests and (.manifests | type == "array")' <<<"$source_manifest" >/dev/null; then
+            for platform in $(jq -r '.[]' <<<"$EXPECTED_PLATFORMS"); do
+              os="${platform%/*}"; architecture="${platform#*/}"
+              jq -e --arg os "$os" --arg architecture "$architecture" \
+                '.manifests[] | select(.platform.os == $os and .platform.architecture == $architecture)' \
+                <<<"$source_manifest" >/dev/null
+            done
+          else
+            test "$(jq 'length' <<<"$EXPECTED_PLATFORMS")" = 1
+            expected_platform="$(jq -r '.[0]' <<<"$EXPECTED_PLATFORMS")"
+            source_config="$(crane config "$SOURCE@$source_digest")"
+            actual_platform="$(jq -r '.os + "/" + .architecture' <<<"$source_config")"
+            test "$actual_platform" = "$expected_platform"
+          fi
           crane copy "$SOURCE" "$target"
           target_digest="$(crane digest "$target")"
           test "$target_digest" = "$source_digest"
