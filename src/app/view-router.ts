@@ -58,7 +58,7 @@ export class ViewRouter {
   private write(): void {
     try {
       const m = this.module();
-      const hasTabs = ['postgres', 'psmdb', 'valkey', 'rustfs', 'opensearch', 'keycloak', 'modules', 'delivery'].includes(m);
+      const hasTabs = ['postgres', 'psmdb', 'valkey', 'rustfs', 'opensearch', 'keycloak', 'addc', 'modules', 'delivery'].includes(m);
       const t = this.tab();
       let next = '/p/foundation';
       if (m && m !== 'overview') next += hasTabs && t && t !== 'overview' ? `/${m}/${t}` : `/${m}`;
