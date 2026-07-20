@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, computed, inject } from '@angular/core';
 import { ClarityModule } from '@clr/angular';
-import { PluginPageHeaderComponent, PluginPageHeaderModel, PluginPageTab, PluginTabsComponent } from '../shared/plugin-page-shell.component';
+import { PluginPageHeaderComponent, PluginPageHeaderModel, PluginPageTab, PluginTabsComponent, pfsPluginTabs } from '../shared/plugin-page-shell.component';
 import { ViewRouter } from '../view-router';
 
 export interface RoadmapModuleInput {
@@ -142,24 +142,24 @@ const DEFINITIONS: Record<string, Partial<RoadmapDefinition>> = {
 
     <ng-container *ngIf="active()==='overview'">
       <section class="pgp-steps" [attr.aria-label]="module.name + ' 구현 단계'">
-        <button type="button" class="pgp-step current" (click)="select('dependency')"><span class="pgp-step-n">1</span><span><b>실행 기반 확인</b><small>선행 capability와 Control Plane 계약</small></span></button>
-        <button type="button" class="pgp-step" (click)="select('plan')"><span class="pgp-step-n">2</span><span><b>설치 계획 확정</b><small>버전·digest·리소스·보호 정책</small></span></button>
+        <button type="button" class="pgp-step current" (click)="select('operator')"><span class="pgp-step-n">1</span><span><b>Operator 준비</b><small>선행 capability와 Control Plane 계약</small></span></button>
+        <button type="button" class="pgp-step" (click)="select('cluster')"><span class="pgp-step-n">2</span><span><b>Cluster 계획 확정</b><small>버전·digest·리소스·보호 정책</small></span></button>
         <button type="button" class="pgp-step" disabled><span class="pgp-step-n">3</span><span><b>운영 관리</b><small>reconciler 구현 후 활성화</small></span></button>
       </section>
     <section class="rm-grid">
       <article class="rm-panel"><h2>Capability</h2><p>{{module.role}}</p><dl><dt>연결</dt><dd>{{module.wiring}}</dd><dt>소유 섹터</dt><dd>{{module.category}}</dd><dt>관리 수준</dt><dd>PostgreSQL surface v1</dd></dl></article>
       <article class="rm-panel"><h2>구현 게이트</h2><ol class="rm-list"><li *ngFor="let gate of def().gates">{{gate}}</li></ol><span class="label label-warning">{{def().gates.length}} gates open</span></article>
-      <article class="rm-panel"><h2>다음 조치</h2><p>제품 버전과 의존성을 BOM으로 확정하고, control-plane reconciler와 E2E rollback 증거를 구현합니다.</p><button class="btn btn-sm btn-primary" type="button" (click)="select('plan')">설치 계획 검토</button></article>
+      <article class="rm-panel"><h2>다음 조치</h2><p>제품 버전과 의존성을 BOM으로 확정하고, control-plane reconciler와 E2E rollback 증거를 구현합니다.</p><button class="btn btn-sm btn-primary" type="button" (click)="select('cluster')">Cluster plan 검토</button></article>
     </section>
     </ng-container>
 
-    <section class="rm-work" *ngIf="active()==='dependency'">
-      <h2>실행 기반</h2><p class="os-sub">이 모듈을 설치하기 전에 충족해야 하는 조건입니다.</p>
+    <section class="rm-work" *ngIf="active()==='operator'">
+      <h2>Operator</h2><p class="os-sub">이 모듈을 설치하기 전에 충족해야 하는 실행 기반과 reconciler 조건입니다.</p>
       <table class="table"><thead><tr><th>요구조건</th><th>상태</th><th>근거</th></tr></thead><tbody><tr *ngFor="let item of def().prerequisites"><td>{{item}}</td><td><span class="label label-warning">검증 필요</span></td><td>Runtime probe 미배선</td></tr></tbody></table>
     </section>
 
-    <section class="rm-work" *ngIf="active()==='plan'">
-      <h2>설치·운영 구성</h2>
+    <section class="rm-work" *ngIf="active()==='cluster'">
+      <h2>Cluster plan</h2>
       <div class="rm-form"><label><span>Channel</span><select disabled><option>stable — BOM 미고정</option></select></label><label><span>Profile</span><input [value]="def().profile" disabled /></label><label><span>Namespace</span><input [value]="def().namespace" disabled /></label></div>
       <clr-alert clrAlertType="warning" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">설치 버튼은 의도적으로 잠겨 있습니다. 버전·이미지 digest·chart·rollback이 서명 BOM에 고정되고 reconciler가 준비되어야 활성화됩니다.</span></clr-alert-item></clr-alert>
       <button class="btn btn-primary" type="button" disabled>설치 계획 적용</button>
@@ -169,12 +169,16 @@ const DEFINITIONS: Record<string, Partial<RoadmapDefinition>> = {
       <h2>Topology & workloads</h2><div class="rm-topology"><article *ngFor="let item of def().components"><span class="rm-node">{{item}}</span><span class="label label-warning">Planned</span></article></div>
     </section>
 
-    <section class="rm-work" *ngIf="active()==='consumers'">
-      <h2>Consumers & contracts</h2><table class="table"><thead><tr><th>계약</th><th>상태</th><th>발급 주체</th></tr></thead><tbody><tr *ngFor="let item of def().consumers"><td>{{item}}</td><td><span class="label label-warning">Planned</span></td><td>Foundation Control Plane</td></tr></tbody></table>
+    <section class="rm-work" *ngIf="active()==='config'">
+      <h2>Configuration</h2><p>서명 BOM이 확정되기 전에는 적용하지 않으며, 현재 계획 값을 명시적으로 노출합니다.</p><dl class="os-kv"><dt>Channel</dt><dd>stable · BOM 미고정</dd><dt>Profile</dt><dd>{{def().profile}}</dd><dt>Namespace</dt><dd class="os-mono">{{def().namespace}}</dd><dt>Apply owner</dt><dd>Foundation Control Plane</dd></dl><button class="btn btn-primary" type="button" (click)="select('cluster')">Cluster plan에서 검토</button>
     </section>
 
-    <section class="rm-work" *ngIf="active()==='protection'">
-      <h2>Protection & security</h2><div class="rm-grid"><article class="rm-panel" *ngFor="let item of def().protection"><h3>{{item}}</h3><p>정책·SecretRef·감사 증거를 control-plane에서 검증하도록 구현합니다.</p></article></div>
+    <section class="rm-work" *ngIf="active()==='domain'">
+      <h2>{{domainLabel()}}</h2><table class="table"><thead><tr><th>영역</th><th>상태</th><th>소유 주체</th></tr></thead><tbody><tr *ngFor="let item of def().components"><td>{{item}}</td><td><span class="label label-warning">Planned</span></td><td>{{module.name}}</td></tr></tbody></table>
+    </section>
+
+    <section class="rm-work" *ngIf="active()==='backups'">
+      <h2>Backups</h2><div class="rm-grid"><article class="rm-panel" *ngFor="let item of def().protection"><h3>{{item}}</h3><p>정책·SecretRef·감사 증거를 control-plane에서 검증하도록 구현합니다.</p></article></div>
     </section>
 
     <section class="rm-work" *ngIf="active()==='events'">
@@ -185,6 +189,10 @@ const DEFINITIONS: Record<string, Partial<RoadmapDefinition>> = {
       <h2>Upgrade & rollback</h2><table class="table"><thead><tr><th>Channel</th><th>용도</th><th>승격 조건</th></tr></thead><tbody><tr><td>stable</td><td>운영</td><td>감사 통과·rollback 증거</td></tr><tr><td>candidate</td><td>승격 검증</td><td>E2E·호환성·보안 검사</td></tr><tr><td>edge</td><td>개발</td><td>기능 검증 전용</td></tr></tbody></table>
     </section>
 
+    <section class="rm-work" *ngIf="active()==='claims'">
+      <h2>Claims</h2><table class="table"><thead><tr><th>계약</th><th>상태</th><th>발급 주체</th></tr></thead><tbody><tr *ngFor="let item of def().consumers"><td>{{item}}</td><td><span class="label label-warning">Planned</span></td><td>Foundation Control Plane</td></tr></tbody></table>
+    </section>
+
     <section class="rm-work" *ngIf="active()==='documentation'">
       <h2>Documentation</h2><p>plugin 한글 안내서는 Foundation package 활성화 시 Console Manual Registry와 통합 검색에 자동 등록됩니다. 제품 공식 문서는 구현 세부의 1차 자료로 사용합니다.</p><dl class="os-kv"><dt>문서 ID</dt><dd class="os-mono">plugin:foundation/{{manualId()}}</dd><dt>상태</dt><dd><span class="label label-info">Phase 1 범위 문서</span></dd></dl><a class="btn btn-sm btn-primary" [href]="manualUrl()">한글 안내서 열기</a><a *ngIf="def().docs" class="btn btn-sm" [href]="def().docs" target="_blank" rel="noreferrer">공식 문서 열기</a><span *ngIf="!def().docs" class="label label-warning">공식 문서 연결 검토 필요</span>
     </section>
@@ -193,11 +201,7 @@ const DEFINITIONS: Record<string, Partial<RoadmapDefinition>> = {
 export class RoadmapModuleComponent {
   @Input({ required: true }) module!: RoadmapModuleInput;
   readonly vr = inject(ViewRouter);
-  readonly tabs: PluginPageTab[] = [
-    {id:'overview',label:'Overview'}, {id:'dependency',label:'실행 기반'}, {id:'plan',label:'설치·운영 구성'},
-    {id:'topology',label:'Topology'}, {id:'consumers',label:'Consumers'}, {id:'protection',label:'Protection'},
-    {id:'events',label:'Events'}, {id:'upgrade',label:'Upgrade'}, {id:'documentation',label:'Documentation'},
-  ];
+  get tabs(): PluginPageTab[] { return pfsPluginTabs(this.domainLabel()); }
   readonly active = computed(() => this.vr.detail());
   readonly def = computed<RoadmapDefinition>(() => ({ ...DEFAULT, ...(DEFINITIONS[this.module.id] ?? {}) }));
 
@@ -215,4 +219,12 @@ export class RoadmapModuleComponent {
   back(): void { this.vr.setTab('overview'); }
   manualId(): string { return `${this.module.id}-operations-ko`; }
   manualUrl(): string { return `/manual?doc=${encodeURIComponent(`plugin:foundation/${this.manualId()}`)}`; }
+  domainLabel(): string {
+    return ({
+      syncope:'Users & Workflows', opa:'Policies & Decisions', litellm:'Models & Routes', langfuse:'Traces & Prompts',
+      stalwart:'Domains & Mailboxes', novu:'Workflows & Templates', mattermost:'Workspaces & Channels',
+      tempo:'Traces & Tenants', loki:'Logs & Tenants', 'grafana-operator':'Dashboards & Datasources',
+      ptm:'Policies & Restore Points', argocd:'Applications & Projects',
+    } as Record<string,string>)[this.module.id] || 'Resources & Access';
+  }
 }

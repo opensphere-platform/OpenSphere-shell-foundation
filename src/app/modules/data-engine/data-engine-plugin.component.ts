@@ -12,9 +12,9 @@ import ArrowLeft16 from '@carbon/icons/es/arrow--left/16';
 import Download16 from '@carbon/icons/es/download/16';
 import Renew16 from '@carbon/icons/es/renew/16';
 import Password16 from '@carbon/icons/es/password/16';
-import { PluginPageHeaderComponent, PluginPageHeaderModel, PluginPageTab, PluginTabsComponent } from '../../shared/plugin-page-shell.component';
+import { PfsPluginTabId, PluginPageHeaderComponent, PluginPageHeaderModel, PluginPageTab, PluginTabsComponent, pfsPluginTabs } from '../../shared/plugin-page-shell.component';
 
-type Tab = 'overview' | 'dependency' | 'plan' | 'topology' | 'consumers' | 'protection' | 'events' | 'upgrade' | 'documentation';
+type Tab = PfsPluginTabId;
 type Profile = 'development' | 'production' | 'custom';
 interface StorageClassRow { name: string; provisioner: string; isDefault: boolean; allowExpansion: boolean; reclaimPolicy: string }
 interface EngineForm extends DataEngineInstallParameters { profile: Profile; approval: string }
@@ -46,19 +46,19 @@ function defaultForm(spec: DataEngineSpec): EngineForm {
 
     <section *ngIf="tab()==='overview'">
       <div class="pgp-steps">
-        <button class="pgp-step" [class.done]="dependencyReady()" [class.current]="!dependencyReady()" (click)="openTab('dependency')"><span class="pgp-step-n">1</span><span><b>실행 기반 준비</b><small>{{dependencyLabel()}}</small></span></button>
-        <button class="pgp-step" [class.done]="exists()" [class.current]="dependencyReady()&&!exists()" (click)="openTab('plan')"><span class="pgp-step-n">2</span><span><b>서비스 구성</b><small>버전·토폴로지·스토리지·보안</small></span></button>
+        <button class="pgp-step" [class.done]="dependencyReady()" [class.current]="!dependencyReady()" (click)="openTab('operator')"><span class="pgp-step-n">1</span><span><b>Operator 준비</b><small>{{dependencyLabel()}}</small></span></button>
+        <button class="pgp-step" [class.done]="exists()" [class.current]="dependencyReady()&&!exists()" (click)="openTab('cluster')"><span class="pgp-step-n">2</span><span><b>Cluster 생성</b><small>버전·토폴로지·스토리지·보안</small></span></button>
         <button class="pgp-step" [class.done]="ready()" [class.current]="exists()&&!ready()" [disabled]="!exists()" (click)="openTab('topology')"><span class="pgp-step-n">3</span><span><b>운영 관리</b><small>상태·소비자·보호·이벤트</small></span></button>
       </div>
       <div class="pgp-dashboard">
-        <article class="pgp-panel"><h2>Package readiness</h2><p>설치 수명주기의 실제 상태만 표시합니다.</p><dl class="de-kv"><dt>PFS Control Plane</dt><dd [class.ok]="controlPlaneReady()">{{controlPlaneReady()?'Ready':'Required'}}</dd><dt>{{spec.operator?.name||'Reconciler'}}</dt><dd [class.ok]="dependencyReady()">{{dependencyLabel()}}</dd><dt>Managed resource</dt><dd [class.ok]="exists()">{{runtimePhase()}}</dd></dl><button class="btn btn-sm btn-primary" (click)="openTab(dependencyReady()?'plan':'dependency')">{{dependencyReady()?'서비스 구성':'전제조건 확인'}}</button></article>
+        <article class="pgp-panel"><h2>Package readiness</h2><p>설치 수명주기의 실제 상태만 표시합니다.</p><dl class="de-kv"><dt>PFS Control Plane</dt><dd [class.ok]="controlPlaneReady()">{{controlPlaneReady()?'Ready':'Required'}}</dd><dt>{{spec.operator?.name||'Reconciler'}}</dt><dd [class.ok]="dependencyReady()">{{dependencyLabel()}}</dd><dt>Managed resource</dt><dd [class.ok]="exists()">{{runtimePhase()}}</dd></dl><button class="btn btn-sm btn-primary" (click)="openTab(dependencyReady()?'cluster':'operator')">{{dependencyReady()?'Cluster plan':'Operator 확인'}}</button></article>
         <article class="pgp-panel"><h2>Service health</h2><p>관리 workload와 Pod가 보고한 실제 가용성입니다.</p><div class="pgp-health"><strong [class.ok]="ready()">{{availability()}}%</strong><span>replicas ready · {{readyN()}}/{{totalN()}}</span><progress [value]="readyN()" [max]="totalN()||1"></progress></div><dl class="de-kv"><dt>Endpoint</dt><dd class="os-mono">{{spec.endpoint}}:{{spec.port}}</dd><dt>Storage</dt><dd>{{runtime.storage(engine)}}</dd></dl></article>
         <article class="pgp-panel"><h2>Operations policy</h2><p>선언된 보호·관측·인증 정책입니다.</p><dl class="de-kv"><dt>TLS</dt><dd>{{form().tls?'Enabled':'Disabled'}}</dd><dt>Monitoring</dt><dd>{{form().monitoring?'Enabled':'Disabled'}}</dd><dt>Backup</dt><dd>{{form().backup.enabled?'Configured':'Not configured'}}</dd><dt>Auth Secret</dt><dd class="os-mono">{{form().authSecret||'Operator managed / none'}}</dd></dl></article>
       </div>
-      <div class="de-docs"><a [href]="manualUrl()">OpenSphere {{spec.name}} 설치·운영 안내서 (한글)</a><a [href]="spec.docs" target="_blank" rel="noreferrer">공식 문서</a><button class="btn btn-sm btn-link" (click)="openTab('plan')">OpenSphere 설치 계약</button></div>
+      <div class="de-docs"><a [href]="manualUrl()">OpenSphere {{spec.name}} 설치·운영 안내서 (한글)</a><a [href]="spec.docs" target="_blank" rel="noreferrer">공식 문서</a><button class="btn btn-sm btn-link" (click)="openTab('cluster')">OpenSphere 설치 계약</button></div>
     </section>
 
-    <section class="de-work" *ngIf="tab()==='dependency'">
+    <section class="de-work" *ngIf="tab()==='operator'">
       <div class="de-section-head"><div><span class="vl-eyebrow">Internal dependency</span><h2>{{spec.operator?.name||'Foundation Control Plane'}}</h2></div><span class="label" [ngClass]="dependencyReady()?'label-success':'label-warning'">{{dependencyLabel()}}</span></div>
       <clr-alert *ngIf="!controlPlaneReady()" clrAlertType="warning" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">Foundation Control Plane이 먼저 Ready여야 선언형 설치를 실행할 수 있습니다.</span><div class="alert-actions"><button class="btn alert-action" (click)="openControlPlane()">Control Plane</button></div></clr-alert-item></clr-alert>
       <ng-container *ngIf="spec.operator">
@@ -71,7 +71,7 @@ function defaultForm(spec: DataEngineSpec): EngineForm {
       <div class="de-log" *ngIf="operatorLogs().length"><div *ngFor="let line of operatorLogs()">{{line}}</div></div>
     </section>
 
-    <section class="de-work" *ngIf="tab()==='plan'">
+    <section class="de-work" *ngIf="tab()==='cluster'">
       <div class="de-section-head"><div><span class="vl-eyebrow">Desired state</span><h2>{{spec.name}} 운영 구성</h2></div><span class="label" [ngClass]="exists()?'label-success':'label-warning'">{{exists()?'Managed':'Not created'}}</span></div>
       <clr-alert *ngIf="!dependencyReady()" clrAlertType="warning" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">설정은 미리 작성할 수 있지만 적용하려면 {{dependencyLabel()}} 상태가 필요합니다.</span></clr-alert-item></clr-alert>
       <form class="de-form" (ngSubmit)="apply()">
@@ -104,14 +104,15 @@ function defaultForm(spec: DataEngineSpec): EngineForm {
       <div class="de-section-head"><h2>Topology & workloads</h2><button class="btn btn-sm" (click)="refresh()" [disabled]="runtime.busy()[engine]"><os-cicon [icon]="iRenew" [size]="16"/> 새로고침</button></div>
       <clr-alert *ngIf="rt().state==='loading'" clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">{{spec.name}} 관리 리소스와 workload 상태를 확인하고 있습니다.</span></clr-alert-item></clr-alert>
       <clr-alert *ngIf="rt().state==='noperm'" clrAlertType="warning" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">현재 사용자에게 {{spec.name}} 관리 리소스를 조회할 권한이 없습니다. Foundation 권한 프로파일과 impersonation 경로를 확인하세요.</span></clr-alert-item></clr-alert>
-      <clr-alert *ngIf="rt().state==='nocrd'" clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">{{spec.name}} 서비스가 아직 생성되지 않았습니다. 설치·운영 구성에서 desired state를 제출하세요.</span><div class="alert-actions"><button class="btn alert-action" (click)="openTab('plan')">설치·운영 구성</button></div></clr-alert-item></clr-alert>
+      <clr-alert *ngIf="rt().state==='nocrd'" clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">{{spec.name}} 서비스가 아직 생성되지 않았습니다. Cluster plan에서 desired state를 제출하세요.</span><div class="alert-actions"><button class="btn alert-action" (click)="openTab('cluster')">Cluster plan</button></div></clr-alert-item></clr-alert>
       <clr-alert *ngIf="rt().state==='error'" clrAlertType="danger" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">{{spec.name}} 런타임 상태 조회에 실패했습니다. API 경로와 control-plane 상태를 확인한 뒤 다시 시도하세요.</span></clr-alert-item></clr-alert>
       <div class="de-grid"><article class="de-panel"><h2>Managed resource</h2><dl class="de-kv"><dt>Kind/name</dt><dd class="os-mono">{{spec.workloadKind==='psmdb'?'PerconaServerMongoDB':'StatefulSet'}}/{{spec.workloadName}}</dd><dt>Image</dt><dd class="os-mono">{{runtime.image(engine)||'—'}}</dd><dt>Ready</dt><dd>{{readyN()}}/{{totalN()}}</dd></dl></article><article class="de-panel"><h2>Storage</h2><p>{{runtime.storage(engine)}}</p></article><article class="de-panel"><h2>Endpoint</h2><p class="os-mono">{{spec.endpoint}}:{{spec.port}}</p><p>ClusterIP 전용 소비점</p></article></div>
       <table class="de-table"><thead><tr><th>Pod</th><th>Phase</th><th>Ready</th><th>Node</th><th>Restarts</th></tr></thead><tbody><tr *ngFor="let p of rt().pods"><td class="os-mono">{{p.metadata?.name}}</td><td>{{p.status?.phase}}</td><td>{{podReady(p)?'Ready':'Not Ready'}}</td><td>{{p.spec?.nodeName||'—'}}</td><td>{{restarts(p)}}</td></tr><tr *ngIf="!rt().pods.length"><td colspan="5">관찰된 Pod가 없습니다.</td></tr></tbody></table>
     </section>
 
-    <section class="de-work" *ngIf="tab()==='consumers'"><h2>Consumer contracts</h2><table class="de-table"><thead><tr><th>Contract</th><th>Status</th><th>Description</th></tr></thead><tbody><tr *ngFor="let c of spec.claims"><td>{{c.name}}</td><td><span class="label" [ngClass]="c.status==='available'?'label-success':'label-warning'">{{c.status}}</span></td><td>{{c.description}}</td></tr></tbody></table><dl class="de-kv"><dt>Service endpoint</dt><dd class="os-mono">{{spec.endpoint}}:{{spec.port}}</dd><dt>Credential source</dt><dd class="os-mono">{{form().authSecret||'Operator generated Secret'}}</dd></dl></section>
-    <section class="de-work" *ngIf="tab()==='protection'"><h2>Protection & security</h2><div class="de-policy"><div *ngFor="let p of spec.policies"><b>{{p.name}}</b><p>{{p.description}}</p></div></div><clr-alert clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">자격 증명 값은 FoundationModel·ConfigMap·화면 상태에 저장하지 않고 Secret 이름만 선언합니다. 외부 공개는 별도 Ingress/OIDC 승인 절차를 사용합니다.</span></clr-alert-item></clr-alert></section>
+    <section class="de-work" *ngIf="tab()==='config'"><h2>Configuration</h2><p>적용된 desired state와 다음 변경 값을 분리해 검토합니다.</p><dl class="de-kv"><dt>Version</dt><dd>{{form().version}}</dd><dt>Profile</dt><dd>{{form().profile}}</dd><dt>Replicas</dt><dd>{{form().replicas}}</dd><dt>StorageClass / size</dt><dd>{{form().storageClass}} / {{form().storageSize}}</dd><dt>Resource profile</dt><dd>{{form().resourceProfile}}</dd><dt>Credential SecretRef</dt><dd class="os-mono">{{form().authSecret||'Operator generated Secret'}}</dd></dl><button class="btn btn-primary" type="button" (click)="openTab('cluster')">Cluster plan에서 변경</button></section>
+    <section class="de-work" *ngIf="tab()==='domain'"><h2>{{domainLabel()}}</h2><p>{{spec.name}} 고유 데이터·접근 영역입니다. 운영 객체는 서비스 endpoint와 SecretRef를 통해서만 소비합니다.</p><dl class="de-kv"><dt>Service endpoint</dt><dd class="os-mono">{{spec.endpoint}}:{{spec.port}}</dd><dt>Credential source</dt><dd class="os-mono">{{form().authSecret||'Operator generated Secret'}}</dd><dt>Namespace</dt><dd class="os-mono">{{spec.namespace}}</dd><dt>Managed resource</dt><dd>{{runtimePhase()}}</dd></dl></section>
+    <section class="de-work" *ngIf="tab()==='backups'"><h2>Backups</h2><div class="de-policy"><div *ngFor="let p of spec.policies"><b>{{p.name}}</b><p>{{p.description}}</p></div></div><clr-alert clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">자격 증명 값은 FoundationModel·ConfigMap·화면 상태에 저장하지 않고 Secret 이름만 선언합니다. 백업·복구와 외부 공개는 별도 승인 절차를 사용합니다.</span></clr-alert-item></clr-alert></section>
     <section class="de-work" *ngIf="tab()==='events'"><div class="de-section-head"><h2>Events</h2><button class="btn btn-sm" (click)="refresh()">새로고침</button></div><table class="de-table"><thead><tr><th>Time</th><th>Type</th><th>Reason</th><th>Object</th><th>Message</th></tr></thead><tbody><tr *ngFor="let e of rt().events"><td>{{e.lastTimestamp||e.eventTime||'—'}}</td><td [class.bad]="e.type==='Warning'">{{e.type}}</td><td>{{e.reason}}</td><td>{{e.involvedObject?.kind}}/{{e.involvedObject?.name}}</td><td>{{e.message}}</td></tr><tr *ngIf="!rt().events.length"><td colspan="5">관련 이벤트가 없습니다.</td></tr></tbody></table></section>
 
     <section class="de-work" *ngIf="tab()==='upgrade'">
@@ -119,8 +120,10 @@ function defaultForm(spec: DataEngineSpec): EngineForm {
       <p>설치 이미지에서 확인된 버전과 서명 BOM에서 선택한 채널 버전을 비교합니다. 실행 중인 major/minor 변경은 보호 상태와 rollback 근거를 확인한 뒤에만 적용합니다.</p>
       <table class="de-table"><thead><tr><th>채널</th><th>버전</th><th>현재</th><th>용도</th></tr></thead><tbody><tr *ngFor="let v of spec.versions"><td>{{v.channel}}</td><td>{{v.value}}</td><td><span class="label" [ngClass]="installedVersion()===v.value?'label-success':''">{{installedVersion()===v.value?'Running':form().version===v.value?'Selected':'Available'}}</span></td><td>{{v.channel==='stable'?'운영 승인 채널':v.channel==='candidate'?'승격 검증 채널':'개발 검증 채널'}}</td></tr></tbody></table>
       <clr-alert clrAlertType="warning" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">StorageClass 변경과 데이터 형식 major 변경은 in-place rollback으로 간주하지 않습니다. 백업·복구 검증과 별도 마이그레이션 계획이 필요합니다.</span></clr-alert-item></clr-alert>
-      <button class="btn btn-primary" type="button" (click)="openTab('plan')">설치·운영 구성에서 버전 검토</button>
+      <button class="btn btn-primary" type="button" (click)="openTab('cluster')">Cluster plan에서 버전 검토</button>
     </section>
+
+    <section class="de-work" *ngIf="tab()==='claims'"><h2>Claims</h2><table class="de-table"><thead><tr><th>Contract</th><th>Status</th><th>Description</th></tr></thead><tbody><tr *ngFor="let c of spec.claims"><td>{{c.name}}</td><td><span class="label" [ngClass]="c.status==='available'?'label-success':'label-warning'">{{c.status}}</span></td><td>{{c.description}}</td></tr></tbody></table></section>
 
     <section class="de-work" *ngIf="tab()==='documentation'">
       <div class="de-section-head"><div><span class="vl-eyebrow">Console Manual Registry</span><h2>Documentation</h2></div><span class="label label-success">자동 등록</span></div>
@@ -147,11 +150,9 @@ export class DataEnginePluginComponent implements OnInit, OnChanges, OnDestroy {
   readonly credentialOnce = signal('');
   readonly iBack = ArrowLeft16; readonly iDownload = Download16; readonly iRenew = Renew16; readonly iPassword = Password16;
   private watchTimer: ReturnType<typeof setInterval> | undefined;
-  readonly tabs: {id:Tab;label:string;runtime?:boolean}[] = [
-    {id:'overview',label:'Overview'},{id:'dependency',label:'실행 기반'},{id:'plan',label:'설치·운영 구성'},
-    {id:'topology',label:'Topology',runtime:true},{id:'consumers',label:'Consumers'},{id:'protection',label:'Backup & Security'},{id:'events',label:'Events',runtime:true},
-    {id:'upgrade',label:'Upgrade'},{id:'documentation',label:'Documentation'},
-  ];
+  get tabs(): {id:Tab;label:string;runtime?:boolean}[] {
+    return pfsPluginTabs(this.domainLabel()).map(tab => ({ ...tab, id: tab.id as Tab, runtime: ['topology','events'].includes(tab.id) }));
+  }
   get spec(): DataEngineSpec { return DATA_ENGINE_SPECS[this.engine]; }
   readonly validationError = computed(() => {
     const f=this.form();
@@ -171,6 +172,7 @@ export class DataEnginePluginComponent implements OnInit, OnChanges, OnDestroy {
   rt(){return this.runtime.runtime(this.engine);} exists(){return this.rt().state==='ok'&&!!this.rt().resource;} ready(){return this.runtime.ready(this.engine);} readyN(){return this.runtime.readyN(this.engine);} totalN(){return this.runtime.totalN(this.engine);} runtimePhase(){return this.runtime.phase(this.engine);} installedVersion(){const i=this.runtime.image(this.engine);return this.spec.versions.find(v=>i.includes(v.value))?.value||'';} availability(){return this.totalN()?Math.round(this.readyN()/this.totalN()*100):0;}
   lifecycle():string{if(!this.dependencyReady())return 'Dependency required';if(!this.exists())return 'Service required';return this.ready()?'Ready':'Progressing';}
   headerModel():PluginPageHeaderModel{return{name:this.spec.name,logo:this.spec.logo,capability:this.spec.capability,description:this.spec.description,lifecycle:this.lifecycle(),lifecycleClass:this.ready()?'label-success':'label-warning',version:this.installedVersion()||this.form().version,profile:this.form().profile,namespace:this.spec.namespace};}
+  domainLabel():string{return({psmdb:'Databases & Users',valkey:'Keys & ACL',opensearch:'Indices & Roles',rustfs:'Buckets & Policies'} as Record<DataEngineId,string>)[this.engine];}
   tabsForUi():PluginPageTab[]{return this.tabs.map(t=>({id:t.id,label:t.label,disabled:!!t.runtime&&!this.exists(),badge:t.id==='events'?this.warningCount():''}));}
   dependencyReady():boolean{return this.controlPlaneReady()&&this.runtime.operatorReady(this.engine);}
   dependencyLabel():string{if(!this.controlPlaneReady())return 'PFS Control Plane required';if(this.spec.operator&&!this.runtime.operatorReady(this.engine))return `${this.spec.operator.name} required`;return this.spec.operator?`${this.spec.operator.name} Ready`:'Foundation reconciler Ready';}

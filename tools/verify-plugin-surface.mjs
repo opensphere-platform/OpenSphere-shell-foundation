@@ -28,13 +28,29 @@ for (const [name, file] of surfaces) {
   }
 }
 
+const sharedShell = read('src/app/shared/plugin-page-shell.component.ts');
+const canonicalTabs = ['overview', 'operator', 'cluster', 'topology', 'config', 'domain', 'backups', 'events', 'claims', 'upgrade', 'documentation'];
+for (const tab of canonicalTabs) {
+  assert.match(sharedShell, new RegExp(`id: ['\"]${tab}['\"]`), `공통 11탭 계약: ${tab} 누락`);
+}
+for (const label of ['Operator', 'Cluster plan', 'Configuration', 'Backups', 'Claims']) {
+  assert.match(sharedShell, new RegExp(`label: ['\"]${label}['\"]`), `공통 11탭 계약: ${label} 라벨 누락`);
+}
+const surfaceContract = read('src/app/registry/plugin-surface.contract.ts');
+for (const tab of canonicalTabs) {
+  assert.match(surfaceContract, new RegExp(`['\"]${tab}['\"]`), `Registry surface contract: ${tab} 누락`);
+}
+for (const [, file] of surfaces.slice(1)) {
+  assert.match(read(file), /pfsPluginTabs/, `${file}: 공통 11탭 helper 미사용`);
+}
+
 // Samba-AD는 Foundation 안층에 마운트되지만 독립 서명 plugin이므로 Angular 공통
 // component 대신 동일 CSS 계약과 동일한 capability tab 집합을 light DOM으로 구현한다.
 const samba = readSamba('ui-shell/ui-shell.plugin.js');
 assert.match(samba, /pgp-page-frame/, 'Samba-AD: PostgreSQL 공통 page frame 누락');
 assert.match(samba, /pfs-plugin-head/, 'Samba-AD: 공통 header 누락');
 assert.match(samba, /pfs-plugin-tabs/, 'Samba-AD: 공통 tabs 누락');
-for (const capability of ['overview', 'dependency', 'plan', 'topology', 'consumers', 'protection', 'events', 'upgrade', 'documentation']) {
+for (const capability of ['overview', 'operator', 'cluster', 'topology', 'configuration', 'directory', 'backups', 'events', 'claims', 'upgrade', 'documentation']) {
   assert.match(samba, new RegExp(`['"]${capability}['"]`), `Samba-AD: ${capability} surface 누락`);
 }
 

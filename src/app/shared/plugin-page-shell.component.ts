@@ -22,6 +22,27 @@ export interface PluginPageTab {
   badge?: string | number;
 }
 
+/** PostgreSQL plugin이 확립한 PFS 상세 화면의 정본 11탭 계약. */
+export type PfsPluginTabId =
+  | 'overview' | 'operator' | 'cluster' | 'topology' | 'config'
+  | 'domain' | 'backups' | 'events' | 'claims' | 'upgrade' | 'documentation';
+
+export function pfsPluginTabs(domainLabel: string): PluginPageTab[] {
+  return [
+    { id: 'overview', label: 'Overview' },
+    { id: 'operator', label: 'Operator' },
+    { id: 'cluster', label: 'Cluster plan' },
+    { id: 'topology', label: 'Topology' },
+    { id: 'config', label: 'Configuration' },
+    { id: 'domain', label: domainLabel },
+    { id: 'backups', label: 'Backups' },
+    { id: 'events', label: 'Events' },
+    { id: 'claims', label: 'Claims' },
+    { id: 'upgrade', label: 'Upgrade' },
+    { id: 'documentation', label: 'Documentation' },
+  ];
+}
+
 /**
  * PostgreSQL이 확립한 PFS plugin 페이지 머리/메타 계약의 단일 구현.
  * 엔진별 차이는 model 값으로만 표현하고 레이아웃은 분기하지 않는다.

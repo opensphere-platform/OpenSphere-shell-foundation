@@ -2,12 +2,14 @@ export const POSTGRES_LEVEL_SURFACE = 'postgres-v1' as const;
 
 export type PluginSurfaceCapability =
   | 'overview'
-  | 'dependency'
-  | 'plan'
+  | 'operator'
+  | 'cluster'
   | 'topology'
-  | 'consumers'
-  | 'protection'
+  | 'config'
+  | 'domain'
+  | 'backups'
   | 'events'
+  | 'claims'
   | 'upgrade'
   | 'documentation';
 
@@ -18,7 +20,7 @@ export interface PluginSurfaceContract {
 }
 
 export const REQUIRED_POSTGRES_LEVEL_CAPABILITIES: readonly PluginSurfaceCapability[] = [
-  'overview', 'dependency', 'plan', 'topology', 'consumers', 'protection', 'events', 'upgrade', 'documentation',
+  'overview', 'operator', 'cluster', 'topology', 'config', 'domain', 'backups', 'events', 'claims', 'upgrade', 'documentation',
 ];
 
 export function verifyPluginSurface(id: string, surface: PluginSurfaceContract): void {
