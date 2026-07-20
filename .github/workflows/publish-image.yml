@@ -117,7 +117,10 @@ jobs:
       - id: package
         shell: bash
         run: |
-          echo "descriptor=$(jq -c . module-package.json)" >> "$GITHUB_OUTPUT"
+          descriptor="$(jq -c . module-package.json)"
+          descriptor_build_arg="$(printf 'OS_MODULE_DESCRIPTOR=%s' "$descriptor" | jq -Rr @csv)"
+          echo "descriptor-build-arg=$descriptor_build_arg" >> "$GITHUB_OUTPUT"
+          echo "version=$(jq -r .version module-package.json)" >> "$GITHUB_OUTPUT"
           echo "signature=$(tr -d '\r\n' < module-package.json.sig)" >> "$GITHUB_OUTPUT"
       - id: meta
         uses: docker/metadata-action@v5
@@ -129,6 +132,7 @@ jobs:
             io.opensphere.source-revision=${{ github.sha }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.package.outputs.version }}
       - id: build
         uses: docker/build-push-action@v6
         with:
@@ -139,11 +143,14 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            OS_MODULE_DESCRIPTOR=${{ steps.package.outputs.descriptor }}
+            ${{ steps.package.outputs.descriptor-build-arg }}
             OS_MODULE_SIGNATURE=${{ steps.package.outputs.signature }}
           provenance: mode=max
           cache-from: type=gha,scope=opensphere-shell-foundation
           cache-to: type=gha,mode=max,scope=opensphere-shell-foundation
+      - uses: imjasonh/setup-crane@v0.4
+      - name: Verify signed module labels survive OCI serialization
+        run: .github/scripts/verify-module-label.sh "${{ env.REGISTRY }}/opensphere-shell-foundation@${{ steps.build.outputs.digest }}" "${{ steps.package.outputs.version }}"
       - uses: actions/attest@v4
         with:
           subject-name: ${{ env.REGISTRY }}/opensphere-shell-foundation
@@ -260,7 +267,10 @@ jobs:
         shell: bash
         env: { PLUGIN_ID: "${{ matrix.id }}" }
         run: |
-          echo "descriptor=$(jq -c . "plugins/generated/$PLUGIN_ID/module-package.json")" >> "$GITHUB_OUTPUT"
+          descriptor="$(jq -c . "plugins/generated/$PLUGIN_ID/module-package.json")"
+          descriptor_build_arg="$(printf 'OS_MODULE_DESCRIPTOR=%s' "$descriptor" | jq -Rr @csv)"
+          echo "descriptor-build-arg=$descriptor_build_arg" >> "$GITHUB_OUTPUT"
+          echo "version=$(jq -r .version "plugins/generated/$PLUGIN_ID/module-package.json")" >> "$GITHUB_OUTPUT"
           echo "signature=$(tr -d '\r\n' < "plugins/generated/$PLUGIN_ID/module-package.json.sig")" >> "$GITHUB_OUTPUT"
       - id: meta
         uses: docker/metadata-action@v5
@@ -273,6 +283,7 @@ jobs:
             io.opensphere.foundation.plugin-id=${{ matrix.id }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.package.outputs.version }}
       - id: build
         uses: docker/build-push-action@v6
         with:
@@ -284,11 +295,14 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             PLUGIN_ID=${{ matrix.id }}
-            OS_MODULE_DESCRIPTOR=${{ steps.package.outputs.descriptor }}
+            ${{ steps.package.outputs.descriptor-build-arg }}
             OS_MODULE_SIGNATURE=${{ steps.package.outputs.signature }}
           provenance: mode=max
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+      - uses: imjasonh/setup-crane@v0.4
+      - name: Verify signed module labels survive OCI serialization
+        run: .github/scripts/verify-module-label.sh "${{ env.REGISTRY }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}" "${{ steps.package.outputs.version }}"
       - uses: actions/attest@v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ matrix.image }}
