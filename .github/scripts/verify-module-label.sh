@@ -3,7 +3,22 @@ set -euo pipefail
 
 image="${1:?image reference is required}"
 expected_version="${2:?expected module version is required}"
-manifest="$(crane manifest "$image")"
+
+# GHCR can acknowledge the multi-platform push a few seconds before the
+# repository's manifest endpoint can resolve the newly-created digest.  The
+# label gate must tolerate that propagation window without weakening any of
+# the descriptor checks below.
+manifest=""
+for attempt in {1..12}; do
+  if manifest="$(crane manifest "$image" 2>/dev/null)"; then
+    break
+  fi
+  if [[ "$attempt" -eq 12 ]]; then
+    echo "module label gate: image manifest was not readable after 60 seconds: $image" >&2
+    exit 1
+  fi
+  sleep 5
+done
 
 while IFS= read -r platform_digest; do
   config="$(crane config "${image%@*}@$platform_digest")"
