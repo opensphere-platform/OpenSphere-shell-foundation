@@ -65,8 +65,21 @@ jobs:
           SOURCE_CHANNEL: ${{ inputs.source_channel }}
           NAME: ${{ matrix.name }}
         run: |
+          set -euo pipefail
           repository="ghcr.io/opensphere-platform/mirror/$NAME"
           digest="$(crane digest "$repository:$SOURCE_CHANNEL")"
+          found=false
+          while IFS= read -r tag; do
+            [[ "$tag" =~ ^[0-9]{12}$ ]] || continue
+            if [[ "$(crane digest "$repository:$tag")" = "$digest" ]]; then
+              found=true
+              break
+            fi
+          done < <(crane ls "$repository")
+          if [[ "$found" != true ]]; then
+            echo "$repository@$digest has no immutable yyyyMMddHHmm release tag" >&2
+            exit 1
+          fi
           echo "repository=$repository" >> "$GITHUB_OUTPUT"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
       - name: Reject critical or high known vulnerabilities

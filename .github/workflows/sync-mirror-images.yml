@@ -39,6 +39,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
+      - uses: actions/checkout@v4
       - uses: imjasonh/setup-crane@v0.4
       - name: Login to GHCR
         env:
@@ -77,8 +78,19 @@ jobs:
           target_digest="$(crane digest "$target")"
           test "$target_digest" = "$source_digest"
           if [[ "$EDGE" = "true" ]]; then
+            release_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
+            release_tag="$(TZ=Asia/Seoul date -d "@$release_epoch" +%Y%m%d%H%M)"
+            [[ "$release_tag" =~ ^[0-9]{12}$ ]]
+            existing="$(crane digest "$repository:$release_tag" 2>/dev/null || true)"
+            if [[ -n "$existing" && "$existing" != "$target_digest" ]]; then
+              echo "Immutable release tag collision: $repository:$release_tag is $existing, expected $target_digest" >&2
+              exit 1
+            fi
+            crane tag "$repository@$target_digest" "$release_tag"
+            test "$(crane digest "$repository:$release_tag")" = "$target_digest"
             crane tag "$repository@$target_digest" edge
             test "$(crane digest "$repository:edge")" = "$target_digest"
+            echo "- \`$repository:$release_tag\` → \`$target_digest\`" >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "repository=$repository" >> "$GITHUB_OUTPUT"
           echo "digest=$target_digest" >> "$GITHUB_OUTPUT"

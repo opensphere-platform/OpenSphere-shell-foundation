@@ -176,6 +176,19 @@ jobs:
         run: |
           set -euo pipefail
           bom="$RUNNER_TEMP/source-bom/source-foundation-bom.json"
+          verify_immutable_release_tag() {
+            local image="$1" repository digest tag
+            repository="${image%@*}"
+            digest="${image##*@}"
+            while IFS= read -r tag; do
+              [[ "$tag" =~ ^[0-9]{12}$ ]] || continue
+              if [[ "$(crane digest "$repository:$tag")" = "$digest" ]]; then
+                return 0
+              fi
+            done < <(crane ls "$repository")
+            echo "$image has no immutable yyyyMMddHHmm release tag" >&2
+            return 1
+          }
           for category in component operand; do
             object="${category}s"
             for key in $(jq -r --arg object "$object" '.[$object] | keys[]' "$bom"); do
@@ -191,6 +204,7 @@ jobs:
                  .repository == $repository and .image == $image and .digest == $digest and .sourceRevision == $revision' \
                 "$binding" >/dev/null
               test "$(crane digest "$image")" = "$digest"
+              verify_immutable_release_tag "$image"
 
               if test "$category" = component; then
                 platforms='["linux/amd64","linux/arm64"]'

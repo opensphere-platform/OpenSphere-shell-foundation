@@ -349,11 +349,15 @@ jobs:
         run: |
           set -euo pipefail
           source_tag="sha-${GITHUB_SHA:0:7}"
-          jq -n --arg revision "$GITHUB_SHA" '{
+          release_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
+          release_tag="$(TZ=Asia/Seoul date -d "@$release_epoch" +%Y%m%d%H%M)"
+          [[ "$release_tag" =~ ^[0-9]{12}$ ]]
+          jq -n --arg revision "$GITHUB_SHA" --arg releaseTag "$release_tag" '{
             apiVersion:"foundation.release.opensphere.io/v1alpha1",
             kind:"OpenSphereFoundationReleaseBOM",
             channel:"edge",
             status:"Active",
+            releaseTag:$releaseTag,
             hostRef:"foundation",
             sourceRevision:$revision,
             supportedPlatforms:["linux/amd64","linux/arm64"],
@@ -447,14 +451,31 @@ jobs:
         run: |
           set -euo pipefail
           bom="$RUNNER_TEMP/foundation-bom.json"
+          release_tag="$(jq -r '.releaseTag' "$bom")"
+          [[ "$release_tag" =~ ^[0-9]{12}$ ]]
+          publish_immutable_tag() {
+            local reference="$1" repository digest existing
+            repository="${reference%@*}"
+            digest="${reference##*@}"
+            existing="$(crane digest "$repository:$release_tag" 2>/dev/null || true)"
+            if [[ -n "$existing" && "$existing" != "$digest" ]]; then
+              echo "Immutable release tag collision: $repository:$release_tag is $existing, expected $digest" >&2
+              exit 1
+            fi
+            crane tag "$reference" "$release_tag"
+            test "$(crane digest "$repository:$release_tag")" = "$digest"
+          }
           for key in $(jq -r '.components | keys[] | select(. != "shell" and . != "samba-ad")' "$bom"); do
             image="$(jq -r --arg key "$key" '.components[$key].image' "$bom")"
+            publish_immutable_tag "$image"
             crane tag "$image" edge
           done
           anchor="$(jq -r '.components.shell.image' "$bom")"
+          publish_immutable_tag "$anchor"
           crane tag "$anchor" edge
           for key in $(jq -r '.components | keys[] | select(. != "samba-ad")' "$bom"); do
             repository="$(jq -r --arg key "$key" '.components[$key].repository' "$bom")"
             expected="$(jq -r --arg key "$key" '.components[$key].image | split("@")[1]' "$bom")"
+            test "$(crane digest "$REGISTRY/$repository:$release_tag")" = "$expected"
             test "$(crane digest "$REGISTRY/$repository:edge")" = "$expected"
           done
