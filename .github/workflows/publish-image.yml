@@ -150,7 +150,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=opensphere-shell-foundation
       - uses: imjasonh/setup-crane@v0.4
       - name: Verify signed module labels survive OCI serialization
-        run: .github/scripts/verify-module-label.sh "${{ env.REGISTRY }}/opensphere-shell-foundation@${{ steps.build.outputs.digest }}" "${{ steps.package.outputs.version }}"
+        run: bash .github/scripts/verify-module-label.sh "${{ env.REGISTRY }}/opensphere-shell-foundation@${{ steps.build.outputs.digest }}" "${{ steps.package.outputs.version }}"
       - uses: actions/attest@v4
         with:
           subject-name: ${{ env.REGISTRY }}/opensphere-shell-foundation
@@ -302,7 +302,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
       - uses: imjasonh/setup-crane@v0.4
       - name: Verify signed module labels survive OCI serialization
-        run: .github/scripts/verify-module-label.sh "${{ env.REGISTRY }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}" "${{ steps.package.outputs.version }}"
+        run: bash .github/scripts/verify-module-label.sh "${{ env.REGISTRY }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}" "${{ steps.package.outputs.version }}"
       - uses: actions/attest@v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ matrix.image }}
