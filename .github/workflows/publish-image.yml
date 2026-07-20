@@ -19,6 +19,7 @@ on:
       - plugins/**
       - tools/**
       - oci/**
+      - .github/scripts/**
       - .github/workflows/publish-image.yml
 
 permissions:
