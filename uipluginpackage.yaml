@@ -13,7 +13,7 @@ spec:
   hostCompat: ">=1.0.0 <2.0.0"
   displayName: "Platform Foundation Service Stack"
   owner: opensphere-platform
-  version: 0.2.0-edge.12
+  version: 0.2.0-edge.13
   description: "OpenSphere PFS lifecycle and foundation service module host; may be staged before Platform Support Profile admission."
   serviceAccountName: opensphere-foundation
   image:
