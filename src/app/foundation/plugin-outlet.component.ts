@@ -16,8 +16,13 @@ import { HostedPlugin } from '../registry/hosted-plugin';
           {{ plugin.name }} plugin 로드 대기 중... UIPluginPackage/{{ packageId() }} 서명 검증과 Extension Host 적재를 기다립니다.
         </span>
         <span class="alert-text" *ngIf="timedOut()">
-          {{ plugin.name }} plugin이 아직 로드되지 않았습니다. UIPluginPackage/{{ packageId() }} 설치, digest, manifest signature, registration 상태를 확인하세요.
+          {{ plugin.name }} plugin runtime이 활성 Registry에 로드되지 않았습니다.
+          UIPluginPackage/{{ packageId() }}가 Installed/Ready라면 별도의 활성화가 필요하고,
+          Failed라면 digest·manifest signature·permission 검증 사유를 확인해야 합니다.
         </span>
+        <div class="alert-actions" *ngIf="timedOut()">
+          <a class="btn alert-action" href="/manage/extensions">Extensions에서 상태 확인</a>
+        </div>
       </clr-alert-item>
     </clr-alert>
   `,

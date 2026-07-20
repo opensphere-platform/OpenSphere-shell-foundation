@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "hostRef": "foundation",
-  "version": "0.1.0-edge.2",
+  "version": "0.1.0-edge.3",
   "plugins": [
     {
       "id": "postgres",

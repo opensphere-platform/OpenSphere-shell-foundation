@@ -58,6 +58,25 @@ const surfaceContract = read('src/app/registry/plugin-surface.contract.ts');
 for (const tab of canonicalTabs) {
   assert.match(surfaceContract, new RegExp(`['\"]${tab}['\"]`), `Registry surface contract: ${tab} 누락`);
 }
+
+// 독립 서명 child plugin은 활성화 뒤 Foundation의 계획 표면을 대체한다.
+// 따라서 runtime template도 설치 전 Angular 표면과 같은 11탭 계약을 유지해야 하며,
+// Extension Host 재로드 후 stale context를 잡지 않도록 공유 runtime slot을 사용한다.
+const runtimeTemplate = read('plugins/runtime/ui-shell.plugin.template.js');
+for (const tab of canonicalTabs) {
+  assert.match(runtimeTemplate, new RegExp(`\\['${tab}',`), `독립 plugin runtime 11탭 계약: ${tab} 누락`);
+}
+for (const contract of [/pgp-page-frame/, /pfs-plugin-head/, /pfs-plugin-tabs/, /pgp-steps/, /pgp-dashboard/]) {
+  assert.match(runtimeTemplate, contract, `독립 plugin runtime PostgreSQL surface 누락: ${contract}`);
+}
+assert.match(runtimeTemplate, /Symbol\.for\(`opensphere\.plugin\.foundation\.\$\{SPEC\.id\}\.runtime`\)/, '독립 plugin runtime 재활성화 context slot 누락');
+assert.match(runtimeTemplate, /RUNTIME\.apiFetch/, '독립 plugin runtime Host API capability 배선 누락');
+assert.match(runtimeTemplate, /apiFetch\('\/api\/info'/, '독립 plugin package live info probe 누락');
+assert.match(runtimeTemplate, /apiFetch\('\/api\/plan'/, '독립 plugin operand plan probe 누락');
+
+const outlet = read('src/app/foundation/plugin-outlet.component.ts');
+assert.match(outlet, /Installed\/Ready라면 별도의 활성화가 필요/, 'child plugin Installed와 Activated 상태 안내가 구분되지 않습니다.');
+assert.match(outlet, /href="\/manage\/extensions"/, 'child plugin 실패 복구 경로가 없습니다.');
 for (const [, file] of surfaces.slice(1)) {
   assert.match(read(file), /pfsPluginTabs/, `${file}: 공통 11탭 helper 미사용`);
 }
