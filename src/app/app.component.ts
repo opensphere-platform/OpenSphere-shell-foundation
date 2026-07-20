@@ -144,7 +144,7 @@ const CATALOG_MODULES = new Set([
         </nav>
 
         <app-foundation-overview *ngIf="vr.module() === 'overview'"></app-foundation-overview>
-        <app-foundation-engines *ngIf="(vr.module() === 'modules' || catalogModule()) && !activePlugin()"></app-foundation-engines>
+        <app-foundation-engines *ngIf="((vr.module() === 'modules' && vr.tab() === 'overview') || catalogModule()) && !activePlugin()"></app-foundation-engines>
         <app-control-plane *ngIf="vr.module() === 'control-plane'"></app-control-plane>
         <app-foundation-delivery *ngIf="vr.module() === 'delivery' && !activePlugin()"></app-foundation-delivery>
         <app-plugin-outlet *ngIf="activePlugin() as p" [plugin]="p"></app-plugin-outlet>
@@ -246,7 +246,10 @@ export class AppComponent implements OnInit, OnDestroy {
 
   unknownModule(): boolean {
     const m = this.vr.module();
-    if (['overview', 'modules', 'control-plane', 'delivery'].includes(m)) { return false; }
+    // /modules is the catalog root only. The retired /modules/<plugin> address
+    // must not keep behaving as a second, hidden plugin URL namespace.
+    if (m === 'modules') { return this.vr.tab() !== 'overview'; }
+    if (['overview', 'control-plane', 'delivery'].includes(m)) { return false; }
     if (CATALOG_MODULES.has(m)) { return false; }
     return !this.reg.all.some((p) => this.routeId(p.id) === m);
   }

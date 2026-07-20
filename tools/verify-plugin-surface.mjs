@@ -13,10 +13,12 @@ const readSamba = (path) => readFileSync(resolve(sambaRoot, path), 'utf8');
 // expose one release version. A split version makes the channel digest look
 // newer while the Extension Host still reconciles the previous release.
 const packageVersion = JSON.parse(read('package.json')).version;
+const lockVersion = JSON.parse(read('package-lock.json')).version;
 const manifestVersion = JSON.parse(read('ui-shell/ui-shell.manifest.json')).version;
 const packageYaml = read('uipluginpackage.yaml');
 const dockerfile = read('Dockerfile');
 assert.equal(manifestVersion, packageVersion, 'ui-shell manifest와 package.json 버전이 다릅니다.');
+assert.equal(lockVersion, packageVersion, 'package-lock.json과 package.json 버전이 다릅니다.');
 assert.match(packageYaml, new RegExp(`\\n  version: ${packageVersion.replaceAll('.', '\\.')}(?:\\r?\\n)`), 'UIPluginPackage 버전이 package.json과 다릅니다.');
 assert.match(dockerfile, new RegExp(`org\\.opencontainers\\.image\\.version="${packageVersion.replaceAll('.', '\\.')}"`), 'OCI label 버전이 package.json과 다릅니다.');
 
@@ -115,6 +117,10 @@ for (const id of directRouteIds) {
   assert.match(manualEntry, new RegExp(`/p/foundation/${id}`), `Manual route ${id}가 직접 경로가 아닙니다.`);
 }
 assert.doesNotMatch(`${appSource}\n${routerSource}\n${registry}\n${manualEntry}`, /\/p\/foundation\/modules\//, '폐기된 /p/foundation/modules/<plugin> 경로가 남아 있습니다.');
+const enginesSource = read('src/app/foundation/engines.component.ts');
+assert.match(appSource, /vr\.module\(\) === 'modules' && vr\.tab\(\) === 'overview'/, '/modules는 PFS catalog root에서만 렌더링해야 합니다.');
+assert.doesNotMatch(enginesSource, /vr\.module\(\) === ['"]modules['"]\s*\?\s*this\.vr\.tab\(\)/, '폐기된 /modules/<plugin>을 plugin detail로 해석하고 있습니다.');
+assert.match(appSource, /if \(m === 'modules'\) \{ return this\.vr\.tab\(\) !== 'overview'; \}/, '폐기된 /modules/<plugin>을 유효 경로로 허용하고 있습니다.');
 
 const css = read('src/app/app.component.css');
 assert.match(css, /\.pgp-page-frame \.pfs-plugin-logo \{ border: 0; border-radius: 0;/, '장식 없는 공통 logo header 규칙 누락');

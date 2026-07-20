@@ -55,7 +55,6 @@ const LOGO_BASE = 'https://logos.opl.io.kr/i';
   template: `
     <app-otel *ngIf="currentId() === 'otel'"></app-otel>
     <app-roadmap-module *ngIf="placeholderCard() as pc" [module]="pc"></app-roadmap-module>
-    <clr-alert *ngIf="invalidDetailTab()" clrAlertType="warning" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">존재하지 않는 PFS 모듈 경로입니다. Delivery 엔진은 별도 Platform Delivery 메뉴에서 관리합니다.</span></clr-alert-item></clr-alert>
 
     <ng-container *ngIf="vr.module() === 'modules' && vr.tab() === 'overview'">
     <osp-plugin-page-header [model]="catalogHeader" headingId="pfs-module-catalog-title" />
@@ -151,9 +150,8 @@ export class FoundationEnginesComponent {
     else { this.vr.setModule(c.id); }
     if (c.tab) { this.vr.setTab(c.tab); }
   }
-  currentId(): string { return this.vr.module() === 'modules' ? this.vr.tab() : this.vr.module(); }
+  currentId(): string { return this.vr.module(); }
   isDetailTab(): boolean { return DETAIL_TABS.has(this.currentId()); }
-  invalidDetailTab(): boolean { return this.vr.module() === 'modules' && this.vr.tab() !== 'overview'; }
   placeholderCard(): EngineCard | undefined {
     const id = this.currentId();
     return PLACEHOLDER_TABS.has(id) ? this.cards.find((c) => c.id === id) : undefined;
