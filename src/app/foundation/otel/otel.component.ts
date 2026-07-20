@@ -60,11 +60,11 @@ export class OtelComponent {
   readonly iMisuse = Misuse20;
   readonly iDownload = Download16;
   readonly tabs: PluginPageTab[] = pfsPluginTabs('Pipelines & Exporters');
-  readonly active = computed(() => this.vr.detail());
+  readonly active = computed(() => this.vr.tab());
   ngOnInit(): void { this.svc.start(); }
   ngOnDestroy(): void { this.svc.stop(); }
   headerModel(): PluginPageHeaderModel { return { name:'OpenTelemetry Collector', logo:LOGO, capability:'observability.telemetry', description:'Foundation workload의 지표·로그·추적을 수집하고 승인된 backend로 전달하는 중앙 gateway.', lifecycle:this.svc.phaseLabel(), lifecycleClass:this.phasePill(), version:this.svc.installedImage()||`chart ${this.svc.plan().chart}`, profile:'gateway', namespace:'opensphere-foundation' }; }
   phasePill(): string { if (this.svc.installed()) return this.svc.ready()?'label-success':'label-warning'; return this.svc.phaseLabel()==='확인 중'?'':'label-warning'; }
-  select(tab:string):void{this.vr.setDetail(tab);} back():void{this.vr.setTab('overview');}
+  select(tab:string):void{this.vr.setTab(tab);} back():void{this.vr.setModule('modules');}
   onSelect(e:Event):void{this.svc.selectChart((e.target as HTMLSelectElement).value);}
 }

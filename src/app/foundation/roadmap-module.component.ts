@@ -202,7 +202,7 @@ export class RoadmapModuleComponent {
   @Input({ required: true }) module!: RoadmapModuleInput;
   readonly vr = inject(ViewRouter);
   get tabs(): PluginPageTab[] { return pfsPluginTabs(this.domainLabel()); }
-  readonly active = computed(() => this.vr.detail());
+  readonly active = computed(() => this.vr.module() === 'delivery' ? this.vr.detail() : this.vr.tab());
   readonly def = computed<RoadmapDefinition>(() => ({ ...DEFAULT, ...(DEFINITIONS[this.module.id] ?? {}) }));
 
   headerModel(): PluginPageHeaderModel {
@@ -215,8 +215,14 @@ export class RoadmapModuleComponent {
       version: this.module.version || 'BOM 미고정', profile: this.def().profile, namespace: this.def().namespace,
     };
   }
-  select(tab: string): void { this.vr.setDetail(tab); }
-  back(): void { this.vr.setTab('overview'); }
+  select(tab: string): void {
+    if (this.vr.module() === 'delivery') { this.vr.setDetail(tab); return; }
+    this.vr.setTab(tab);
+  }
+  back(): void {
+    if (this.vr.module() === 'delivery') { this.vr.setTab('overview'); return; }
+    this.vr.setModule('modules');
+  }
   manualId(): string { return `${this.module.id}-operations-ko`; }
   manualUrl(): string { return `/manual?doc=${encodeURIComponent(`plugin:foundation/${this.manualId()}`)}`; }
   domainLabel(): string {

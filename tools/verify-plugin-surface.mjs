@@ -83,6 +83,19 @@ for (const id of registryIds) {
 }
 assert.equal((registry.match(/surface: PG_SURFACE/g) || []).length, registryIds.length, `registry plugin ${registryIds.length}종 모두 PostgreSQL surface 계약을 선언해야 합니다.`);
 
+// PFS 모듈 카탈로그는 목록 화면일 뿐 URL 부모가 아니다. 각 plugin은 PostgreSQL과
+// 동일하게 /p/foundation/<plugin>을 정식 주소로 소유한다.
+const directRouteIds = ['syncope', 'opa', 'litellm', 'langfuse', 'stalwart', 'novu', 'mattermost', 'otel', 'tempo', 'loki', 'grafana-operator', 'ptm'];
+const routerSource = read('src/app/view-router.ts');
+const appSource = read('src/app/app.component.ts');
+const manualEntry = read('ui-shell/ui-shell.plugin.js');
+for (const id of directRouteIds) {
+  assert.match(routerSource, new RegExp(`['\"]${id}['\"]`), `정식 Foundation route ${id} 누락`);
+  assert.match(registry, new RegExp(`view: \\{ module: ['\"]${id}['\"] \\}`), `registry view route ${id}가 직접 경로가 아닙니다.`);
+  assert.match(manualEntry, new RegExp(`/p/foundation/${id}`), `Manual route ${id}가 직접 경로가 아닙니다.`);
+}
+assert.doesNotMatch(`${appSource}\n${routerSource}\n${registry}\n${manualEntry}`, /\/p\/foundation\/modules\//, '폐기된 /p/foundation/modules/<plugin> 경로가 남아 있습니다.');
+
 const css = read('src/app/app.component.css');
 assert.match(css, /\.pgp-page-frame \.pfs-plugin-logo \{ border: 0; border-radius: 0;/, '장식 없는 공통 logo header 규칙 누락');
 assert.match(css, /\.pgp-page-frame \.pfs-plugin-tabs/, 'header와 tabs의 단일 frame 규칙 누락');

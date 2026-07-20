@@ -11,7 +11,7 @@ import { Injectable, signal } from '@angular/core';
 export class ViewRouter {
   readonly module = signal<string>('overview');
   readonly tab = signal<string>('overview');
-  /** PFS 모듈 카탈로그 안의 세부 관리 탭. /modules/<engine>/<surface> 4단 경로를 보존한다. */
+  /** Platform Delivery처럼 실제 상위 도메인이 있는 화면에서만 쓰는 4단 세부 탭. */
   readonly detail = signal<string>('overview');
 
   constructor() {
@@ -58,11 +58,15 @@ export class ViewRouter {
   private write(): void {
     try {
       const m = this.module();
-      const hasTabs = ['postgres', 'psmdb', 'valkey', 'rustfs', 'opensearch', 'keycloak', 'addc', 'modules', 'delivery'].includes(m);
+      const hasTabs = [
+        'postgres', 'psmdb', 'valkey', 'rustfs', 'opensearch', 'keycloak', 'addc',
+        'syncope', 'opa', 'litellm', 'langfuse', 'stalwart', 'novu', 'mattermost',
+        'otel', 'tempo', 'loki', 'grafana-operator', 'ptm', 'delivery',
+      ].includes(m);
       const t = this.tab();
       let next = '/p/foundation';
       if (m && m !== 'overview') next += hasTabs && t && t !== 'overview' ? `/${m}/${t}` : `/${m}`;
-      if ((m === 'modules' || m === 'delivery') && t && t !== 'overview' && this.detail() !== 'overview') next += `/${this.detail()}`;
+      if (m === 'delivery' && t && t !== 'overview' && this.detail() !== 'overview') next += `/${this.detail()}`;
       const target = next + location.search + location.hash;
       if (location.pathname !== next) history.pushState(history.state, '', target);
     } catch { /* noop */ }

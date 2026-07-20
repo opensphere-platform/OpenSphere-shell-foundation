@@ -23,8 +23,7 @@ interface DomainCard {
   id: string; label: string; icon: any; desc: string; live: boolean;
   count: number; healthy: number; degraded: boolean; modules: string; firstModule: string;
   opNote?: string;    // 로드맵 도메인 중 실제 설치 진행이 있는 PFS 모듈의 실시간 상태
-  linkTab?: string;   // opNote가 있으면 클릭 시 이동할 탭(예: 'velero')
-  linkModule?: 'modules';
+  linkModule?: string; // opNote가 있으면 클릭 시 이동할 정식 모듈 경로
   plannedNote?: string; // live 도메인 안에도 아직 미구현인 엔진이 있을 때(예: Identity의 Syncope) 표시
 }
 
@@ -41,10 +40,10 @@ interface SetupStep {
 // 아직 capability 서비스(FOUNDATION_PLUGINS)로 등록되지 않은 4개 도메인도 정확한 제품명을 명시한다.
 // liveKey가 있으면 PFS 구현 모듈의 실측 상태를 그대로 반영한다(하드코딩 금지).
 // PFS 정본 멤버는 제품명이 아니라 identity/data/ai/comm/observability/backup capability 모듈이다.
-const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: string; linkTab?: string; linkModule?: 'modules' }> = {
+const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: string; linkModule?: string }> = {
   ai: { modules: 'LiteLLM · Langfuse · Vector Retrieval' },
   comm: { modules: 'Stalwart(JMAP) · Novu · Mattermost' },
-  observability: { modules: 'OpenTelemetry Collector · Tempo · Loki · Grafana Operator', liveKey: 'otel', liveLabel: 'OpenTelemetry Collector', linkTab: 'otel', linkModule: 'modules' },
+  observability: { modules: 'OpenTelemetry Collector · Tempo · Loki · Grafana Operator', liveKey: 'otel', liveLabel: 'OpenTelemetry Collector', linkModule: 'otel' },
   backup: { modules: 'BackupPolicy · Restore · Object/Volume protection' },
 };
 
@@ -142,7 +141,7 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
     <div class="os-sech">Capability 도메인</div>
     <div class="ov-domains">
       <div class="ov-domain" *ngFor="let d of domains()" [class.ov-domain--planned]="!d.live"
-           [class.ov-domain--clickable]="d.live || d.linkTab" (click)="goDomain(d)">
+           [class.ov-domain--clickable]="d.live || d.linkModule" (click)="goDomain(d)">
         <div class="ov-domain-h">
           <os-cicon [icon]="d.icon" [size]="20"/>
           <span class="ov-domain-name">{{ d.label }}</span>
@@ -264,7 +263,7 @@ export class FoundationOverviewComponent {
       const state = this.engines.liveState(p.liveKey);
       if (state === 'loading') { return base; } // 확인 중엔 아무 것도 단정하지 않음(플리커 방지)
       const opNote = state === 'ok' ? `${p.liveLabel} 설치·운영중 — PFS 모듈에서 상태 확인` : `${p.liveLabel} 미설치 — PFS 모듈에서 설치 가능`;
-      return { ...base, opNote, linkTab: p.linkTab, linkModule: p.linkModule };
+      return { ...base, opNote, linkModule: p.linkModule };
     };
     return [
       { id: 'data', label: 'Data', icon: DOMAIN_ICON['data'], desc: '관계형 DB · 검색 · 오브젝트 스토리지', live: true, ...roll('data.') },
@@ -286,7 +285,7 @@ export class FoundationOverviewComponent {
   }
   goDomain(d: DomainCard): void {
     if (d.live) { this.go(d.firstModule); return; }
-    if (d.linkTab) { this.vr.setModule(d.linkModule ?? 'modules'); this.vr.setTab(d.linkTab); }
+    if (d.linkModule) { this.vr.setModule(d.linkModule); }
   }
   openPlugin(p: HostedPlugin): void { this.vr.setModule(p.view.module); }
   preparePlugin(p: HostedPlugin): void {

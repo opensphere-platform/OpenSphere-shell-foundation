@@ -33,6 +33,11 @@ const ICON: Record<string, any> = {
 interface NavChild { id: string; name: string; planned?: boolean; module?: string; tab?: string }
 interface NavGroup { id: string; label: string; iconKey: string; children: NavChild[]; planned?: boolean }
 
+const CATALOG_MODULES = new Set([
+  'syncope', 'opa', 'litellm', 'langfuse', 'stalwart', 'novu', 'mattermost',
+  'otel', 'tempo', 'loki', 'grafana-operator', 'ptm',
+]);
+
 // AI/Comm은 아직 FOUNDATION_PLUGINS registry에 등록되지 않은 로드맵 도메인이라 정적 목록으로 노출.
 // 실제 엔진이 배선되면 registry 엔트리로 승격하고 여기서 제거한다(2026-07-04).
 
@@ -139,7 +144,7 @@ interface NavGroup { id: string; label: string; iconKey: string; children: NavCh
         </nav>
 
         <app-foundation-overview *ngIf="vr.module() === 'overview'"></app-foundation-overview>
-        <app-foundation-engines *ngIf="vr.module() === 'modules' && !activePlugin()"></app-foundation-engines>
+        <app-foundation-engines *ngIf="(vr.module() === 'modules' || catalogModule()) && !activePlugin()"></app-foundation-engines>
         <app-control-plane *ngIf="vr.module() === 'control-plane'"></app-control-plane>
         <app-foundation-delivery *ngIf="vr.module() === 'delivery' && !activePlugin()"></app-foundation-delivery>
         <app-plugin-outlet *ngIf="activePlugin() as p" [plugin]="p"></app-plugin-outlet>
@@ -179,9 +184,9 @@ export class AppComponent implements OnInit, OnDestroy {
     const pick = (prefix: string): NavChild[] => this.reg.all
       .filter((p) => p.capability.startsWith(prefix))
       .map((p) => ({ id:this.routeId(p.id), name:p.name }));
-    const catalog = (id:string,name:string,phase1=true):NavChild => ({id,name,planned:phase1,module:'modules',tab:id});
+    const catalog = (id:string,name:string,phase1=true):NavChild => ({id,name,planned:phase1});
     return [
-      { id:'identity', label:'Identity', iconKey:'identity', children:[...pick('identity.'), catalog('syncope','Apache Syncope'), catalog('opa','OPA')] },
+      { id:'identity', label:'Identity', iconKey:'identity', children:pick('identity.') },
       { id:'data', label:'Data', iconKey:'data', children:pick('data.') },
       { id:'ai', label:'AI / Retrieval', iconKey:'search', planned:true, children:[catalog('litellm','LiteLLM'),catalog('langfuse','Langfuse')] },
       { id:'comm', label:'Communication', iconKey:'users', planned:true, children:[catalog('stalwart','Stalwart'),catalog('novu','Novu'),catalog('mattermost','Mattermost')] },
@@ -225,7 +230,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   activePlugin(): HostedPlugin | undefined {
     const route = this.vr.module();
-    const id = this.pluginId(route === 'modules' || route === 'delivery' ? this.vr.tab() : route);
+    const id = this.pluginId(route === 'delivery' ? this.vr.tab() : route);
     const p = this.reg.all.find((x) => x.id === id && !!x.activation);
     if (!p) { return undefined; }
     // Samba-AD owns a lifecycle-aware Preflight/Install surface. It must be reachable
@@ -242,8 +247,11 @@ export class AppComponent implements OnInit, OnDestroy {
   unknownModule(): boolean {
     const m = this.vr.module();
     if (['overview', 'modules', 'control-plane', 'delivery'].includes(m)) { return false; }
+    if (CATALOG_MODULES.has(m)) { return false; }
     return !this.reg.all.some((p) => this.routeId(p.id) === m);
   }
+
+  catalogModule(): boolean { return CATALOG_MODULES.has(this.vr.module()); }
 
   /** 로드맵 모듈(AI/Comm) 페이지에 넘길 메타 — 해당 모듈이 아니면 undefined(placeholder 미표시). */
   private label(id: string): string {

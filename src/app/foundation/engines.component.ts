@@ -53,11 +53,11 @@ const LOGO_BASE = 'https://logos.opl.io.kr/i';
   standalone: true,
   imports: [CommonModule, ClarityModule, OtelComponent, RoadmapModuleComponent, PluginPageHeaderComponent],
   template: `
-    <app-otel *ngIf="vr.tab() === 'otel'"></app-otel>
+    <app-otel *ngIf="currentId() === 'otel'"></app-otel>
     <app-roadmap-module *ngIf="placeholderCard() as pc" [module]="pc"></app-roadmap-module>
     <clr-alert *ngIf="invalidDetailTab()" clrAlertType="warning" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">존재하지 않는 PFS 모듈 경로입니다. Delivery 엔진은 별도 Platform Delivery 메뉴에서 관리합니다.</span></clr-alert-item></clr-alert>
 
-    <ng-container *ngIf="vr.tab() === 'overview'">
+    <ng-container *ngIf="vr.module() === 'modules' && vr.tab() === 'overview'">
     <osp-plugin-page-header [model]="catalogHeader" headingId="pfs-module-catalog-title" />
     <section class="stack-inline">
       <div>
@@ -148,13 +148,15 @@ export class FoundationEnginesComponent {
 
   open(c: EngineCard): void {
     if (c.module) { this.vr.setModule(c.module); }
-    if (c.tab) { this.vr.setTab(c.tab); return; }
-    this.vr.setTab(c.id);
+    else { this.vr.setModule(c.id); }
+    if (c.tab) { this.vr.setTab(c.tab); }
   }
-  isDetailTab(): boolean { return DETAIL_TABS.has(this.vr.tab()); }
-  invalidDetailTab(): boolean { return this.vr.tab() !== 'overview' && !DETAIL_TABS.has(this.vr.tab()); }
+  currentId(): string { return this.vr.module() === 'modules' ? this.vr.tab() : this.vr.module(); }
+  isDetailTab(): boolean { return DETAIL_TABS.has(this.currentId()); }
+  invalidDetailTab(): boolean { return this.vr.module() === 'modules' && this.vr.tab() !== 'overview'; }
   placeholderCard(): EngineCard | undefined {
-    return PLACEHOLDER_TABS.has(this.vr.tab()) ? this.cards.find((c) => c.id === this.vr.tab()) : undefined;
+    const id = this.currentId();
+    return PLACEHOLDER_TABS.has(id) ? this.cards.find((c) => c.id === id) : undefined;
   }
   cardsFor(category: string): EngineCard[] { return this.cards.filter((c) => c.category === category); }
   logoUrl(name: string): string { return `${LOGO_BASE}/${name}`; }

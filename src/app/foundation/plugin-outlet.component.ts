@@ -53,6 +53,12 @@ export class PluginOutletComponent implements OnChanges, OnDestroy {
     const mount = () => {
       this.mounted?.remove();
       this.mounted = document.createElement(tag);
+      // External custom elements are inline by default.  Foundation's native
+      // plugin pages are block hosts; enforce that same shell contract for every
+      // hosted plugin so PostgreSQL and ADDC share the full content width.
+      this.mounted.style.display = 'block';
+      this.mounted.style.width = '100%';
+      this.mounted.style.minWidth = '0';
       this.mount.nativeElement.appendChild(this.mounted);
       this.ready.set(true);
     };
