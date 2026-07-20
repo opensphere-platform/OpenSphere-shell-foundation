@@ -16,9 +16,9 @@ import { HostedPlugin } from '../registry/hosted-plugin';
           {{ plugin.name }} plugin 로드 대기 중... UIPluginPackage/{{ packageId() }} 서명 검증과 Extension Host 적재를 기다립니다.
         </span>
         <span class="alert-text" *ngIf="timedOut()">
-          {{ plugin.name }} plugin runtime이 활성 Registry에 로드되지 않았습니다.
-          UIPluginPackage/{{ packageId() }}가 Installed/Ready라면 별도의 활성화가 필요하고,
-          Failed라면 digest·manifest signature·permission 검증 사유를 확인해야 합니다.
+          {{ plugin.name }} plugin 실행 UI 적재가 지연되고 있습니다.
+          이 상태만으로 UIPluginPackage/{{ packageId() }}의 미설치·검증 실패를 의미하지 않습니다.
+          Extensions에서 Registry 활성화와 digest·manifest signature·permission의 실제 판정을 확인하세요.
         </span>
         <div class="alert-actions" *ngIf="timedOut()">
           <a class="btn alert-action" href="/manage/extensions">Extensions에서 상태 확인</a>
@@ -74,6 +74,6 @@ export class PluginOutletComponent implements OnChanges, OnDestroy {
     void customElements.whenDefined(tag).then(mount);
     this.timer = setTimeout(() => {
       if (!this.ready()) { this.timedOut.set(true); }
-    }, 8000);
+    }, 30000);
   }
 }

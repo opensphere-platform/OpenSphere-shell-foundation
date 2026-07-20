@@ -1,6 +1,6 @@
 {
   "name": "foundation",
-  "version": "0.2.0-edge.14",
+  "version": "0.2.0-edge.15",
   "description": "OpenSphere subShell — Foundation. Angular 22 + Clarity 18, exported as Angular Element <osp-foundation-shell>. Standalone project: `ng build` → dist served by server.js (generic K8s proxy + WS exec).",
   "private": true,
   "scripts": {
@@ -11,6 +11,7 @@
     "verify:manual": "node tools/verify-manual-contribution.mjs",
     "verify:surface": "node tools/verify-plugin-surface.mjs",
     "verify:plugin-catalog": "node tools/verify-foundation-plugin-catalog.mjs",
+    "test:plugin-runtime": "node --test tools/plugin-runtime.test.mjs",
     "package:plugin": "node tools/package-foundation-plugin.mjs"
   },
   "dependencies": {

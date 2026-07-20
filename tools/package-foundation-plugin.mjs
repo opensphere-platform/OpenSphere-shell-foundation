@@ -5,6 +5,8 @@ import { pathToFileURL } from 'node:url';
 
 const root = resolve(import.meta.dirname, '..');
 const catalog = JSON.parse(readFileSync(resolve(root, 'plugins/catalog.json'), 'utf8'));
+const mirrors = JSON.parse(readFileSync(resolve(root, 'oci/mirrors.json'), 'utf8'));
+const controlContracts = JSON.parse(readFileSync(resolve(root, 'plugins/control-contracts.json'), 'utf8'));
 const arg = process.argv.indexOf('--id');
 const id = arg >= 0 ? process.argv[arg + 1] : '';
 const spec = catalog.plugins.find((item) => item.id === id);
@@ -22,8 +24,26 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
 const manual = readFileSync(resolve(root, 'ui-shell/manual', spec.manual), 'utf8');
+const control = controlContracts.contracts?.[id];
+if (!control) throw new Error(`missing control contract for Foundation plugin: ${id}`);
+const mirrorByName = new Map(mirrors.images.map((item) => [item.name, item]));
+const operandPlan = spec.operands.map((declared) => {
+  const name = declared.slice('mirror/'.length, -':edge'.length);
+  const mirror = mirrorByName.get(name);
+  if (!mirror?.edgeVersion) throw new Error(`missing edgeVersion for operand mirror: ${declared}`);
+  return {
+    name,
+    channel: 'edge',
+    version: mirror.edgeVersion,
+    image: `${mirrors.registry}/${name}:${mirror.edgeVersion}`,
+    declared,
+    platforms: mirror.platforms ?? ['linux/amd64', 'linux/arm64'],
+  };
+});
 const runtimeSpec = {
   ...spec,
+  control,
+  operandPlan,
   version: catalog.version,
   hostRef: catalog.hostRef,
   channel: 'edge',

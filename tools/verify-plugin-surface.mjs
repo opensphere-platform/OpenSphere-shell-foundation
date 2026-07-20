@@ -75,7 +75,8 @@ assert.match(runtimeTemplate, /apiFetch\('\/api\/info'/, '독립 plugin package 
 assert.match(runtimeTemplate, /apiFetch\('\/api\/plan'/, '독립 plugin operand plan probe 누락');
 
 const outlet = read('src/app/foundation/plugin-outlet.component.ts');
-assert.match(outlet, /Installed\/Ready라면 별도의 활성화가 필요/, 'child plugin Installed와 Activated 상태 안내가 구분되지 않습니다.');
+assert.match(outlet, /미설치·검증 실패를 의미하지 않습니다/, 'child plugin 적재 지연을 설치·검증 실패로 오인하지 않는 안내가 없습니다.');
+assert.match(outlet, /Registry 활성화와 digest·manifest signature·permission의 실제 판정/, 'child plugin의 실제 Activated·검증 판정 확인 경로가 없습니다.');
 assert.match(outlet, /href="\/manage\/extensions"/, 'child plugin 실패 복구 경로가 없습니다.');
 for (const [, file] of surfaces.slice(1)) {
   assert.match(read(file), /pfsPluginTabs/, `${file}: 공통 11탭 helper 미사용`);

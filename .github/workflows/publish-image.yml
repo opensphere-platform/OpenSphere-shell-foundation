@@ -59,6 +59,7 @@ jobs:
         env:
           SAMBA_PLUGIN_ROOT: deps/OpenSphere-plugin-samba-ad
       - run: npm run verify:plugin-catalog
+      - run: npm run test:plugin-runtime
       - run: npm run build
       - uses: actions/setup-go@v5
         with:

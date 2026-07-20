@@ -15,7 +15,7 @@ FROM docker.io/library/node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c
 ARG OS_MODULE_DESCRIPTOR
 ARG OS_MODULE_SIGNATURE
 LABEL org.opencontainers.image.title="OpenSphere Platform Foundation Service Stack" \
-      org.opencontainers.image.version="0.2.0-edge.14" \
+      org.opencontainers.image.version="0.2.0-edge.15" \
       org.opencontainers.image.source="https://github.com/opensphere-platform/OpenSphere-shell-foundation" \
       io.opensphere.module.descriptor=$OS_MODULE_DESCRIPTOR \
       io.opensphere.module.descriptor.signature=$OS_MODULE_SIGNATURE \

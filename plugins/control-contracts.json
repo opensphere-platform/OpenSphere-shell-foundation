@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "contracts": {
+    "postgres": { "model": "data", "engineId": "postgres", "parameterPath": "root", "reconciler": "implemented" },
+    "percona-psmdb": { "model": "data", "engineId": "psmdb", "parameterPath": "dataEngines.psmdb", "reconciler": "implemented" },
+    "valkey": { "model": "data", "engineId": "valkey", "parameterPath": "dataEngines.valkey", "reconciler": "implemented" },
+    "opensearch": { "model": "data", "engineId": "opensearch", "parameterPath": "dataEngines.opensearch", "reconciler": "implemented" },
+    "rustfs": { "model": "data", "engineId": "rustfs", "parameterPath": "dataEngines.rustfs", "reconciler": "implemented" },
+    "keycloak": { "model": "identity", "engineId": "keycloak", "parameterPath": "identityEngines.keycloak", "reconciler": "implemented" },
+    "apache-syncope": { "model": "identity", "engineId": "syncope", "parameterPath": "identityEngines.syncope", "reconciler": "pending", "blocker": "Apache Syncope 전용 operand renderer와 readiness adapter가 아직 control-plane에 등록되지 않았습니다." },
+    "opa": { "model": "identity", "engineId": "opa", "parameterPath": "identityEngines.opa", "reconciler": "pending", "blocker": "OPA bundle·policy distribution·readiness adapter가 아직 control-plane에 등록되지 않았습니다." },
+    "litellm": { "model": "ai", "engineId": "litellm", "parameterPath": "aiEngines.litellm", "reconciler": "pending", "blocker": "LiteLLM gateway와 provider SecretRef를 처리하는 AI bundle이 아직 control-plane에 등록되지 않았습니다." },
+    "langfuse": { "model": "ai", "engineId": "langfuse", "parameterPath": "aiEngines.langfuse", "reconciler": "pending", "blocker": "Langfuse web·worker·ClickHouse·PostgreSQL 연결 bundle이 아직 control-plane에 등록되지 않았습니다." },
+    "stalwart": { "model": "communication", "engineId": "stalwart", "parameterPath": "communicationEngines.stalwart", "reconciler": "pending", "blocker": "Stalwart mail domain·TLS·DNS·storage 계약 renderer가 아직 control-plane에 등록되지 않았습니다." },
+    "novu": { "model": "communication", "engineId": "novu", "parameterPath": "communicationEngines.novu", "reconciler": "pending", "blocker": "Novu API·worker·websocket·dashboard와 데이터 계층 bundle이 아직 control-plane에 등록되지 않았습니다." },
+    "mattermost": { "model": "communication", "engineId": "mattermost", "parameterPath": "communicationEngines.mattermost", "reconciler": "pending", "blocker": "Mattermost database·file storage·ingress 계약 renderer가 아직 control-plane에 등록되지 않았습니다." },
+    "opentelemetry": { "model": "observability", "engineId": "otel", "parameterPath": "observabilityEngines.otel", "reconciler": "implemented", "singletonModel": true },
+    "grafana-tempo": { "model": "observability", "engineId": "tempo", "parameterPath": "observabilityEngines.tempo", "reconciler": "pending", "blocker": "Tempo storage·retention·memberlist renderer가 아직 control-plane에 등록되지 않았습니다." },
+    "grafana-loki": { "model": "observability", "engineId": "loki", "parameterPath": "observabilityEngines.loki", "reconciler": "pending", "blocker": "Loki storage schema·retention·gateway renderer가 아직 control-plane에 등록되지 않았습니다." },
+    "grafana-operator": { "model": "observability", "engineId": "grafana-operator", "parameterPath": "observabilityEngines.grafanaOperator", "reconciler": "pending", "blocker": "Grafana Operator CRD·instance·datasource renderer가 아직 control-plane에 등록되지 않았습니다." },
+    "ptm": { "model": "backup", "engineId": "ptm", "parameterPath": "backupEngines.ptm", "reconciler": "pending", "blocker": "Velero와 .ptm 동일시점 복구 manifest를 결합하는 backup bundle이 아직 control-plane에 등록되지 않았습니다." },
+    "argocd": { "model": "delivery", "engineId": "argocd", "parameterPath": "deliveryEngines.argocd", "reconciler": "pending", "blocker": "Argo CD bootstrap·repository SecretRef·ApplicationSet renderer가 아직 control-plane에 등록되지 않았습니다." },
+    "crossplane": { "model": "delivery", "engineId": "crossplane", "parameterPath": "deliveryEngines.crossplane", "reconciler": "pending", "blocker": "Crossplane core·provider-helm·ProviderConfig renderer가 아직 control-plane에 등록되지 않았습니다." }
+  }
+}
