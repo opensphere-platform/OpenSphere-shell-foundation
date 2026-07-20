@@ -118,7 +118,7 @@ jobs:
         shell: bash
         run: |
           descriptor="$(jq -c . module-package.json)"
-          descriptor_build_arg="$(printf 'OS_MODULE_DESCRIPTOR=%s' "$descriptor" | jq -Rr @csv)"
+          descriptor_build_arg="$(printf 'OS_MODULE_DESCRIPTOR=%s' "$descriptor" | jq -Rr '[.] | @csv')"
           echo "descriptor-build-arg=$descriptor_build_arg" >> "$GITHUB_OUTPUT"
           echo "version=$(jq -r .version module-package.json)" >> "$GITHUB_OUTPUT"
           echo "signature=$(tr -d '\r\n' < module-package.json.sig)" >> "$GITHUB_OUTPUT"
@@ -268,7 +268,7 @@ jobs:
         env: { PLUGIN_ID: "${{ matrix.id }}" }
         run: |
           descriptor="$(jq -c . "plugins/generated/$PLUGIN_ID/module-package.json")"
-          descriptor_build_arg="$(printf 'OS_MODULE_DESCRIPTOR=%s' "$descriptor" | jq -Rr @csv)"
+          descriptor_build_arg="$(printf 'OS_MODULE_DESCRIPTOR=%s' "$descriptor" | jq -Rr '[.] | @csv')"
           echo "descriptor-build-arg=$descriptor_build_arg" >> "$GITHUB_OUTPUT"
           echo "version=$(jq -r .version "plugins/generated/$PLUGIN_ID/module-package.json")" >> "$GITHUB_OUTPUT"
           echo "signature=$(tr -d '\r\n' < "plugins/generated/$PLUGIN_ID/module-package.json.sig")" >> "$GITHUB_OUTPUT"
