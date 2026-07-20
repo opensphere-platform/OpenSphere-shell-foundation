@@ -9,6 +9,17 @@ const sambaRoot = process.env.SAMBA_PLUGIN_ROOT
   : resolve(root, '..', 'OpenSphere-plugin-samba-ad');
 const readSamba = (path) => readFileSync(resolve(sambaRoot, path), 'utf8');
 
+// The OCI label, signed module descriptor source, and install package must
+// expose one release version. A split version makes the channel digest look
+// newer while the Extension Host still reconciles the previous release.
+const packageVersion = JSON.parse(read('package.json')).version;
+const manifestVersion = JSON.parse(read('ui-shell/ui-shell.manifest.json')).version;
+const packageYaml = read('uipluginpackage.yaml');
+const dockerfile = read('Dockerfile');
+assert.equal(manifestVersion, packageVersion, 'ui-shell manifest와 package.json 버전이 다릅니다.');
+assert.match(packageYaml, new RegExp(`\\n  version: ${packageVersion.replaceAll('.', '\\.')}(?:\\r?\\n)`), 'UIPluginPackage 버전이 package.json과 다릅니다.');
+assert.match(dockerfile, new RegExp(`org\\.opencontainers\\.image\\.version="${packageVersion.replaceAll('.', '\\.')}"`), 'OCI label 버전이 package.json과 다릅니다.');
+
 const surfaces = [
   ['PostgreSQL', 'src/app/modules/postgres/postgres-plugin.component.ts'],
   ['Data engines', 'src/app/modules/data-engine/data-engine-plugin.component.ts'],
