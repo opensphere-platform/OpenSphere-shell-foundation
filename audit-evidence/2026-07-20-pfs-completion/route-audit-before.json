@@ -1,0 +1,233 @@
+[
+  {
+    "slug": "01-postgres",
+    "url": "https://localhost:8090/p/foundation/postgres",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "02-psmdb",
+    "url": "https://localhost:8090/p/foundation/psmdb",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "03-valkey",
+    "url": "https://localhost:8090/p/foundation/valkey",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "04-opensearch",
+    "url": "https://localhost:8090/p/foundation/opensearch",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "05-rustfs",
+    "url": "https://localhost:8090/p/foundation/rustfs",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "06-keycloak",
+    "url": "https://localhost:8090/p/foundation/keycloak",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "07-addc",
+    "url": "https://localhost:8090/p/foundation/addc",
+    "tabsN": 11,
+    "roleTabsN": 11,
+    "selectedN": 1,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "08-syncope",
+    "url": "https://localhost:8090/p/foundation/modules/syncope",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "09-opa",
+    "url": "https://localhost:8090/p/foundation/modules/opa",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "10-litellm",
+    "url": "https://localhost:8090/p/foundation/modules/litellm",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "11-langfuse",
+    "url": "https://localhost:8090/p/foundation/modules/langfuse",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "12-stalwart",
+    "url": "https://localhost:8090/p/foundation/modules/stalwart",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "13-novu",
+    "url": "https://localhost:8090/p/foundation/modules/novu",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "14-mattermost",
+    "url": "https://localhost:8090/p/foundation/modules/mattermost",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "15-otel",
+    "url": "https://localhost:8090/p/foundation/modules/otel",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 0,
+    "error": false
+  },
+  {
+    "slug": "16-tempo",
+    "url": "https://localhost:8090/p/foundation/modules/tempo",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "17-loki",
+    "url": "https://localhost:8090/p/foundation/modules/loki",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "18-grafana-operator",
+    "url": "https://localhost:8090/p/foundation/modules/grafana-operator",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "19-ptm",
+    "url": "https://localhost:8090/p/foundation/modules/ptm",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "20-argocd",
+    "url": "https://localhost:8090/p/foundation/delivery/argocd",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 3,
+    "error": false
+  },
+  {
+    "slug": "21-crossplane",
+    "url": "https://localhost:8090/p/foundation/delivery/crossplane",
+    "tabsN": 11,
+    "roleTabsN": 0,
+    "selectedN": 0,
+    "h1N": 1,
+    "framesN": 1,
+    "stepsN": 0,
+    "error": false
+  }
+]

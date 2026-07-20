@@ -1,0 +1,23 @@
+{
+  "auditedAt": "2026-07-20",
+  "browser": "user Chrome",
+  "viewport": "1728x859",
+  "routes": 21,
+  "results": {
+    "routesWithElevenTabs": 21,
+    "routesWithSingleSelectedTab": 21,
+    "routesWithThreeLifecycleStages": 21,
+    "routesWithoutHttpOrErrorState": 21,
+    "foundationRoutesWithRovingTabindex": 20,
+    "addcRoutesWithRovingTabindex": 0,
+    "chromeWarnings": 0,
+    "chromeErrors": 0
+  },
+  "blocker": {
+    "component": "samba-ad",
+    "targetVersion": "0.1.1-edge.7",
+    "reason": "PlatformSupportProfileRequiredForPfsPlugin",
+    "hisReady": false,
+    "missingEvidence": ["TelemetryEvidenceMissing", "PolicyEvidenceMissing"]
+  }
+}

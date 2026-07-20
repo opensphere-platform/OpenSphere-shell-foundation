@@ -1,70 +1,53 @@
-# Foundation Plugin — PostgreSQL/ADDC Design QA
+# Foundation Plugin Surface Design QA
 
 검증일: 2026-07-20
 
-기준 화면: `/p/foundation/postgres`
+검증 브라우저: 로그인된 사용자 Chrome, 1728 × 859
 
-대상 화면: `/p/foundation/addc`
-배포 버전: Foundation `0.2.0-edge.10`, Samba-AD `0.1.1-edge.6`
+정본 화면: `/p/foundation/postgres`
 
-## 시각 정본과 비교 조건
+## 검증 대상
 
-- PostgreSQL 기준 캡처: `audit-evidence/2026-07-20-pfs-parity/02-postgres-edge10.png`
-- ADDC 구현 캡처: `audit-evidence/2026-07-20-pfs-parity/01-addc-edge10.png`
-- 동일 뷰포트 비교본: `audit-evidence/2026-07-20-pfs-parity/03-postgres-addc-comparison.png`
-- 문서 탭 비교본: `audit-evidence/2026-07-20-pfs-parity/06-postgres-addc-documentation-comparison.png`
-- ADDC Operator 증거: `audit-evidence/2026-07-20-pfs-parity/07-addc-operator.png`
-- ADDC 최종 캡처: `audit-evidence/2026-07-20-pfs-parity/08-addc-final.png`
-- 뷰포트/상태: 로그인된 사용자 Chrome, 1728 × 859, 설치 전 `Operator required`
+- Foundation subShell `0.2.0-edge.11`의 20개 plugin 화면
+- Foundation에 종속된 Samba-AD plugin `/p/foundation/addc`
+- 공통 계약: 단일 평면 헤더, 4열 메타데이터, 11개 탭, 3단계 수명주기, 3열 Overview
 
-## PostgreSQL 기준 공통 화면 계약
+## 구현·배포 상태
 
-- Foundation 전역 사이드바, breadcrumb, `← PFS 모듈` 복귀 링크
-- 장식 박스 없는 실제 제품 로고, capability, 제목, 설명
-- Lifecycle, Version, Profile, Namespace 4열 메타데이터
-- 다음 순서의 11개 수평 탭
-  1. Overview
-  2. Operator
-  3. Cluster plan
-  4. Topology
-  5. Configuration
-  6. 제품별 핵심 도메인
-  7. Backups
-  8. Events
-  9. Claims
-  10. Upgrade
-  11. Documentation
-- `Operator 준비 → Cluster 생성 → 운영 관리` 3단계 수명주기
-- `Package readiness`, 제품 health, `Operations policy` 3열 Overview
-- 설치 전에도 Operator와 Documentation에 접근 가능한 관리 흐름
+| 대상 | 구현 | 이미지 | 클러스터 | 판정 |
+|---|---|---|---|---|
+| Foundation 20개 화면 | commit `46541e7` | `0.2.0-edge.11` · `sha256:6180ae245425...` | Activated / Ready | 통과 |
+| Samba-AD ADDC | commit `f36f3f2` | `0.1.1-edge.7` · `sha256:21fa2d8c4ab3...` | `edge.6` 유지 | 배포 차단 |
 
-ADDC의 제품별 차이는 여섯 번째 탭 `Directory & Roles`, LDAP/AD DC health, Realm, Directory 접근·보안 정책뿐이다. 레이아웃과 탐색 흐름은 PostgreSQL과 동일하다.
+Foundation 이미지는 digest, descriptor, signature, provenance, SBOM, permission profile 및 amd64/arm64 검증을 통과한 뒤 `os extensions install`과 `activate`로 배포했다.
 
-## 브라우저 상호작용 검증
+## 현재 실행 화면 감사
 
-1. `/p/foundation/addc` — 11개 탭, 3단계 수명주기, 3열 상태 패널 렌더링 확인
-2. `Cluster plan` 클릭 — `/p/foundation/addc/cluster` 전환 확인
-3. `Operator` 클릭 — `/p/foundation/addc/operator`와 `Foundation installer` 차단 사유 확인
-4. `Documentation` 클릭 — `/p/foundation/addc/documentation`, Console Manual Registry, 한글 안내서 진입점 확인
-5. 최종적으로 Overview로 복귀하고 Chrome의 warning/error 로그가 0건임을 확인
+1. 21개 모든 경로에서 HTTP/Error 화면이 없고 11개 탭과 단일 `aria-selected=true`가 존재한다.
+2. 21개 모든 경로에서 `1 → 2 → 3` 단계 버튼을 확인했다.
+3. Foundation 20개 경로는 roving tabindex가 정확히 1개이며 `ArrowRight`로 `Overview → Operator`가 전환된다.
+4. OTel과 Crossplane은 누락됐던 3단계 스트립과 직각 3열 Overview를 추가했다.
+5. Chrome 로그는 extension-host 검증 성공 `info`만 있고 warning/error는 없다.
+6. ADDC의 시각 구조는 PostgreSQL과 일치하지만 현재 배포본 `edge.6`에는 roving tabindex와 방향키 처리가 없다.
 
-## 시각 대조 결과
+## 시각 증거
 
-| 항목 | PostgreSQL 기준 | ADDC 결과 |
-|---|---|---|
-| 콘텐츠 폭과 상단 여백 | 전역 셸 안의 전체 가용 폭 | 일치 |
-| 헤더 높이·로고·메타데이터 | 단일 평면 헤더, 4열 메타데이터 | 일치 |
-| 탭 수와 순서 | 11개 | 일치 |
-| 도메인 탭 | Databases & Roles | Directory & Roles — 의도된 차이 |
-| 수명주기 스트립 | 3단계 전체 폭 | 일치 |
-| Overview 카드 | 3열 동일 폭 | 일치 |
-| Documentation | 같은 헤더/탭 프레임 안에서 문서 기여 표시 | 일치 |
-| 브라우저 오류 | 없음 | warning/error 0건 |
+- `audit-evidence/2026-07-20-pfs-completion/comparison-postgres-addc-after.png`
+- `audit-evidence/2026-07-20-pfs-completion/comparison-otel-before-after.png`
+- `audit-evidence/2026-07-20-pfs-completion/comparison-crossplane-before-after.png`
+- `audit-evidence/2026-07-20-pfs-completion/route-audit-before.json`
+- `audit-evidence/2026-07-20-pfs-completion/route-audit-after.json`
 
-## 접근성 범위
+## 배포 차단 근거
 
-현재 QA에서는 탭의 명시적 텍스트, 선택 상태, disabled 상태, 읽을 수 있는 상태 메시지를 확인했다. 키보드 전 경로 및 스크린리더 조합별 완전 적합성은 별도 접근성 감사 범위다.
+Samba-AD `edge.7` 설치는 Console admission에서 HTTP 409 `PlatformSupportProfileRequiredForPfsPlugin`으로 거절됐다.
 
-## 최종 결과
+- HIS Ready: `Blocked`
+- Platform Support Profile: `Blocked`
+- Observability: `TelemetryEvidenceMissing`
+- Security/Policy: `PolicyEvidenceMissing`
+- 개발 예외는 Foundation subShell 활성화만 허용하며 PFS plugin 설치·업그레이드는 허용하지 않는다.
 
-final result: passed
+감사 중 `kubectl` 직접 교체나 admission 우회는 수행하지 않았다. ADDC의 최종 배포 검증은 HIS/Platform Support Profile을 Ready로 만들거나, 사용자가 PFS plugin 업그레이드에 한정된 별도 개발 예외를 명시 승인한 뒤 진행해야 한다.
+
+final result: blocked
