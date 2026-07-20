@@ -1,5 +1,7 @@
 # PFS Plugin Surface Completion Audit
 
+> **Historical / superseded:** 이 보고서의 `부분 완료` 판정은 Foundation `edge.11`, Samba-AD `edge.7` 실행 상태를 기준으로 한다. 최신 완료 판정과 실행 증거는 `../2026-07-20-completion-audit/AUDIT-REPORT.md`를 따른다.
+
 검증일: 2026-07-20
 
 ## 결과

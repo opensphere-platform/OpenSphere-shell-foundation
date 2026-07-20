@@ -1,0 +1,23 @@
+[
+  {"slug":"postgres","url":"https://localhost:8090/p/foundation/postgres","h1":"PostgreSQL","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"psmdb","url":"https://localhost:8090/p/foundation/psmdb","h1":"Percona PSMDB","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"valkey","url":"https://localhost:8090/p/foundation/valkey","h1":"Valkey","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"opensearch","url":"https://localhost:8090/p/foundation/opensearch","h1":"OpenSearch","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"rustfs","url":"https://localhost:8090/p/foundation/rustfs","h1":"RustFS","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"keycloak","url":"https://localhost:8090/p/foundation/keycloak","h1":"Keycloak","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"addc","url":"https://localhost:8090/p/foundation/addc","h1":"Samba-AD","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"syncope","url":"https://localhost:8090/p/foundation/syncope","h1":"Apache Syncope","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"opa","url":"https://localhost:8090/p/foundation/opa","h1":"OPA","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"litellm","url":"https://localhost:8090/p/foundation/litellm","h1":"LiteLLM","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"langfuse","url":"https://localhost:8090/p/foundation/langfuse","h1":"Langfuse","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"stalwart","url":"https://localhost:8090/p/foundation/stalwart","h1":"Stalwart","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"novu","url":"https://localhost:8090/p/foundation/novu","h1":"Novu","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"mattermost","url":"https://localhost:8090/p/foundation/mattermost","h1":"Mattermost","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"otel","url":"https://localhost:8090/p/foundation/otel","h1":"OpenTelemetry Collector","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"tempo","url":"https://localhost:8090/p/foundation/tempo","h1":"Grafana Tempo","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"loki","url":"https://localhost:8090/p/foundation/loki","h1":"Grafana Loki","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"grafana-operator","url":"https://localhost:8090/p/foundation/grafana-operator","h1":"Grafana Operator","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"ptm","url":"https://localhost:8090/p/foundation/ptm","h1":".ptm","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"argocd","url":"https://localhost:8090/p/foundation/delivery/argocd","h1":"Argo CD / ApplicationSet","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0},
+  {"slug":"crossplane","url":"https://localhost:8090/p/foundation/delivery/crossplane","h1":"Crossplane","tabs":11,"selected":1,"roving":1,"steps":3,"frame":1,"errors":0}
+]
