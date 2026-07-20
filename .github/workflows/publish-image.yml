@@ -150,6 +150,9 @@ jobs:
           cache-from: type=gha,scope=opensphere-shell-foundation
           cache-to: type=gha,mode=max,scope=opensphere-shell-foundation
       - uses: imjasonh/setup-crane@v0.4
+      - name: Authenticate crane to private GHCR packages
+        env: { GHCR_TOKEN: "${{ secrets.GHCR_PAT }}" }
+        run: crane auth login ghcr.io -u "opensphere-platform" -p "$GHCR_TOKEN"
       - name: Verify signed module labels survive OCI serialization
         run: bash .github/scripts/verify-module-label.sh "${{ env.REGISTRY }}/opensphere-shell-foundation@${{ steps.build.outputs.digest }}" "${{ steps.package.outputs.version }}"
       - uses: actions/attest@v4
@@ -302,6 +305,9 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
       - uses: imjasonh/setup-crane@v0.4
+      - name: Authenticate crane to private GHCR packages
+        env: { GHCR_TOKEN: "${{ secrets.GHCR_PAT }}" }
+        run: crane auth login ghcr.io -u "opensphere-platform" -p "$GHCR_TOKEN"
       - name: Verify signed module labels survive OCI serialization
         run: bash .github/scripts/verify-module-label.sh "${{ env.REGISTRY }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}" "${{ steps.package.outputs.version }}"
       - uses: actions/attest@v4
