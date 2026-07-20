@@ -146,10 +146,10 @@ const DEFINITIONS: Record<string, Partial<RoadmapDefinition>> = {
         <button type="button" class="pgp-step" (click)="select('cluster')"><span class="pgp-step-n">2</span><span><b>Cluster 계획 확정</b><small>버전·digest·리소스·보호 정책</small></span></button>
         <button type="button" class="pgp-step" disabled><span class="pgp-step-n">3</span><span><b>운영 관리</b><small>reconciler 구현 후 활성화</small></span></button>
       </section>
-    <section class="rm-grid">
-      <article class="rm-panel"><h2>Capability</h2><p>{{module.role}}</p><dl><dt>연결</dt><dd>{{module.wiring}}</dd><dt>소유 섹터</dt><dd>{{module.category}}</dd><dt>관리 수준</dt><dd>PostgreSQL surface v1</dd></dl></article>
-      <article class="rm-panel"><h2>구현 게이트</h2><ol class="rm-list"><li *ngFor="let gate of def().gates">{{gate}}</li></ol><span class="label label-warning">{{def().gates.length}} gates open</span></article>
-      <article class="rm-panel"><h2>다음 조치</h2><p>제품 버전과 의존성을 BOM으로 확정하고, control-plane reconciler와 E2E rollback 증거를 구현합니다.</p><button class="btn btn-sm btn-primary" type="button" (click)="select('cluster')">Cluster plan 검토</button></article>
+    <section class="pgp-dashboard">
+      <article class="pgp-panel"><h2>Capability</h2><p>{{module.role}}</p><dl><dt>연결</dt><dd>{{module.wiring}}</dd><dt>소유 섹터</dt><dd>{{module.category}}</dd><dt>관리 수준</dt><dd>PostgreSQL surface v1</dd></dl></article>
+      <article class="pgp-panel"><h2>구현 게이트</h2><ol class="rm-list"><li *ngFor="let gate of def().gates">{{gate}}</li></ol><span class="label label-warning">{{def().gates.length}} gates open</span></article>
+      <article class="pgp-panel"><h2>다음 조치</h2><p>제품 버전과 의존성을 BOM으로 확정하고, control-plane reconciler와 E2E rollback 증거를 구현합니다.</p><button class="btn btn-sm btn-primary" type="button" (click)="select('cluster')">Cluster plan 검토</button></article>
     </section>
     </ng-container>
 

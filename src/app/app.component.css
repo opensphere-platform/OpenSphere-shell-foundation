@@ -343,6 +343,7 @@ pg-metric { display: block; height: 100%; }
 .pgp-tab:hover:not(:disabled), .pfs-plugin-tab:hover:not(:disabled) { color: var(--os-ink); background: #f7f8fb; }
 .pgp-tab.active, .pfs-plugin-tab.active { color: var(--os-ink); border-bottom-color: var(--os-brand-500); font-weight: 600; }
 .pgp-tab:disabled, .pfs-plugin-tab:disabled { color: #a8a8a8; cursor: not-allowed; }
+.pgp-tab:focus-visible, .pfs-plugin-tab:focus-visible, .pgp-step:focus-visible { position: relative; z-index: 1; outline: 2px solid var(--os-brand-500); outline-offset: -2px; }
 
 /* PostgreSQL pilot: identity, release metadata, and local navigation are one page surface. */
 .pgp-page-frame { margin: 0 0 18px; overflow: hidden; background: #fff; border: 0; box-shadow: none; }

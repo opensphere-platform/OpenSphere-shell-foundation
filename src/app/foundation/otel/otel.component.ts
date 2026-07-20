@@ -18,11 +18,18 @@ const LOGO = 'https://logos.opl.io.kr/i/opentelemetry-non-typo';
     <button class="btn btn-sm btn-link rm-back" type="button" (click)="back()">← PFS 모듈</button>
     <section class="pgp-page-frame" aria-label="OpenTelemetry Collector plugin 개요와 메뉴"><osp-plugin-page-header [model]="headerModel()" headingId="otel-plugin-title" /><osp-plugin-tabs [tabs]="tabs" [active]="active()" ariaLabel="OpenTelemetry Collector 관리 메뉴" (selected)="select($event)" /></section>
 
-    <section class="rm-grid" *ngIf="active()==='overview'">
-      <article class="rm-panel"><h2>Service health</h2><dl><dt>상태</dt><dd><span class="label" [ngClass]="phasePill()">{{svc.phaseLabel()}}</span></dd><dt>Ready</dt><dd>{{svc.readyN()}}/{{svc.totalN()}}</dd><dt>Image</dt><dd class="os-mono">{{svc.installedImage()||'—'}}</dd></dl></article>
-      <article class="rm-panel"><h2>Pipeline role</h2><p>Foundation workload의 OTLP 지표·로그·추적을 받아 승인된 관측 backend로 전달합니다.</p><button class="btn btn-sm btn-primary" (click)="select(svc.installed()?'topology':'cluster')">{{svc.installed()?'Topology':'Cluster plan'}}</button></article>
-      <article class="rm-panel"><h2>Endpoint contract</h2><dl><dt>Namespace</dt><dd class="os-mono">opensphere-foundation</dd><dt>Protocol</dt><dd>OTLP gRPC/HTTP</dd><dt>Exposure</dt><dd>ClusterIP only</dd></dl></article>
-    </section>
+    <ng-container *ngIf="active()==='overview'">
+      <section class="pgp-steps" aria-label="OpenTelemetry Collector 설치 단계">
+        <button type="button" class="pgp-step" [class.done]="svc.installed()" [class.current]="!svc.installed()" (click)="select('operator')"><span class="pgp-step-n">1</span><span><b>Operator 준비</b><small>Foundation Control Plane과 관측 계약 확인</small></span></button>
+        <button type="button" class="pgp-step" [class.done]="svc.ready()" [class.current]="svc.installed()&&!svc.ready()" (click)="select('cluster')"><span class="pgp-step-n">2</span><span><b>Collector 구성</b><small>버전·pipeline·endpoint·보호 정책</small></span></button>
+        <button type="button" class="pgp-step" [class.done]="svc.ready()" [disabled]="!svc.ready()" (click)="select('topology')"><span class="pgp-step-n">3</span><span><b>운영 관리</b><small>상태·pipeline·exporter·이벤트 관리</small></span></button>
+      </section>
+      <section class="pgp-dashboard">
+        <article class="pgp-panel"><h2>Service health</h2><p>Collector workload가 보고한 실제 가용성입니다.</p><dl><dt>상태</dt><dd><span class="label" [ngClass]="phasePill()">{{svc.phaseLabel()}}</span></dd><dt>Ready</dt><dd>{{svc.readyN()}}/{{svc.totalN()}}</dd><dt>Image</dt><dd class="os-mono">{{svc.installedImage()||'—'}}</dd></dl></article>
+        <article class="pgp-panel"><h2>Pipeline role</h2><p>Foundation workload의 OTLP 지표·로그·추적을 받아 승인된 관측 backend로 전달합니다.</p><button class="btn btn-sm btn-primary" (click)="select(svc.installed()?'topology':'cluster')">{{svc.installed()?'Topology':'Cluster plan'}}</button></article>
+        <article class="pgp-panel"><h2>Endpoint contract</h2><p>내부 수집 endpoint와 노출 경계를 고정합니다.</p><dl><dt>Namespace</dt><dd class="os-mono">opensphere-foundation</dd><dt>Protocol</dt><dd>OTLP gRPC/HTTP</dd><dt>Exposure</dt><dd>ClusterIP only</dd></dl></article>
+      </section>
+    </ng-container>
 
     <section class="rm-work" *ngIf="active()==='operator'">
       <h2>Operator</h2><table class="table"><thead><tr><th>요구조건</th><th>상태</th></tr></thead><tbody><tr><td>Crossplane provider-helm</td><td><span class="label label-info">Release API</span></td></tr><tr><td>HIS Shared Observability</td><td><span class="label label-warning">연결 검증 필요</span></td></tr><tr><td>Foundation Control Plane</td><td><span class="label label-info">Required</span></td></tr></tbody></table>

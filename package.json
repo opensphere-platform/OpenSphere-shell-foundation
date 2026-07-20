@@ -1,6 +1,6 @@
 {
   "name": "foundation",
-  "version": "0.2.0-edge.10",
+  "version": "0.2.0-edge.11",
   "description": "OpenSphere subShell — Foundation. Angular 22 + Clarity 18, exported as Angular Element <osp-foundation-shell>. Standalone project: `ng build` → dist served by server.js (generic K8s proxy + WS exec).",
   "private": true,
   "scripts": {

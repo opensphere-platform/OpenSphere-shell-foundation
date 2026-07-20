@@ -80,9 +80,13 @@ export class PluginPageHeaderComponent {
   standalone: true,
   imports: [CommonModule],
   template: `
-    <nav class="pfs-plugin-tabs" [attr.aria-label]="ariaLabel">
+    <nav class="pfs-plugin-tabs" [attr.aria-label]="ariaLabel" role="tablist" aria-orientation="horizontal">
       <button *ngFor="let tab of tabs" type="button" class="pfs-plugin-tab"
-        [class.active]="active === tab.id" [disabled]="tab.disabled" (click)="selected.emit(tab.id)">
+        role="tab" [attr.aria-selected]="active === tab.id" [attr.tabindex]="active === tab.id ? 0 : -1"
+        [attr.aria-label]="tab.disabled ? tab.label + ' — 선행 설치 단계 완료 후 사용 가능' : tab.label"
+        [attr.title]="tab.disabled ? '선행 설치 단계 완료 후 사용 가능' : null"
+        [class.active]="active === tab.id" [disabled]="tab.disabled"
+        (click)="selected.emit(tab.id)" (keydown)="onKeydown($event, tab.id)">
         {{ tab.label }}<span *ngIf="tab.badge !== undefined && tab.badge !== '' && tab.badge !== 0" class="label">{{ tab.badge }}</span>
       </button>
     </nav>
@@ -93,4 +97,21 @@ export class PluginTabsComponent {
   @Input({ required: true }) active = 'overview';
   @Input() ariaLabel = 'Plugin 메뉴';
   @Output() readonly selected = new EventEmitter<string>();
+
+  onKeydown(event: KeyboardEvent, currentId: string): void {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    const enabled = this.tabs.filter((tab) => !tab.disabled);
+    const current = enabled.findIndex((tab) => tab.id === currentId);
+    if (current < 0 || !enabled.length) return;
+    let next = current;
+    if (event.key === 'ArrowRight') next = (current + 1) % enabled.length;
+    if (event.key === 'ArrowLeft') next = (current - 1 + enabled.length) % enabled.length;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = enabled.length - 1;
+    event.preventDefault();
+    const targetId = enabled[next].id;
+    const buttons = (event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLElement>('[role="tab"]:not(:disabled)');
+    buttons?.[next]?.focus();
+    this.selected.emit(targetId);
+  }
 }

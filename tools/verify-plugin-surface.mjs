@@ -47,6 +47,13 @@ for (const tab of canonicalTabs) {
 for (const label of ['Operator', 'Cluster plan', 'Configuration', 'Backups', 'Claims']) {
   assert.match(sharedShell, new RegExp(`label: ['\"]${label}['\"]`), `공통 11탭 계약: ${label} 라벨 누락`);
 }
+for (const contract of [/role="tablist"/, /role="tab"/, /aria-selected/, /tabindex/, /ArrowRight/, /ArrowLeft/, /Home/, /End/]) {
+  assert.match(sharedShell, contract, `공통 탭 접근성·키보드 계약 누락: ${contract}`);
+}
+for (const file of ['src/app/foundation/otel/otel.component.ts', 'src/app/foundation/crossplane/crossplane.component.ts']) {
+  assert.match(read(file), /pgp-steps/, `${file}: PostgreSQL 3단계 진행 영역 누락`);
+  assert.match(read(file), /pgp-dashboard/, `${file}: PostgreSQL overview dashboard 누락`);
+}
 const surfaceContract = read('src/app/registry/plugin-surface.contract.ts');
 for (const tab of canonicalTabs) {
   assert.match(surfaceContract, new RegExp(`['\"]${tab}['\"]`), `Registry surface contract: ${tab} 누락`);
