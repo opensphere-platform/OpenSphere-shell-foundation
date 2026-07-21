@@ -28,11 +28,8 @@ COPY --chmod=0644 server.js /app/server.js
 COPY ui-shell/ /app/plugins/
 COPY --chmod=0644 module-package.json module-package.json.sig /app/plugins/
 COPY --from=build /app/dist/foundation/browser /app/www
-# 인증 CA는 이미지에 굽지 않는다. Console Extension Host가 Setup-managed
-# opensphere-console-auth-ca Secret을 /etc/opensphere/auth-ca에 read-only로 마운트한다.
 ENV PLUGINS_DIR=/app/plugins WWW_DIR=/app/www PORT=8080 \
-    NODE_EXTRA_CA_CERTS=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
-    KANIDM_CA_PATH=/etc/opensphere/auth-ca/ca.crt
+    NODE_EXTRA_CA_CERTS=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 EXPOSE 8080
 USER 1000
 CMD ["node", "/app/server.js"]

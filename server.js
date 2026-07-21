@@ -4,12 +4,11 @@
 //   /app/*      → Angular dist(main.js, styles.css)
 //   /api/nodes  → 노드 집계
 const http = require('http');
-const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer, WebSocket } = require('ws');
 const COOKIE = 'osng_token'; // 브라우저 WS는 커스텀 헤더를 못 실음 → 신원 토큰을 HttpOnly 쿠키로 전달
-// ⚠️ 'bearer' 쿠키는 콘솔 id_token이 아님(Kanidm UI 세션 등 별개 토큰, iss/aud 없음) — 읽지 말 것.
+// ⚠️ 'bearer' 쿠키는 Console Supabase access token이 아님 — 읽지 말 것.
 //    신원 전달 정본 = Main Shell ctx.api.fetch가 주입한 Authorization Bearer.
 function tokenFromCookie(cookieHeader) {
   if (!cookieHeader) return null;
@@ -34,85 +33,70 @@ const SA = '/var/run/secrets/kubernetes.io/serviceaccount';
 const APISERVER = 'https://kubernetes.default.svc';
 const tok = () => fs.readFileSync(`${SA}/token`, 'utf8').trim();
 
-// ── 쓰기 인가: 호출자 토큰을 검증 → Impersonate-User (SA 광범위 write 금지) ──
-// Kanidm 콘솔 id_token(ES256) 전용 — cutover 완료, 레거시 Keycloak RS256 dual-accept 경로는 제거됨.
-const { createPublicKey, verify: cryptoVerify } = require('crypto');
-// Kanidm 콘솔 IdP — split-horizon: 토큰 iss는 브라우저값(auth.console...), JWKS는 in-cluster svc.
-// ⚠️ JWKS는 반드시 kanidm-core(진짜 kanidmd)에서 — 'kanidm' svc는 BFF(opensphere-auth)를 가리켜 다른 키를 반환한다.
-//    인증서 SAN에 kanidm-core명이 없어 SNI(servername)를 SAN에 있는 이름으로 맞춘다(opensphere-auth 배포와 동일 트릭).
-const KANIDM_ISS = process.env.KANIDM_ISS || 'https://auth.console.opensphere.dev/oauth2/openid/opensphere-console';
-const KANIDM_JWKS_URL = process.env.KANIDM_JWKS_URL || 'https://kanidm-core.opensphere-console-auth.svc:8443/oauth2/openid/opensphere-console/public_key.jwk';
-const KANIDM_SNI = process.env.KANIDM_SNI || 'kanidm.opensphere-console-auth.svc';
-const KANIDM_AZP = process.env.KANIDM_AZP || 'opensphere-console';
-const KANIDM_CA_PATH = process.env.KANIDM_CA_PATH || '/etc/kanidm-ca/ca.crt';
+// ── Supabase identity and Kubernetes write boundary ────────────────────────
+// Foundation owns neither an IdP nor a parallel JWT verifier. The Console Backend
+// evaluates the Supabase session and the canonical console.operator_role projection.
+const CONSOLE_IDENTITY_URL = (process.env.CONSOLE_IDENTITY_URL
+  || 'http://opensphere-console-backend.opensphere-console.svc.cluster.local:8080').replace(/\/$/, '');
+// Kubernetes RBAC still uses platform group names. Only the evaluated Console roles
+// below may be projected; a caller cannot inject arbitrary Impersonate-Group values.
+const K8S_GROUP_BY_CONSOLE_ROLE = Object.freeze({
+  'console-admins': 'opensphere-console-admins',
+  'console-operators': 'opensphere-console-operators',
+  'console-viewers': 'opensphere-console-viewers',
+});
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const FND_NS = process.env.FOUNDATION_NS || 'opensphere-foundation';
 const CLUSTER_MANAGER_URL = process.env.CLUSTER_MANAGER_URL || 'http://cluster-manager.opensphere-console.svc.cluster.local:8080';
 const SAMBA_BOOTSTRAP_SECRET = process.env.SAMBA_BOOTSTRAP_SECRET || 'foundation-identity-samba-creds';
 const SAMBA_BOOTSTRAP_SECRET_KEY = 'domain-password';
-// Kanidm JWKS — 자체서명 CA를 명시적 'ca' 옵션으로 신뢰(TLS 검증 비활성화 금지, NODE_EXTRA_CA_CERTS 미접촉).
-let _kjwks = null, _kjwksAt = 0;
-const KJWKS_TTL = 5 * 60 * 1000;
-function _kanidmGetJwks(force) {
-  return new Promise((resolve, reject) => {
-    if (!force && _kjwks && (Date.now() - _kjwksAt) < KJWKS_TTL) return resolve(_kjwks);
-    const u = new URL(KANIDM_JWKS_URL);
-    // servername: SNI + 호스트명 검증 모두 이 값 기준(Node tls) — kanidm-core로 접속하되 SAN에 있는 이름으로 정합.
-    const opts = { hostname: u.hostname, port: u.port || 443, path: u.pathname + u.search, method: 'GET', servername: KANIDM_SNI };
-    try { opts.ca = fs.readFileSync(KANIDM_CA_PATH); } catch (e) { console.error('[auth] kanidm CA read failed: ' + e); }
-    const rq = https.request(opts, (resp) => {
-      const ch = []; resp.on('data', (c) => ch.push(c));
-      resp.on('end', () => { try { const j = JSON.parse(Buffer.concat(ch).toString('utf8')); _kjwks = j.keys || (j.kty ? [j] : []); _kjwksAt = Date.now(); resolve(_kjwks); } catch (e) { reject(e); } });
-    });
-    rq.on('error', reject); rq.end();
-  });
+function k8sGroups(groups) {
+  return [...new Set((groups || []).map((role) => K8S_GROUP_BY_CONSOLE_ROLE[role]).filter(Boolean))];
 }
-const b64urlJson = (s) => JSON.parse(Buffer.from(s, 'base64url').toString('utf8'));
-async function verifyToken(idToken) {
-  if (!idToken) throw { code: 401, msg: 'no id token' };
-  const parts = idToken.split('.');
-  if (parts.length !== 3) throw { code: 401, msg: 'malformed token' };
-  const header = b64urlJson(parts[0]);
-  const sig = Buffer.from(parts[2], 'base64url');
-  // ── Kanidm 콘솔 id_token (ES256) 전용 — alg pin (fail closed) ──
-  if (header.alg !== 'ES256') throw { code: 401, msg: 'unexpected alg' };
-  let jwk = (await _kanidmGetJwks()).find((k) => k.kid === header.kid);
-  if (!jwk) jwk = (await _kanidmGetJwks(true)).find((k) => k.kid === header.kid); // 키 롤오버 재시도
-  if (!jwk) {
-    try {
-      const avail = (await _kanidmGetJwks()).map((k) => k.kid).join(',');
-      const cc = b64urlJson(parts[1]);
-      console.log(`[auth-diag] unknown-kid tokenKid=${header.kid} jwksKids=[${avail}] iss=${cc.iss} aud=${JSON.stringify(cc.aud)} azp=${cc.azp}`);
-    } catch (_) { /* noop */ }
-    throw { code: 401, msg: 'unknown kid (kanidm)' };
+function requireConsoleAdmin(actor) {
+  if (!actor.groups.includes('console-admins')) throw { code: 403, msg: 'requires console-admins' };
+  return actor;
+}
+async function verifySupabaseToken(rawToken, identityFetch = fetch) {
+  if (!rawToken) throw { code: 401, msg: 'no bearer token' };
+  let response;
+  try {
+    response = await identityFetch(`${CONSOLE_IDENTITY_URL}/api/identity/session`, {
+      headers: { authorization: `Bearer ${rawToken}`, accept: 'application/json' },
+      signal: AbortSignal.timeout(3000),
+    });
+  } catch {
+    throw { code: 503, msg: 'Supabase identity authority unavailable' };
   }
-  const pub = createPublicKey({ key: jwk, format: 'jwk' });
-  // ECDSA P-256: JWS 서명은 raw r||s(IEEE-P1363)이며 DER이 아님 → dsaEncoding 명시 필수.
-  const ok = cryptoVerify('SHA256', Buffer.from(`${parts[0]}.${parts[1]}`), { key: pub, dsaEncoding: 'ieee-p1363' }, sig);
-  if (!ok) throw { code: 401, msg: 'bad signature' };
-  const c = b64urlJson(parts[1]); // 검증된 클레임
-  // split-horizon: 토큰 iss는 브라우저값(localhost:8444) — 정확히 일치해야 함(JWKS는 in-cluster svc에서 받음).
-  if (c.iss !== KANIDM_ISS) throw { code: 401, msg: 'bad iss' };
-  const aud = Array.isArray(c.aud) ? c.aud : c.aud ? [c.aud] : [];
-  if (c.azp !== KANIDM_AZP && !aud.includes(KANIDM_AZP)) throw { code: 401, msg: 'bad azp/aud' };
-  // ── 공통 꼬리: 시간 검증 + 클레임 추출 ──
-  const now = Date.now();
-  if (c.exp && c.exp * 1000 < now) throw { code: 401, msg: 'token expired' };
-  if (c.nbf && c.nbf * 1000 > now + 30000) throw { code: 401, msg: 'token not yet valid' };
-  return { username: c.preferred_username || 'unknown', groups: c.groups || [] };
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw { code: response.status === 403 ? 403 : 401, msg: body.error || 'invalid Supabase session' };
+  return {
+    username: body.username || body.subject || 'unknown',
+    subject: body.subject || '',
+    groups: Array.isArray(body.groups) ? body.groups : [],
+    provider: 'supabase',
+  };
+}
+async function verifyToken(rawToken) {
+  return verifySupabaseToken(rawToken);
 }
 const readBody = (req) => new Promise((resolve, reject) => {
   const ch = []; req.on('data', (c) => ch.push(c)); req.on('end', () => resolve(Buffer.concat(ch))); req.on('error', reject);
 });
 const jsonRes = (res, code, obj) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
-const k8sJson = async (method, path, body) => {
+const k8sJson = async (method, path, body, actor) => {
+  const headers = new Headers({
+    Authorization: `Bearer ${tok()}`,
+    Accept: 'application/json',
+    ...(body ? { 'Content-Type': 'application/json' } : {}),
+  });
+  if (actor) {
+    headers.set('Impersonate-User', actor.username);
+    for (const group of k8sGroups(actor.groups)) headers.append('Impersonate-Group', group);
+  }
   const r = await fetch(`${APISERVER}${path}`, {
     method,
-    headers: {
-      Authorization: `Bearer ${tok()}`,
-      Accept: 'application/json',
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-    },
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await r.text();
@@ -125,6 +109,8 @@ async function saveSambaBootstrapSecret(req, res) {
   let actor;
   try { actor = await verifyToken(requestToken(req)); }
   catch (e) { return jsonRes(res, e.code || 401, { error: e.msg || 'unauthorized' }); }
+  try { requireConsoleAdmin(actor); }
+  catch (e) { return jsonRes(res, e.code || 403, { error: e.msg || 'forbidden' }); }
   if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
   let body;
   try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); }
@@ -143,12 +129,12 @@ async function saveSambaBootstrapSecret(req, res) {
     stringData: { [SAMBA_BOOTSTRAP_SECRET_KEY]: password },
   };
   const path = `/api/v1/namespaces/${FND_NS}/secrets`;
-  let r = await k8sJson('POST', path, obj);
+  let r = await k8sJson('POST', path, obj, actor);
   if (r.status === 409) {
     r = await k8sJson('PATCH', `${path}/${SAMBA_BOOTSTRAP_SECRET}`, {
       metadata: { labels: obj.metadata.labels },
       stringData: obj.stringData,
-    });
+    }, actor);
   }
   console.log(`[audit] user=${actor.username} action=samba-bootstrap-secret-upsert target=${FND_NS}/${SAMBA_BOOTSTRAP_SECRET} status=${r.status} ${new Date().toISOString()}`);
   if (!r.ok) return jsonRes(res, r.status, { error: r.json?.message || r.json?.error || `kubernetes HTTP ${r.status}` });
@@ -290,8 +276,9 @@ function serveFrom(root, rel, res) {
 }
 
 // 제네릭 K8s API 프록시: /api/k8s/<표준 K8s 경로> → APISERVER.
-// 읽기(GET): SA 토큰(+토큰 있으면 사용자 임퍼소네이션). 쓰기(POST/PUT/PATCH/DELETE): 토큰 JWKS 검증 필수
-// → Impersonate-User로 사용자 본인 RBAC 인가(SA 광범위 write 금지). secrets 전면 차단. 쓰기는 감사 로그.
+// 모든 요청은 Supabase session을 먼저 검증한다. 읽기는 제한된 ServiceAccount 권한으로,
+// 쓰기는 평가된 Console role을 제한된 Kubernetes group으로 매핑해 Impersonate-User로 수행한다.
+// secrets 전면 차단, 쓰기는 감사 로그를 남긴다.
 async function k8sProxy(req, res, rawUrl) {
   // 보안: 원시 경로 정규식 매칭은 URL 인코딩(sec%72ets)으로 우회됨 → 디코드 후 세그먼트 정확 매칭.
   const qIdx = rawUrl.indexOf('?');
@@ -311,42 +298,29 @@ async function k8sProxy(req, res, rawUrl) {
   if (segs.includes('serviceaccounts') && last === 'token') return jsonRes(res, 403, { error: 'token subresource blocked by policy' });
 
   const isWrite = WRITE_METHODS.has(req.method);
-  const idToken = requestToken(req); // Main Shell이 host-mediated fetch에 주입한 콘솔 IdP token
+  const idToken = requestToken(req); // Main Shell host-mediated fetch가 주입한 Supabase access token
   // 헤더는 새로 구성 — 클라이언트의 Impersonate-*/Authorization은 절대 전달하지 않음(위조 차단)
   const headers = { Authorization: `Bearer ${tok()}`, Accept: 'application/json' };
-  let actor = null;
+  let actor;
+  try { actor = await verifyToken(idToken); }
+  catch (e) {
+    const status = (typeof e.code === 'number') ? e.code : 502;
+    return jsonRes(res, status, { error: e.msg || e.message || 'unauthorized' });
+  }
 
   if (isWrite) {
-    try { actor = await verifyToken(idToken); }
-    catch (e) {
-      const cookieNames = (req.headers.cookie || '').split(';').map((c) => c.trim().split('=')[0]).filter(Boolean).join(',');
-      console.log(`[auth-fail] write path=${pathOnly} hdrToken=${!!requestToken(req)} cookieToken=${!!tokenFromCookie(req.headers.cookie)} cookies=[${cookieNames}] err=${e && (e.msg || e.message || e)}`);
-      // e.code가 숫자가 아니면(예: TLS 오류 'DEPTH_ZERO_SELF_SIGNED_CERT') writeHead 크래시 → 502로 안전 매핑.
-      const status = (typeof e.code === 'number') ? e.code : 502;
-      return jsonRes(res, status, { error: e.msg || e.message || 'unauthorized' });
-    }
     headers['Impersonate-User'] = actor.username;
     const ct = req.headers['content-type'];
     if (ct) headers['Content-Type'] = ct;
-  } else if (idToken) {
-    // 읽기: 토큰이 있으면 사용자 임퍼소네이션(per-user RBAC). 검증 실패 시 SA 읽기로 폴백.
-    try { actor = await verifyToken(idToken); headers['Impersonate-User'] = actor.username; } catch { actor = null; }
   }
 
   const body = isWrite ? await readBody(req) : undefined;
   // 업스트림은 검증된 디코드 경로 + 원형 쿼리로 재구성(원시 sub 그대로 전달 금지)
-  // 쓰기에 한해 사용자 그룹도 임퍼소네이션 → 그룹 기반 RBAC(예: opensphere-console-admins) 적용.
-  // 그룹 정규화 = 콘솔 auth.service.ts와 동일 규칙: 선행 '/' 제거, '@도메인' 접미사 제거, uuid형 제외
-  // (Kanidm 토큰 그룹은 'name@domain' 형태 — raw 그대로 보내면 RBAC Group명과 불일치).
-  // 읽기는 기존 동작(무토큰=SA, 토큰=user-only) 유지해 회귀 방지. system: 그룹은 특권상승 방지 위해 제외.
+  // 쓰기에 한해 검증된 Console role을 고정된 Kubernetes group으로만 임퍼소네이션한다.
   const fetchHeaders = new Headers(headers);
   const sentGroups = [];
   if (isWrite && actor) {
-    for (const raw of (actor.groups || [])) {
-      if (typeof raw !== 'string' || !raw) continue;
-      const g = raw.replace(/^\//, '').replace(/@.*$/, '');
-      // 제외: 빈값·system:·uuid형·Kanidm 내부 그룹(idm_*, SA가 임퍼소네이션 못 하고 앱 RBAC과 무관).
-      if (!g || g.startsWith('system:') || g.startsWith('idm_') || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/.test(g)) continue;
+    for (const g of k8sGroups(actor.groups)) {
       fetchHeaders.append('Impersonate-Group', g);
       sentGroups.push(g);
     }
@@ -463,9 +437,10 @@ server.on('upgrade', async (req, socket, head) => {
     qs.set('stdin', 'true'); qs.set('stdout', 'true'); qs.set('stderr', 'true'); qs.set('tty', 'true');
     for (const c of cmds) qs.append('command', c);
     const upUrl = `${APISERVER.replace(/^https/, 'wss')}/api/v1/namespaces/${ns}/pods/${pod}/exec?${qs.toString()}`;
-    const up = new WebSocket(upUrl, ['v4.channel.k8s.io'], {
-      headers: { Authorization: `Bearer ${tok()}`, 'Impersonate-User': actor.username },
-    });
+    const headers = { Authorization: `Bearer ${tok()}`, 'Impersonate-User': actor.username };
+    const groups = k8sGroups(actor.groups);
+    if (groups.length) headers['Impersonate-Group'] = groups;
+    const up = new WebSocket(upUrl, ['v4.channel.k8s.io'], { headers });
     console.log(`[audit] exec user=${actor.username} pod=${ns}/${pod} container=${container} ${new Date().toISOString()}`);
     const closeBoth = () => { try { browserWs.close(); } catch {} try { up.close(); } catch {} };
     up.on('message', (data) => { if (browserWs.readyState === 1) browserWs.send(data, { binary: true }); });
@@ -477,12 +452,16 @@ server.on('upgrade', async (req, socket, head) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`foundation v${VERSION} on :${PORT}`);
-  // 콘솔 인박스에 시작 이벤트 발행 + 주기적 노드 헬스 + FoundationModel 수명주기 전이(유기적 연동)
-  publishNotify({ action: 'started', target: 'foundation', result: 'info', reason: `Foundation 백엔드 v${VERSION} 시작` });
-  nodeHealthPublish();
-  fmTransitionPublish(); // 첫 호출 = 기준선 수립(발행 없음), 이후 전이만 발행
-  setInterval(nodeHealthPublish, 60000);
-  setInterval(fmTransitionPublish, 30000);
-});
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`foundation v${VERSION} on :${PORT}`);
+    // 콘솔 인박스에 시작 이벤트 발행 + 주기적 노드 헬스 + FoundationModel 수명주기 전이(유기적 연동)
+    publishNotify({ action: 'started', target: 'foundation', result: 'info', reason: `Foundation 백엔드 v${VERSION} 시작` });
+    nodeHealthPublish();
+    fmTransitionPublish(); // 첫 호출 = 기준선 수립(발행 없음), 이후 전이만 발행
+    setInterval(nodeHealthPublish, 60000);
+    setInterval(fmTransitionPublish, 30000);
+  });
+} else {
+  module.exports = { verifySupabaseToken, k8sGroups, requireConsoleAdmin };
+}

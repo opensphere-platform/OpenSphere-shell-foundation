@@ -12,6 +12,7 @@
     "verify:surface": "node tools/verify-plugin-surface.mjs",
     "verify:plugin-catalog": "node tools/verify-foundation-plugin-catalog.mjs",
     "test:plugin-runtime": "node --test tools/plugin-runtime.test.mjs",
+    "test:server-auth": "node --test test/server-auth.test.js",
     "package:plugin": "node tools/package-foundation-plugin.mjs"
   },
   "dependencies": {
