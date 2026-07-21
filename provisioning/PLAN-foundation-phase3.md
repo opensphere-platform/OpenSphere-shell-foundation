@@ -65,6 +65,8 @@ cd D:/@PROJECT/OpenSphere/OpenSphere-Platform/opensphere-foundation-shell
 # 1. CRD (foundation + provisioning) — control-plane 매니저 informer가 시작 시 요구
 kubectl apply -f deploy/crds/foundation-crds.yaml      # FoundationModel/Claim/Binding (model·claim reconciler용)
 kubectl apply -f deploy/crds/provisioning-crds.yaml    # PostgresClaim·OpenSearchIndexClaim (Phase 3)
+# Console Supabase identity를 고정 K8s 그룹으로만 projection (Foundation 자체 write 권한 부여 아님)
+kubectl apply -f deploy/foundation-console-rbac.yaml
 # 2. 컨트롤러 RBAC + Deployment (이미지는 IfNotPresent로 로컬 데몬 사용 — 매니페스트 무변경)
 kubectl apply -f deploy/control-plane.yaml
 kubectl rollout status deploy/foundation-control-plane -n opensphere-system

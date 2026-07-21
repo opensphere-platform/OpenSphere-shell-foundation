@@ -1,0 +1,48 @@
+# Foundation Console API gateway RBAC.
+#
+# This ServiceAccount does not gain write access to Kubernetes objects.  It may
+# only impersonate the authenticated Console identity and the three fixed
+# Console role projections.  The API server then evaluates the impersonated
+# identity against the platform's normal RBAC bindings (for example,
+# foundation-models-manage-admins).  Keeping this binding separate from the
+# DUPA observer profile prevents a Foundation image from becoming a broad
+# cluster writer merely because it fronts an authenticated console request.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opensphere-foundation-console-impersonator-v1
+  labels:
+    opensphere.io/managed-by: foundation
+    opensphere.io/purpose: console-identity-projection
+rules:
+  # The authenticated Console subject is dynamic, so Kubernetes cannot use a
+  # resourceNames allowlist for users. server.js obtains it only from the
+  # Console Backend's Supabase session authority.
+  - apiGroups: [""]
+    resources: [users]
+    verbs: [impersonate]
+  # Groups are fixed at the Foundation boundary; arbitrary client groups are
+  # never forwarded to Kubernetes.
+  - apiGroups: [""]
+    resources: [groups]
+    resourceNames:
+      - opensphere-console-admins
+      - opensphere-console-operators
+      - opensphere-console-viewers
+    verbs: [impersonate]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opensphere-foundation-console-impersonator-v1
+  labels:
+    opensphere.io/managed-by: foundation
+    opensphere.io/purpose: console-identity-projection
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opensphere-foundation-console-impersonator-v1
+subjects:
+  - kind: ServiceAccount
+    name: opensphere-foundation
+    namespace: opensphere-console
