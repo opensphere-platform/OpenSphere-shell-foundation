@@ -32,10 +32,20 @@ const FOUNDATION_MANUALS = [
   ['crossplane-operations-ko', 'OpenSphere Crossplane Delivery 플러그인 설치 및 운영 안내서', 'crossplane-operations.ko.md', '/p/foundation/delivery/crossplane', ['crossplane', 'provider', 'delivery']],
 ].map(([id, title, file, route, tags]) => ({ id, title, path: `plugins/manual/${file}`, sourcePath: `ui-shell/manual/${file}`, route, tags }));
 
-function injectOnce(base) {
+async function injectOnce(ctx, base) {
   if (injected) return;
   injected = true;
   window.__OSP_NG_API_BASE__ = base; // Angular 앱이 /api/k8s/* 프록시를 셸 경유로 호출
+  if (ctx.assets) {
+    try {
+      await ctx.assets.loadStyle('styles');
+      if (!customElements.get(TAG)) await ctx.assets.loadModule('app');
+      return;
+    } catch (error) {
+      injected = false;
+      throw error;
+    }
+  }
   const v = `?v=${Date.now()}`; // 재배포 번들 즉시 반영(PoC 캐시버스터)
   const css = document.createElement('link');
   css.rel = 'stylesheet'; css.href = `${base}/app/styles.css${v}`;
@@ -44,7 +54,7 @@ function injectOnce(base) {
   const s = document.createElement('script');
   s.type = 'module'; s.src = `${base}/app/main.js${v}`;
   s.setAttribute('data-osp-plugin', 'foundation');
-  document.head.appendChild(s);
+  if (!customElements.get(TAG)) document.head.appendChild(s);
 }
 
 async function contributeFoundationManuals(ctx) {
@@ -75,7 +85,7 @@ export async function activate(ctx) {
   contexts.foundation = { api: { baseUrl: base, fetch: ctx.api?.fetch } };
   hostContextInstalled = true;
   activeContext = ctx;
-  injectOnce(base);
+  await injectOnce(ctx, base);
   ctx.extensions.registerPage({
     id: ctx.pluginId,
     title: 'Foundation',

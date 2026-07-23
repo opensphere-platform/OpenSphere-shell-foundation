@@ -8,6 +8,7 @@
     "start": "ng serve",
     "serve:backend": "node server.js",
     "package:module": "node tools/package-module.mjs",
+    "verify:artifacts": "node tools/verify-artifacts.mjs",
     "verify:manual": "node tools/verify-manual-contribution.mjs",
     "verify:surface": "node tools/verify-plugin-surface.mjs",
     "verify:plugin-catalog": "node tools/verify-foundation-plugin-catalog.mjs",
