@@ -1,5 +1,7 @@
 # identity operand 번들 — control plane이 SSA로 적용(__NAMESPACE__/__IMAGE__ 치환).
-# D-3: Keycloak(start-dev, H2) + workforce realm import.
+# D-3: Keycloak(start-dev, H2) operand. ★2026-07-23 핸드오프: workforce realm 정의는 이 번들이 소유하지 않는다 —
+#   P3 identity operator 소유 CM `keycloak-realm-import`(ns opensphere-foundation)를 --import-realm 으로 마운트만 한다
+#   (인라인 realm CM 폐기, 아래 volumes). 소유권: control-plane=Keycloak operand / P3=realm config·Syncope·IGA.
 # 2026-07-06 self-contained: Samba-AD operand 선언은 이 번들에서 제거됨 — plugin(OpenSphere-plugin-samba-ad)이
 #   소유하고 GET /operand/manifests로 내민다. control-plane은 engines.samba=enabled면 그 선언을 fetch해
 #   라벨 스탬프 후 SSA apply(buildIdentityBundle). 이 파일엔 keycloak operand만 남는다.
@@ -16,42 +18,12 @@ metadata:
   namespace: __NAMESPACE__
   labels: { foundation.opensphere.io/engine: keycloak }
 ---
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: foundation-identity-keycloak-realm
-  namespace: __NAMESPACE__
-  labels: { foundation.opensphere.io/engine: keycloak }
-data:
-  opensphere-workforce-realm.json: |
-    {
-      "realm": "opensphere-workforce",
-      "enabled": true,
-      "registrationAllowed": false,
-      "registrationEmailAsUsername": false,
-      "resetPasswordAllowed": false,
-      "rememberMe": false,
-      "verifyEmail": false,
-      "loginWithEmailAllowed": true,
-      "duplicateEmailsAllowed": false,
-      "identityProviders": [],
-      "clients": [
-        {
-          "clientId": "workforce-oidc",
-          "name": "OpenSphere Workforce OIDC",
-          "enabled": true,
-          "protocol": "openid-connect",
-          "publicClient": true,
-          "standardFlowEnabled": true,
-          "directAccessGrantsEnabled": false,
-          "serviceAccountsEnabled": false,
-          "redirectUris": ["https://edge.opensphere.local/oidc/*", "https://console.opensphere.local/oidc/*"],
-          "webOrigins": ["https://edge.opensphere.local", "https://console.opensphere.local"],
-          "attributes": { "pkce.code.challenge.method": "S256" }
-        }
-      ]
-    }
----
+# [P3-W1 realm-import 핸드오프 2026-07-23] 인라인 workforce realm 정의는 폐기됨.
+#   realm 정본 = P3 identity operator 소유 ConfigMap `keycloak-realm-import`(ns opensphere-foundation, 아래
+#   Deployment 가 마운트). 근거: workforce SSO 단일 realm 정의(중복 제거) + 소유권 경계(control-plane = Keycloak
+#   operand 소유 / P3 = realm config·Syncope·IGA lifecycle 소유). 정본 시드/스키마:
+#   OpenSphere-shell-identity/bootstrap/keycloak-realm-import.yaml (client·ES256 서명·하드닝 포함 완전 realm).
+#   ※ control-plane 은 이 CM 을 정의/reclaim 하지 않는다 — P3 가 소유(SSA field owner 분리, 상호 clobber 방지).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -98,7 +70,10 @@ spec:
             - { name: realm, mountPath: /opt/keycloak/data/import, readOnly: true }
       volumes:
         - name: realm
-          configMap: { name: foundation-identity-keycloak-realm }
+          # [핸드오프] P3 identity operator 소유 realm CM 마운트(구 인라인 foundation-identity-keycloak-realm 폐기).
+          #   optional: P3 CM 미생성 시에도 Keycloak 기동(realm 부재 → import 빈 상태 → readiness 미충족 대기,
+          #   CM 생성 후 pod 재기동 시 --import-realm 반영. import-realm 은 기동 시 1회이므로 CM 늦게 오면 재기동 필요).
+          configMap: { name: keycloak-realm-import, optional: true }
 ---
 apiVersion: v1
 kind: Service

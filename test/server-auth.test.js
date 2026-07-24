@@ -2,7 +2,14 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { verifySupabaseToken, k8sGroups, requireConsoleAdmin } = require('../server');
+const fs = require('node:fs');
+const path = require('node:path');
+const {
+  verifySupabaseToken, k8sGroups, requireConsoleAdmin, requireFoundationOwner,
+  requireClosedOwnerBody, requireOwnerReason, requireOwnerConfirm, requireK8sName,
+  requireFoundationLifecycle,
+  FOUNDATION_ENGINE_MODEL, FOUNDATION_CLAIM_MODELS,
+} = require('../server');
 
 test('Foundation delegates Console identity validation to the Supabase authority', async () => {
   let call;
@@ -11,12 +18,15 @@ test('Foundation delegates Console identity validation to the Supabase authority
     return {
       ok: true,
       status: 200,
-      json: async () => ({ subject: 'subject-1', username: 'cmars', groups: ['console-admins'] }),
+      json: async () => ({ subject: 'subject-1', username: 'cmars', groups: ['console-admins'], permissions: ['oaa.system.read'], assurance: 'aal2' }),
     };
   });
   assert.match(call.url, /\/api\/identity\/session$/);
   assert.equal(call.init.headers.authorization, 'Bearer supabase-access-token');
-  assert.deepEqual(actor, { username: 'cmars', subject: 'subject-1', groups: ['console-admins'], provider: 'supabase' });
+  assert.deepEqual(actor, {
+    username: 'cmars', subject: 'subject-1', groups: ['console-admins'],
+    permissions: ['oaa.system.read'], assurance: 'aal2', provider: 'supabase',
+  });
 });
 
 test('Foundation fails closed and only projects known Console roles into Kubernetes groups', async () => {
@@ -31,4 +41,63 @@ test('Foundation fails closed and only projects known Console roles into Kuberne
   assert.deepEqual(k8sGroups(['console-admins', 'system:masters', 'untrusted']), ['opensphere-console-admins']);
   assert.doesNotThrow(() => requireConsoleAdmin({ groups: ['console-admins'] }));
   assert.throws(() => requireConsoleAdmin({ groups: ['console-viewers'] }), (error) => error.code === 403);
+});
+
+test('Foundation owner actions require admin AAL2 and closed inputs', () => {
+  assert.doesNotThrow(() => requireFoundationOwner({ groups: ['console-admins'], assurance: 'aal2' }));
+  assert.throws(() => requireFoundationOwner({ groups: ['console-admins'], assurance: 'aal1' }), (error) => error.code === 403);
+  assert.throws(() => requireFoundationOwner({ groups: ['console-viewers'], assurance: 'aal2' }), (error) => error.code === 403);
+  assert.doesNotThrow(() => requireClosedOwnerBody({ engine: 'postgres' }, ['engine']));
+  assert.throws(() => requireClosedOwnerBody({ engine: 'postgres', path: '/api/v1/secrets' }, ['engine']), (error) => error.code === 400);
+  assert.equal(requireOwnerReason('approved maintenance'), 'approved maintenance');
+  assert.throws(() => requireOwnerReason('short'), (error) => error.code === 400);
+  assert.doesNotThrow(() => requireOwnerConfirm('enable Foundation engine postgres', 'enable Foundation engine postgres'));
+  assert.throws(() => requireOwnerConfirm('yes', 'enable Foundation engine postgres'), (error) => error.code === 409);
+  assert.equal(requireK8sName('consumer-a'), 'consumer-a');
+  assert.throws(() => requireK8sName('../secret'), (error) => error.code === 400);
+});
+
+test('Foundation owner catalog is finite and does not accept arbitrary models or parameters', () => {
+  assert.deepEqual(FOUNDATION_CLAIM_MODELS, ['identity', 'data']);
+  assert.equal(FOUNDATION_ENGINE_MODEL.postgres, 'data');
+  assert.equal(FOUNDATION_ENGINE_MODEL.keycloak, 'identity');
+  assert.equal(FOUNDATION_ENGINE_MODEL.shell, undefined);
+});
+
+test('Foundation owner mutations independently enforce the platform lifecycle gate', async () => {
+  const originalFetch = global.fetch;
+  try {
+    global.fetch = async () => ({
+      ok: true, status: 200,
+      json: async () => ({ prerequisites: [{ key: 'cluster-manager', ready: true }, { key: 'his-binding', ready: false }] }),
+    });
+    await assert.rejects(requireFoundationLifecycle('token'), (error) => error.code === 409 && /his_preflight_not_ready/.test(error.msg));
+    global.fetch = async () => ({
+      ok: true, status: 200,
+      json: async () => ({ prerequisites: [{ key: 'cluster-manager', ready: true }, { key: 'his-binding', ready: true }] }),
+    });
+    await assert.doesNotReject(requireFoundationLifecycle('token'));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('Foundation owner workload is isolated from the generic proxy and uses least privilege', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const deploy = fs.readFileSync(path.join(__dirname, '..', 'deploy', 'oaa-owner.yaml'), 'utf8');
+  const rbac = fs.readFileSync(path.join(__dirname, '..', 'deploy', 'oaa-owner-rbac.yaml'), 'utf8');
+  assert.ok(source.indexOf('if (FOUNDATION_OWNER_ONLY)') < source.indexOf("if (p.startsWith('/api/k8s/'))"));
+  assert.match(deploy, /FOUNDATION_OWNER_ONLY, value: "true"/);
+  assert.match(deploy, /podSelector: \{ matchLabels: \{ app: opensphere-console-oaa-gateway \} \}/);
+  assert.match(rbac, /resourceNames: \[identity, data\][\s\S]*verbs: \[patch\]/);
+  assert.match(rbac, /resources: \[identitydirectoryclaims\][\s\S]*verbs: \[get, list, watch, create, delete\]/);
+  assert.doesNotMatch(rbac, /resources: \[secrets\]/);
+});
+
+test('typed IdentityDirectory owner input cannot carry parameters or credential material', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const create = source.slice(source.indexOf('async function identityDirectoryClaimCreate'), source.indexOf('async function identityDirectoryClaimRelease'));
+  assert.match(create, /requireClosedOwnerBody\(body, \['name', 'confirm', 'reason'\]\)/);
+  assert.match(create, /spec: \{ provider: 'samba-ad' \}/);
+  assert.doesNotMatch(create, /body\.(?:parameters|consumerRef|realm|secret|credential)/);
 });

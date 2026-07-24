@@ -1,0 +1,96 @@
+# Foundation-owned, closed OAA control facade. It deliberately runs separately
+# from the DUPA-managed Foundation UI workload so the signed extension image
+# remains immutable. FOUNDATION_OWNER_ONLY disables UI, generic Kubernetes
+# proxy, websocket exec, and background notification loops in this workload.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: foundation-oaa-owner
+  namespace: opensphere-console
+  labels:
+    app: foundation-oaa-owner
+    app.kubernetes.io/name: foundation-oaa-owner
+    app.kubernetes.io/component: owner-api
+    app.kubernetes.io/part-of: foundation-control-plane
+    opensphere.io/managed-by: foundation
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  selector: { matchLabels: { app: foundation-oaa-owner } }
+  template:
+    metadata:
+      labels:
+        app: foundation-oaa-owner
+        app.kubernetes.io/name: foundation-oaa-owner
+        app.kubernetes.io/component: owner-api
+        app.kubernetes.io/part-of: foundation-control-plane
+        opensphere.io/managed-by: foundation
+    spec:
+      serviceAccountName: opensphere-foundation
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: owner
+          image: opensphere-shell-foundation:oaa-owner-v4
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: APP_VERSION, value: "0.2.3-oaa-owner" }
+            - { name: FOUNDATION_OWNER_ONLY, value: "true" }
+            - { name: FOUNDATION_NS, value: opensphere-foundation }
+            - { name: CONSOLE_IDENTITY_URL, value: http://opensphere-console-backend.opensphere-console.svc.cluster.local:8080 }
+            - { name: FOUNDATION_AUDIT_URL, value: http://opensphere-console-dupa-controller.opensphere-console.svc.cluster.local:8080 }
+          ports: [{ name: http, containerPort: 8080 }]
+          startupProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 3, failureThreshold: 40 }
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 5, failureThreshold: 3 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10, failureThreshold: 6 }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: foundation-oaa-owner
+  namespace: opensphere-console
+  labels:
+    app: foundation-oaa-owner
+    opensphere.io/managed-by: foundation
+spec:
+  selector: { app: foundation-oaa-owner }
+  ports: [{ name: http, port: 8080, targetPort: http }]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: foundation-oaa-owner
+  namespace: opensphere-console
+  labels: { opensphere.io/managed-by: foundation }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: foundation-oaa-owner } }
+---
+# Only the OAA Gateway may call the owner facade. HTTP still independently
+# verifies the Supabase session, console-admins, AAL2, exact confirmation, and
+# the closed engine/model catalog.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foundation-oaa-owner
+  namespace: opensphere-console
+  labels: { opensphere.io/managed-by: foundation }
+spec:
+  podSelector: { matchLabels: { app: foundation-oaa-owner } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: opensphere-console-oaa-gateway } }
+      ports: [{ protocol: TCP, port: 8080 }]

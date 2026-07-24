@@ -23,6 +23,7 @@ function requestToken(req) {
   return match ? match[1] : '';
 }
 const PORT = process.env.PORT || 8080;
+const FOUNDATION_OWNER_ONLY = process.env.FOUNDATION_OWNER_ONLY === 'true';
 const PLUGINS = process.env.PLUGINS_DIR || '/app/plugins';
 const WWW = process.env.WWW_DIR || '/app/www';
 const VERSION = process.env.APP_VERSION || (() => {
@@ -48,13 +49,32 @@ const K8S_GROUP_BY_CONSOLE_ROLE = Object.freeze({
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const FND_NS = process.env.FOUNDATION_NS || 'opensphere-foundation';
 const CLUSTER_MANAGER_URL = process.env.CLUSTER_MANAGER_URL || 'http://cluster-manager.opensphere-console.svc.cluster.local:8080';
+const FOUNDATION_AUDIT_URL = (process.env.FOUNDATION_AUDIT_URL
+  || 'http://opensphere-console-dupa-controller.opensphere-console.svc.cluster.local:8080').replace(/\/$/, '');
 const SAMBA_BOOTSTRAP_SECRET = process.env.SAMBA_BOOTSTRAP_SECRET || 'foundation-identity-samba-creds';
 const SAMBA_BOOTSTRAP_SECRET_KEY = 'domain-password';
+const FOUNDATION_API = '/apis/foundation.opensphere.io/v1alpha1';
+const FOUNDATION_ENGINE_MODEL = Object.freeze({
+  keycloak: 'identity',
+  samba: 'identity',
+  postgres: 'data',
+  psmdb: 'data',
+  valkey: 'data',
+  opensearch: 'data',
+  rustfs: 'data',
+});
+const FOUNDATION_CLAIM_MODELS = Object.freeze(['identity', 'data']);
+const K8S_NAME_RE = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
 function k8sGroups(groups) {
   return [...new Set((groups || []).map((role) => K8S_GROUP_BY_CONSOLE_ROLE[role]).filter(Boolean))];
 }
 function requireConsoleAdmin(actor) {
   if (!actor.groups.includes('console-admins')) throw { code: 403, msg: 'requires console-admins' };
+  return actor;
+}
+function requireFoundationOwner(actor) {
+  requireConsoleAdmin(actor);
+  if (actor.assurance !== 'aal2') throw { code: 403, msg: 'Foundation owner action requires MFA assurance aal2' };
   return actor;
 }
 async function verifySupabaseToken(rawToken, identityFetch = fetch) {
@@ -74,6 +94,8 @@ async function verifySupabaseToken(rawToken, identityFetch = fetch) {
     username: body.username || body.subject || 'unknown',
     subject: body.subject || '',
     groups: Array.isArray(body.groups) ? body.groups : [],
+    permissions: Array.isArray(body.permissions) ? body.permissions : [],
+    assurance: body.assurance || 'aal1',
     provider: 'supabase',
   };
 }
@@ -88,7 +110,7 @@ const k8sJson = async (method, path, body, actor) => {
   const headers = new Headers({
     Authorization: `Bearer ${tok()}`,
     Accept: 'application/json',
-    ...(body ? { 'Content-Type': 'application/json' } : {}),
+    ...(body ? { 'Content-Type': method === 'PATCH' ? 'application/merge-patch+json' : 'application/json' } : {}),
   });
   if (actor) {
     headers.set('Impersonate-User', actor.username);
@@ -104,6 +126,308 @@ const k8sJson = async (method, path, body, actor) => {
   try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
   return { ok: r.ok, status: r.status, json, text };
 };
+
+function requireClosedOwnerBody(body, allowed) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw { code: 400, msg: 'JSON object required' };
+  const extra = Object.keys(body).filter((key) => !allowed.includes(key));
+  if (extra.length) throw { code: 400, msg: `unsupported Foundation owner inputs: ${extra.join(', ')}` };
+}
+function requireOwnerReason(value) {
+  const reason = String(value || '').trim();
+  if (reason.length < 8 || reason.length > 500) throw { code: 400, msg: 'management reason must be 8..500 characters' };
+  return reason;
+}
+function requireOwnerConfirm(actual, expected) {
+  if (String(actual || '').trim() !== expected) throw { code: 409, msg: `confirmation must exactly equal: ${expected}` };
+}
+function requireK8sName(value, field = 'name') {
+  const name = String(value || '').trim();
+  if (!K8S_NAME_RE.test(name) || name.length > 63) throw { code: 400, msg: `${field} is not a valid Kubernetes name` };
+  return name;
+}
+function k8sFailure(result) {
+  return result.json?.message || result.json?.error || `Kubernetes HTTP ${result.status}`;
+}
+function foundationModelProjection(model) {
+  const engines = model?.spec?.parameters?.engines || {};
+  return {
+    name: model?.metadata?.name || '',
+    model: model?.spec?.model || '',
+    desiredState: model?.spec?.desiredState || '',
+    engines: Object.fromEntries(Object.entries(engines).filter(([id]) => FOUNDATION_ENGINE_MODEL[id]).map(([id, state]) => [id, state])),
+    phase: model?.status?.phase || 'Unknown',
+    observedAt: model?.status?.observedAt || null,
+    observed: Array.isArray(model?.status?.observed) ? model.status.observed.slice(0, 64) : [],
+  };
+}
+function foundationClaimProjection(item) {
+  return {
+    name: item?.metadata?.name || '', namespace: item?.metadata?.namespace || '',
+    model: item?.spec?.model || '', phase: item?.status?.phase || 'Pending',
+    bindingRef: item?.status?.bindingRef || null,
+    deletionTimestamp: item?.metadata?.deletionTimestamp || null,
+  };
+}
+function foundationBindingProjection(item) {
+  return {
+    name: item?.metadata?.name || '', namespace: item?.metadata?.namespace || '',
+    claimRef: item?.spec?.claimRef || null, endpoint: item?.spec?.endpoint || '',
+    phase: item?.status?.phase || 'Unknown', connection: item?.status?.connection || null,
+  };
+}
+function identityDirectoryClaimProjection(item) {
+  return {
+    name: item?.metadata?.name || '', namespace: item?.metadata?.namespace || '',
+    provider: item?.spec?.provider || 'samba-ad', phase: item?.status?.phase || 'Pending',
+    reason: item?.status?.reason || '', bindingRef: item?.status?.bindingRef || null,
+    deletionTimestamp: item?.metadata?.deletionTimestamp || null,
+  };
+}
+function identityDirectoryBindingProjection(item) {
+  return {
+    name: item?.metadata?.name || '', namespace: item?.metadata?.namespace || '',
+    claimRef: item?.spec?.claimRef || null,
+    endpointRef: item?.spec?.endpointRef || null,
+    credentialAvailable: Boolean(item?.spec?.secretRef?.name),
+    policyRef: item?.spec?.policyRef || null,
+    phase: item?.status?.phase || 'Unknown', connection: item?.status?.connection || null,
+  };
+}
+async function publishFoundationAudit(actor, action, target, result, reason) {
+  let response;
+  try {
+    response = await fetch(`${FOUNDATION_AUDIT_URL}/api/admin/events`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${tok()}`,
+        'content-type': 'application/json',
+        'x-opensphere-source': 'foundation',
+      },
+      body: JSON.stringify({
+        source: 'foundation', userActor: actor.username, action, target, result, reason,
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    throw { code: 503, msg: 'Foundation durable audit authority unavailable' };
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw { code: 503, msg: body.error || `Foundation durable audit HTTP ${response.status}` };
+  }
+}
+async function requireFoundationLifecycle(rawToken) {
+  let response;
+  try {
+    response = await fetch(`${FOUNDATION_AUDIT_URL}/api/admin/platform-readiness/status`, {
+      headers: { authorization: `Bearer ${rawToken}`, accept: 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    throw { code: 503, msg: 'Foundation lifecycle authority unavailable' };
+  }
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw { code: response.status, msg: body.error || `Foundation lifecycle HTTP ${response.status}` };
+  const prerequisites = Array.isArray(body.prerequisites) ? body.prerequisites : [];
+  const clusterManager = prerequisites.find((item) => item.key === 'cluster-manager');
+  const hisBinding = prerequisites.find((item) => item.key === 'his-binding');
+  if (!clusterManager?.ready || !hisBinding?.ready) {
+    const reason = clusterManager?.ready ? 'his_preflight_not_ready' : 'cluster_manager_not_activated';
+    throw { code: 409, msg: `Foundation mutation gate closed: ${reason}` };
+  }
+}
+async function foundationOwnerActor(req) {
+  const rawToken = requestToken(req);
+  const actor = requireFoundationOwner(await verifyToken(rawToken));
+  await requireFoundationLifecycle(rawToken);
+  return actor;
+}
+async function foundationStatus(req, res) {
+  if (req.method !== 'GET') return jsonRes(res, 405, { error: 'method not allowed' });
+  try { await verifyToken(requestToken(req)); }
+  catch (e) { return jsonRes(res, e.code || 401, { error: e.msg || 'unauthorized' }); }
+  const [models, claims, bindings, identityClaims, identityBindings, controller] = await Promise.all([
+    k8sJson('GET', `${FOUNDATION_API}/foundationmodels`),
+    k8sJson('GET', `${FOUNDATION_API}/namespaces/${FND_NS}/foundationclaims`),
+    k8sJson('GET', `${FOUNDATION_API}/namespaces/${FND_NS}/foundationbindings`),
+    k8sJson('GET', `${FOUNDATION_API}/namespaces/${FND_NS}/identitydirectoryclaims`),
+    k8sJson('GET', `${FOUNDATION_API}/namespaces/${FND_NS}/identitydirectorybindings`),
+    k8sJson('GET', '/apis/apps/v1/namespaces/opensphere-system/deployments/foundation-control-plane'),
+  ]);
+  const failed = [models, claims, bindings, identityClaims, identityBindings, controller].find((item) => !item.ok);
+  if (failed) return jsonRes(res, failed.status, { error: k8sFailure(failed) });
+  const desired = Number(controller.json?.spec?.replicas || 0);
+  const ready = Number(controller.json?.status?.readyReplicas || 0);
+  return jsonRes(res, 200, {
+    schema: 'foundation-owner-status.opensphere.io/v1alpha1',
+    owner: 'Foundation control plane', namespace: FND_NS,
+    ready: desired > 0 && ready === desired,
+    controller: { name: 'foundation-control-plane', desired, ready, available: Number(controller.json?.status?.availableReplicas || 0) },
+    catalog: { engines: Object.keys(FOUNDATION_ENGINE_MODEL), claimModels: FOUNDATION_CLAIM_MODELS },
+    models: (models.json?.items || []).map(foundationModelProjection),
+    claims: (claims.json?.items || []).map(foundationClaimProjection),
+    bindings: (bindings.json?.items || []).map(foundationBindingProjection),
+    identityDirectoryClaims: (identityClaims.json?.items || []).map(identityDirectoryClaimProjection),
+    identityDirectoryBindings: (identityBindings.json?.items || []).map(identityDirectoryBindingProjection),
+  });
+}
+async function foundationEngineLifecycle(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  let actor;
+  try { actor = await foundationOwnerActor(req); }
+  catch (e) { return jsonRes(res, e.code || 401, { error: e.msg || 'unauthorized' }); }
+  let body;
+  try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); }
+  catch { return jsonRes(res, 400, { error: 'invalid json' }); }
+  try {
+    requireClosedOwnerBody(body, ['engine', 'action', 'confirm', 'reason']);
+    const engine = requireK8sName(body.engine, 'engine');
+    const model = FOUNDATION_ENGINE_MODEL[engine];
+    if (!model) throw { code: 400, msg: 'engine is outside the Foundation owner catalog' };
+    const action = String(body.action || '').trim().toLowerCase();
+    if (!['enable', 'disable'].includes(action)) throw { code: 400, msg: 'Foundation engine action must be enable or disable' };
+    const reason = requireOwnerReason(body.reason);
+    const expected = `${action} Foundation engine ${engine}`;
+    requireOwnerConfirm(body.confirm, expected);
+    const target = `FoundationModel/${model}/engine/${engine}`;
+    await publishFoundationAudit(actor, 'foundation-engine-lifecycle', target, 'attempt', reason);
+    const current = await k8sJson('GET', `${FOUNDATION_API}/foundationmodels/${model}`);
+    if (!current.ok) throw { code: current.status, msg: k8sFailure(current) };
+    const previous = current.json?.spec?.parameters?.engines?.[engine] || 'disabled';
+    const desired = action === 'enable' ? 'enabled' : 'disabled';
+    const result = await k8sJson('PATCH', `${FOUNDATION_API}/foundationmodels/${model}`, {
+      spec: { desiredState: 'Installed', parameters: { engines: { [engine]: desired } } },
+    });
+    if (!result.ok) throw { code: result.status, msg: k8sFailure(result) };
+    await publishFoundationAudit(actor, 'foundation-engine-lifecycle', target, 'accepted', `${reason}; ${previous}->${desired}`);
+    return jsonRes(res, 202, {
+      accepted: true, owner: 'Foundation control plane', target, model, engine,
+      previous, desired, generation: result.json?.metadata?.generation || null,
+    });
+  } catch (e) {
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 500, { error: e.msg || e.message || String(e) });
+  }
+}
+async function foundationClaimCreate(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  let actor;
+  try { actor = await foundationOwnerActor(req); }
+  catch (e) { return jsonRes(res, e.code || 401, { error: e.msg || 'unauthorized' }); }
+  let body;
+  try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); }
+  catch { return jsonRes(res, 400, { error: 'invalid json' }); }
+  try {
+    requireClosedOwnerBody(body, ['name', 'model', 'confirm', 'reason']);
+    const name = requireK8sName(body.name);
+    const model = String(body.model || '').trim().toLowerCase();
+    if (!FOUNDATION_CLAIM_MODELS.includes(model)) throw { code: 400, msg: 'model is outside the Foundation claim catalog' };
+    const reason = requireOwnerReason(body.reason);
+    requireOwnerConfirm(body.confirm, `create Foundation claim ${name} for ${model}`);
+    const target = `FoundationClaim/${FND_NS}/${name}`;
+    await publishFoundationAudit(actor, 'foundation-claim-create', target, 'attempt', reason);
+    const modelState = await k8sJson('GET', `${FOUNDATION_API}/foundationmodels/${model}`);
+    if (!modelState.ok) throw { code: modelState.status, msg: k8sFailure(modelState) };
+    if (modelState.json?.status?.phase !== 'Installed') throw { code: 409, msg: `Foundation model ${model} is not Installed` };
+    const result = await k8sJson('POST', `${FOUNDATION_API}/namespaces/${FND_NS}/foundationclaims`, {
+      apiVersion: 'foundation.opensphere.io/v1alpha1', kind: 'FoundationClaim',
+      metadata: {
+        name, namespace: FND_NS,
+        labels: { 'opensphere.io/managed-by': 'foundation-oaa', 'foundation.opensphere.io/model': model },
+      },
+      spec: { model },
+    });
+    if (!result.ok) throw { code: result.status, msg: k8sFailure(result) };
+    await publishFoundationAudit(actor, 'foundation-claim-create', target, 'accepted', reason);
+    return jsonRes(res, 202, { accepted: true, owner: 'Foundation control plane', target, claim: foundationClaimProjection(result.json) });
+  } catch (e) {
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 500, { error: e.msg || e.message || String(e) });
+  }
+}
+async function foundationClaimRelease(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  let actor;
+  try { actor = await foundationOwnerActor(req); }
+  catch (e) { return jsonRes(res, e.code || 401, { error: e.msg || 'unauthorized' }); }
+  let body;
+  try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); }
+  catch { return jsonRes(res, 400, { error: 'invalid json' }); }
+  try {
+    requireClosedOwnerBody(body, ['name', 'confirm', 'reason']);
+    const name = requireK8sName(body.name);
+    const reason = requireOwnerReason(body.reason);
+    requireOwnerConfirm(body.confirm, `release Foundation claim ${name}`);
+    const target = `FoundationClaim/${FND_NS}/${name}`;
+    const existing = await k8sJson('GET', `${FOUNDATION_API}/namespaces/${FND_NS}/foundationclaims/${name}`);
+    if (!existing.ok) throw { code: existing.status, msg: k8sFailure(existing) };
+    await publishFoundationAudit(actor, 'foundation-claim-release', target, 'attempt', reason);
+    const result = await k8sJson('DELETE', `${FOUNDATION_API}/namespaces/${FND_NS}/foundationclaims/${name}`);
+    if (!result.ok) throw { code: result.status, msg: k8sFailure(result) };
+    await publishFoundationAudit(actor, 'foundation-claim-release', target, 'accepted', reason);
+    return jsonRes(res, 202, { accepted: true, owner: 'Foundation control plane', target, phase: 'Releasing' });
+  } catch (e) {
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 500, { error: e.msg || e.message || String(e) });
+  }
+}
+async function identityDirectoryClaimCreate(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  let actor;
+  try { actor = await foundationOwnerActor(req); }
+  catch (e) { return jsonRes(res, e.code || 401, { error: e.msg || 'unauthorized' }); }
+  let body;
+  try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); }
+  catch { return jsonRes(res, 400, { error: 'invalid json' }); }
+  try {
+    requireClosedOwnerBody(body, ['name', 'confirm', 'reason']);
+    const name = requireK8sName(body.name);
+    const reason = requireOwnerReason(body.reason);
+    requireOwnerConfirm(body.confirm, `create IdentityDirectory claim ${name}`);
+    const target = `IdentityDirectoryClaim/${FND_NS}/${name}`;
+    await publishFoundationAudit(actor, 'identity-directory-claim-create', target, 'attempt', reason);
+    const identity = await k8sJson('GET', `${FOUNDATION_API}/foundationmodels/identity`);
+    if (!identity.ok) throw { code: identity.status, msg: k8sFailure(identity) };
+    if (identity.json?.status?.phase !== 'Installed' || identity.json?.spec?.parameters?.engines?.samba !== 'enabled') {
+      throw { code: 409, msg: 'Foundation Samba-AD engine is not enabled and Installed' };
+    }
+    const result = await k8sJson('POST', `${FOUNDATION_API}/namespaces/${FND_NS}/identitydirectoryclaims`, {
+      apiVersion: 'foundation.opensphere.io/v1alpha1', kind: 'IdentityDirectoryClaim',
+      metadata: {
+        name, namespace: FND_NS,
+        labels: { 'opensphere.io/managed-by': 'foundation-oaa', 'foundation.opensphere.io/provider': 'samba-ad' },
+      },
+      spec: { provider: 'samba-ad' },
+    });
+    if (!result.ok) throw { code: result.status, msg: k8sFailure(result) };
+    await publishFoundationAudit(actor, 'identity-directory-claim-create', target, 'accepted', reason);
+    return jsonRes(res, 202, { accepted: true, owner: 'Foundation control plane', target, claim: identityDirectoryClaimProjection(result.json) });
+  } catch (e) {
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 500, { error: e.msg || e.message || String(e) });
+  }
+}
+async function identityDirectoryClaimRelease(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  let actor;
+  try { actor = await foundationOwnerActor(req); }
+  catch (e) { return jsonRes(res, e.code || 401, { error: e.msg || 'unauthorized' }); }
+  let body;
+  try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); }
+  catch { return jsonRes(res, 400, { error: 'invalid json' }); }
+  try {
+    requireClosedOwnerBody(body, ['name', 'confirm', 'reason']);
+    const name = requireK8sName(body.name);
+    const reason = requireOwnerReason(body.reason);
+    requireOwnerConfirm(body.confirm, `release IdentityDirectory claim ${name}`);
+    const target = `IdentityDirectoryClaim/${FND_NS}/${name}`;
+    const existing = await k8sJson('GET', `${FOUNDATION_API}/namespaces/${FND_NS}/identitydirectoryclaims/${name}`);
+    if (!existing.ok) throw { code: existing.status, msg: k8sFailure(existing) };
+    await publishFoundationAudit(actor, 'identity-directory-claim-release', target, 'attempt', reason);
+    const result = await k8sJson('DELETE', `${FOUNDATION_API}/namespaces/${FND_NS}/identitydirectoryclaims/${name}`);
+    if (!result.ok) throw { code: result.status, msg: k8sFailure(result) };
+    await publishFoundationAudit(actor, 'identity-directory-claim-release', target, 'accepted', reason);
+    return jsonRes(res, 202, { accepted: true, owner: 'Foundation control plane', target, phase: 'Releasing' });
+  } catch (e) {
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 500, { error: e.msg || e.message || String(e) });
+  }
+}
 
 async function saveSambaBootstrapSecret(req, res) {
   let actor;
@@ -399,6 +723,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/foundation/samba/bootstrap-secret') return saveSambaBootstrapSecret(req, res);
     if (p === '/api/foundation/his-status') return hisStatusProxy(req, res);
+    if (p === '/api/foundation/oaa/status') return foundationStatus(req, res);
+    if (p === '/api/foundation/oaa/engines/lifecycle') return foundationEngineLifecycle(req, res);
+    if (p === '/api/foundation/oaa/claims/create') return foundationClaimCreate(req, res);
+    if (p === '/api/foundation/oaa/claims/release') return foundationClaimRelease(req, res);
+    if (p === '/api/foundation/oaa/identity-directory/claims/create') return identityDirectoryClaimCreate(req, res);
+    if (p === '/api/foundation/oaa/identity-directory/claims/release') return identityDirectoryClaimRelease(req, res);
+    if (FOUNDATION_OWNER_ONLY) return jsonRes(res, 404, { error: 'Foundation owner endpoint not found' });
     if (p.startsWith('/api/k8s/')) return k8sProxy(req, res, req.url);
     if (p.startsWith('/api/opensearch')) return opensearchProxy(req, res, req.url);
     if (p.startsWith('/api/prometheus')) return prometheusProxy(req, res, req.url);
@@ -460,7 +791,8 @@ server.on('upgrade', async (req, socket, head) => {
 
 if (require.main === module) {
   server.listen(PORT, () => {
-    console.log(`foundation v${VERSION} on :${PORT}`);
+    console.log(`foundation v${VERSION} on :${PORT}${FOUNDATION_OWNER_ONLY ? ' (owner-only)' : ''}`);
+    if (FOUNDATION_OWNER_ONLY) return;
     // 콘솔 인박스에 시작 이벤트 발행 + 주기적 노드 헬스 + FoundationModel 수명주기 전이(유기적 연동)
     publishNotify({ action: 'started', target: 'foundation', result: 'info', reason: `Foundation 백엔드 v${VERSION} 시작` });
     nodeHealthPublish();
@@ -469,5 +801,10 @@ if (require.main === module) {
     setInterval(fmTransitionPublish, 30000);
   });
 } else {
-  module.exports = { verifySupabaseToken, k8sGroups, requireConsoleAdmin };
+  module.exports = {
+    verifySupabaseToken, k8sGroups, requireConsoleAdmin, requireFoundationOwner,
+    requireClosedOwnerBody, requireOwnerReason, requireOwnerConfirm, requireK8sName,
+    requireFoundationLifecycle,
+    FOUNDATION_ENGINE_MODEL, FOUNDATION_CLAIM_MODELS,
+  };
 }

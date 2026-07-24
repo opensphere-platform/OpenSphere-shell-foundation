@@ -1,0 +1,77 @@
+# Foundation-owned OAA facade RBAC.
+#
+# The existing Foundation server validates the Supabase session, console-admins,
+# AAL2, a closed engine/model catalog, a management reason, and an exact
+# confirmation before using these permissions. Generic /api/k8s writes always
+# impersonate the caller, so these ServiceAccount permissions cannot be reached
+# through the generic proxy.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: foundation-oaa-owner
+  labels:
+    opensphere.io/managed-by: foundation
+    opensphere.io/purpose: oaa-owner-facade
+rules:
+  - apiGroups: [foundation.opensphere.io]
+    resources: [foundationmodels]
+    verbs: [get, list, watch]
+  - apiGroups: [foundation.opensphere.io]
+    resources: [foundationmodels]
+    resourceNames: [identity, data]
+    verbs: [patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: foundation-oaa-owner
+  labels:
+    opensphere.io/managed-by: foundation
+    opensphere.io/purpose: oaa-owner-facade
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: foundation-oaa-owner
+subjects:
+  - kind: ServiceAccount
+    name: opensphere-foundation
+    namespace: opensphere-console
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: foundation-oaa-owner
+  namespace: opensphere-foundation
+  labels:
+    opensphere.io/managed-by: foundation
+    opensphere.io/purpose: oaa-owner-facade
+rules:
+  - apiGroups: [foundation.opensphere.io]
+    resources: [foundationclaims]
+    verbs: [get, list, watch, create, delete]
+  - apiGroups: [foundation.opensphere.io]
+    resources: [foundationbindings]
+    verbs: [get, list, watch]
+  - apiGroups: [foundation.opensphere.io]
+    resources: [identitydirectoryclaims]
+    verbs: [get, list, watch, create, delete]
+  - apiGroups: [foundation.opensphere.io]
+    resources: [identitydirectorybindings]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: foundation-oaa-owner
+  namespace: opensphere-foundation
+  labels:
+    opensphere.io/managed-by: foundation
+    opensphere.io/purpose: oaa-owner-facade
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: foundation-oaa-owner
+subjects:
+  - kind: ServiceAccount
+    name: opensphere-foundation
+    namespace: opensphere-console
