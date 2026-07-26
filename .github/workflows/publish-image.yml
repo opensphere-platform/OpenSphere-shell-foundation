@@ -327,6 +327,8 @@ jobs:
             PLUGIN_ID=${{ matrix.id }}
             ${{ steps.package.outputs.descriptor-build-arg }}
             OS_MODULE_SIGNATURE=${{ steps.package.outputs.signature }}
+            OS_RELEASE_TAG=${{ steps.release.outputs.version }}
+            OS_COMPATIBILITY_VERSION=${{ steps.package.outputs.version }}
           provenance: mode=max
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
