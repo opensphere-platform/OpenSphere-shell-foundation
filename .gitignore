@@ -2,5 +2,14 @@ node_modules/
 dist/
 .angular/
 plugins/generated/
+
+# Release-only signed artifacts. The release build regenerates these from the
+# source manifest with the approved P-256 key. Keeping them out of Git prevents
+# a stale descriptor, manifest hash or signature from being mistaken for the
+# current source contract.
+/module-package.json
+/module-package.json.sig
+/ui-shell/ui-shell.manifest.json
+/ui-shell/ui-shell.manifest.json.sig
 *.log
 .DS_Store

@@ -9,18 +9,19 @@ const sambaRoot = process.env.SAMBA_PLUGIN_ROOT
   : resolve(root, '..', 'OpenSphere-plugin-samba-ad');
 const readSamba = (path) => readFileSync(resolve(sambaRoot, path), 'utf8');
 
-// The OCI label, signed module descriptor source, and install package must
-// expose one release version. A split version makes the channel digest look
-// newer while the Extension Host still reconciles the previous release.
+// Compatibility SemVer is shared by the signed module sources. The official
+// image version is injected separately as a KST release tag at build time.
 const packageVersion = JSON.parse(read('package.json')).version;
 const lockVersion = JSON.parse(read('package-lock.json')).version;
-const manifestVersion = JSON.parse(read('ui-shell/ui-shell.manifest.json')).version;
+const manifestVersion = JSON.parse(read('ui-shell/ui-shell.manifest.source.json')).version;
 const packageYaml = read('uipluginpackage.yaml');
 const dockerfile = read('Dockerfile');
 assert.equal(manifestVersion, packageVersion, 'ui-shell manifest와 package.json 버전이 다릅니다.');
 assert.equal(lockVersion, packageVersion, 'package-lock.json과 package.json 버전이 다릅니다.');
 assert.match(packageYaml, new RegExp(`\\n  version: ${packageVersion.replaceAll('.', '\\.')}(?:\\r?\\n)`), 'UIPluginPackage 버전이 package.json과 다릅니다.');
-assert.match(dockerfile, new RegExp(`org\\.opencontainers\\.image\\.version="${packageVersion.replaceAll('.', '\\.')}"`), 'OCI label 버전이 package.json과 다릅니다.');
+assert.match(packageVersion, /^\d+\.\d+\.\d+$/, '호환 버전에는 channel suffix를 사용할 수 없습니다.');
+assert.match(dockerfile, /org\.opencontainers\.image\.version=\$OS_RELEASE_TAG/, 'OCI 공식 버전은 KST release tag build arg를 사용해야 합니다.');
+assert.match(dockerfile, new RegExp(`io\\.opensphere\\.compatibility-version="${packageVersion.replaceAll('.', '\\.')}"`), 'OCI 호환 버전이 package.json과 다릅니다.');
 
 const surfaces = [
   ['PostgreSQL', 'src/app/modules/postgres/postgres-plugin.component.ts'],

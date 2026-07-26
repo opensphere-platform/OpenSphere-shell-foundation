@@ -63,7 +63,7 @@ test('Foundation child runtime exposes an authenticated, fail-closed control bou
   t.after(() => rm(pluginRoot, { recursive: true, force: true }));
   await writeFile(path.join(pluginRoot, 'manual.ko.md'), '# Test manual\n');
   await writeFile(path.join(pluginRoot, 'plugin.json'), JSON.stringify({
-    id: 'test-plugin', displayName: 'Test Plugin', cliNamespace: 'test', version: '0.1.0-edge.1', channel: 'edge',
+    id: 'test-plugin', displayName: 'Test Plugin', cliNamespace: 'test', version: '0.1.0', channel: 'edge',
     installer: 'foundation-model', namespace: 'opensphere-foundation', capability: 'test.capability',
     operands: ['mirror/test:edge'],
     operandPlan: [{ name: 'test', channel: 'edge', version: '1.2.3', image: 'ghcr.io/opensphere-platform/mirror/test:1.2.3' }],

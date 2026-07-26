@@ -14,12 +14,15 @@ RUN npx ng build --configuration production
 FROM docker.io/library/node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2
 ARG OS_MODULE_DESCRIPTOR
 ARG OS_MODULE_SIGNATURE
+ARG OS_RELEASE_TAG
+ARG OS_MODULE_KEY_ID=opensphere-plugins-v4
 LABEL org.opencontainers.image.title="OpenSphere Platform Foundation Service Stack" \
-      org.opencontainers.image.version="0.2.0-edge.16" \
+      org.opencontainers.image.version=$OS_RELEASE_TAG \
       org.opencontainers.image.source="https://github.com/opensphere-platform/OpenSphere-shell-foundation" \
+      io.opensphere.compatibility-version="0.2.0" \
       io.opensphere.module.descriptor=$OS_MODULE_DESCRIPTOR \
       io.opensphere.module.descriptor.signature=$OS_MODULE_SIGNATURE \
-      io.opensphere.module.descriptor.key-id="opensphere-plugins-v4"
+      io.opensphere.module.descriptor.key-id=$OS_MODULE_KEY_ID
 RUN apk upgrade --no-cache
 WORKDIR /app
 RUN npm install --omit=dev --no-audit --no-fund --no-save ws@8.21.0 \

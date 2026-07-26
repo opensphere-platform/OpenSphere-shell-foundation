@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
 const entry = read('ui-shell/ui-shell.plugin.js');
-const manifest = JSON.parse(read('ui-shell/ui-shell.manifest.json'));
+const manifest = JSON.parse(read('ui-shell/ui-shell.manifest.source.json'));
 const manual = read('ui-shell/manual/postgresql-operations.ko.md');
 const page = read('src/app/modules/postgres/postgres-plugin.component.ts');
 const manualFiles = readdirSync(resolve(root, 'ui-shell/manual')).filter((name) => name.endsWith('.ko.md')).sort();

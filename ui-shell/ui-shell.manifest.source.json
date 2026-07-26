@@ -5,11 +5,10 @@
   "hostRef": "main",
   "hostApiVersion": "1.0.0",
   "hostCompat": ">=1.0.0 <2.0.0",
-  "version": "0.2.0-edge.16",
+  "version": "0.2.0",
   "title": "Platform Foundation Service Stack",
   "description": "OpenSphere PFS lifecycle and foundation service module host.",
   "entry": "ui-shell.plugin.js",
-  "entrySha256": "461cc4838485b8d55024f5f3310fa7447ef2992a9f6e71d52dba1b9dbc5bf10f",
   "shellCompat": ">=0.2.0 <0.9.0",
   "sdkVersion": "0.2.0",
   "permissions": [

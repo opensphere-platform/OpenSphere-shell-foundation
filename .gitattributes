@@ -2,6 +2,7 @@
 * text=auto eol=lf
 
 # 무결성 임계 파일 — git이 절대 줄끝 변환하지 않도록 (변환 시 서명/해시 깨짐)
+ui-shell/ui-shell.manifest.source.json -text
 ui-shell/ui-shell.manifest.json     -text
 ui-shell/ui-shell.manifest.json.sig -text
 ui-shell/ui-shell.plugin.js         -text

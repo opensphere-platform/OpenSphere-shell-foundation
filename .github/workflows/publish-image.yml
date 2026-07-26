@@ -1,26 +1,7 @@
-name: Publish atomic Foundation edge release
+name: Publish atomic Foundation GA release
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - Dockerfile
-      - server.js
-      - package.json
-      - package-lock.json
-      - angular.json
-      - src/**
-      - ui-shell/**
-      - module-package.json
-      - module-package.json.sig
-      - backend/control-plane/**
-      - deploy/**
-      - plugins/**
-      - tools/**
-      - oci/**
-      - .github/scripts/**
-      - .github/workflows/publish-image.yml
 
 permissions:
   contents: read
@@ -30,10 +11,7 @@ permissions:
   artifact-metadata: write
 
 concurrency:
-  # v2 rotates the lease after a GitHub-hosted QEMU runner ignored both the
-  # normal and force-cancel requests. A cancelled v1 run cannot reach the
-  # atomic publish-edge job; all current releases remain serialized here.
-  group: foundation-edge-images-v2
+  group: foundation-ga-images
   cancel-in-progress: false
 
 env:
@@ -120,6 +98,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
+      - id: release
+        name: Calculate official KST version
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
+          release_tag="$(TZ=Asia/Seoul date -d "@$release_epoch" +%Y%m%d%H%M)"
+          [[ "$release_tag" =~ ^[0-9]{12}$ ]]
+          echo "version=$release_tag" >> "$GITHUB_OUTPUT"
       - id: package
         shell: bash
         run: |
@@ -134,11 +121,16 @@ jobs:
           images: ${{ env.REGISTRY }}/opensphere-shell-foundation
           tags: type=sha,prefix=sha-
           labels: |
-            io.opensphere.channel=edge
+            io.opensphere.channel=ga
             io.opensphere.source-revision=${{ github.sha }}
+            io.opensphere.release-tag=${{ steps.release.outputs.version }}
+            opensphere.io/build-authority=github-actions
+            opensphere.io/release-class=ga
+            opensphere.io/ga-eligible=true
+            io.opensphere.compatibility-version=${{ steps.package.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.version=${{ steps.package.outputs.version }}
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
       - id: build
         uses: docker/build-push-action@v6
         with:
@@ -151,6 +143,7 @@ jobs:
           build-args: |
             ${{ steps.package.outputs.descriptor-build-arg }}
             OS_MODULE_SIGNATURE=${{ steps.package.outputs.signature }}
+            OS_RELEASE_TAG=${{ steps.release.outputs.version }}
           provenance: mode=max
           cache-from: type=gha,scope=opensphere-shell-foundation
           cache-to: type=gha,mode=max,scope=opensphere-shell-foundation
@@ -159,7 +152,7 @@ jobs:
         env: { GHCR_TOKEN: "${{ secrets.GHCR_PAT }}" }
         run: crane auth login ghcr.io -u "opensphere-platform" -p "$GHCR_TOKEN"
       - name: Verify signed module labels survive OCI serialization
-        run: bash .github/scripts/verify-module-label.sh "${{ env.REGISTRY }}/opensphere-shell-foundation@${{ steps.build.outputs.digest }}" "${{ steps.package.outputs.version }}"
+        run: bash .github/scripts/verify-module-label.sh "${{ env.REGISTRY }}/opensphere-shell-foundation@${{ steps.build.outputs.digest }}" "${{ steps.package.outputs.version }}" "${{ steps.release.outputs.version }}"
       - uses: actions/attest@v4
         with:
           subject-name: ${{ env.REGISTRY }}/opensphere-shell-foundation
@@ -193,16 +186,30 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
+      - id: release
+        name: Calculate official KST version
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
+          release_tag="$(TZ=Asia/Seoul date -d "@$release_epoch" +%Y%m%d%H%M)"
+          [[ "$release_tag" =~ ^[0-9]{12}$ ]]
+          echo "version=$release_tag" >> "$GITHUB_OUTPUT"
       - id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/foundation-control-plane
           tags: type=sha,prefix=sha-
           labels: |
-            io.opensphere.channel=edge
+            io.opensphere.channel=ga
             io.opensphere.source-revision=${{ github.sha }}
+            io.opensphere.release-tag=${{ steps.release.outputs.version }}
+            opensphere.io/build-authority=github-actions
+            opensphere.io/release-class=ga
+            opensphere.io/ga-eligible=true
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
       - id: build
         uses: docker/build-push-action@v6
         with:
@@ -272,6 +279,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
+      - id: release
+        name: Calculate official KST version
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
+          release_tag="$(TZ=Asia/Seoul date -d "@$release_epoch" +%Y%m%d%H%M)"
+          [[ "$release_tag" =~ ^[0-9]{12}$ ]]
+          echo "version=$release_tag" >> "$GITHUB_OUTPUT"
       - id: package
         shell: bash
         env: { PLUGIN_ID: "${{ matrix.id }}" }
@@ -287,12 +303,17 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ matrix.image }}
           tags: type=sha,prefix=sha-
           labels: |
-            io.opensphere.channel=edge
+            io.opensphere.channel=ga
             io.opensphere.source-revision=${{ github.sha }}
+            io.opensphere.release-tag=${{ steps.release.outputs.version }}
+            opensphere.io/build-authority=github-actions
+            opensphere.io/release-class=ga
+            opensphere.io/ga-eligible=true
+            io.opensphere.compatibility-version=${{ steps.package.outputs.version }}
             io.opensphere.foundation.plugin-id=${{ matrix.id }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.version=${{ steps.package.outputs.version }}
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
       - id: build
         uses: docker/build-push-action@v6
         with:
@@ -314,7 +335,7 @@ jobs:
         env: { GHCR_TOKEN: "${{ secrets.GHCR_PAT }}" }
         run: crane auth login ghcr.io -u "opensphere-platform" -p "$GHCR_TOKEN"
       - name: Verify signed module labels survive OCI serialization
-        run: bash .github/scripts/verify-module-label.sh "${{ env.REGISTRY }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}" "${{ steps.package.outputs.version }}"
+        run: bash .github/scripts/verify-module-label.sh "${{ env.REGISTRY }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}" "${{ steps.package.outputs.version }}" "${{ steps.release.outputs.version }}"
       - uses: actions/attest@v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ matrix.image }}
@@ -334,7 +355,7 @@ jobs:
           sbom-path: ${{ runner.temp }}/${{ matrix.image }}.spdx.json
           push-to-registry: true
 
-  publish-edge:
+  publish-ga:
     needs: [prepare, publish-shell, publish-control-plane, publish-plugins]
     runs-on: ubuntu-latest
     steps:
@@ -359,7 +380,7 @@ jobs:
           jq -n --arg revision "$GITHUB_SHA" --arg releaseTag "$release_tag" '{
             apiVersion:"foundation.release.opensphere.io/v1alpha1",
             kind:"OpenSphereFoundationReleaseBOM",
-            channel:"edge",
+            channel:"ga",
             status:"Active",
             releaseTag:$releaseTag,
             hostRef:"foundation",
@@ -403,7 +424,7 @@ jobs:
           done < <(jq -r '.plugins[] | [.id,("opensphere-plugin-" + .id)] | @tsv' plugins/catalog.json)
 
           samba_repo='opensphere-plugin-samba-ad'
-          samba_digest="$(crane digest "$REGISTRY/$samba_repo:edge")"
+          samba_digest="$(crane digest "$REGISTRY/$samba_repo:ga")"
           samba_revision="$(crane config "$REGISTRY/$samba_repo@$samba_digest" | jq -r '.config.Labels["io.opensphere.source-revision"] // "separately-governed"')"
           jq --arg repository "$samba_repo" --arg image "$REGISTRY/$samba_repo@$samba_digest" --arg revision "$samba_revision" \
             '.components["samba-ad"]={repository:$repository,image:$image,sourceRevision:$revision,role:"plugin",governance:"separate-signed-package"}' \
@@ -415,24 +436,24 @@ jobs:
           # part of the installable Foundation release and must be digest-pinned
           # in the same BOM as the plugin package.
           samba_operand_repository='mirror/samba-domain'
-          samba_operand_digest="$(crane digest "$REGISTRY/$samba_operand_repository:edge")"
+          samba_operand_digest="$(crane digest "$REGISTRY/$samba_operand_repository:ga")"
           samba_operand_platforms="$(jq -c '.images[] | select(.name == "samba-domain") | .platforms' oci/mirrors.json)"
           test -n "$samba_operand_platforms"
           test "$samba_operand_platforms" != "null"
           jq --arg repository "$samba_operand_repository" \
             --arg image "$REGISTRY/$samba_operand_repository@$samba_operand_digest" \
             --argjson platforms "$samba_operand_platforms" \
-            '.operands["samba-domain"]={repository:$repository,image:$image,channel:"edge",platforms:$platforms,governance:"samba-ad-separate-signed-package"}' \
+            '.operands["samba-domain"]={repository:$repository,image:$image,channel:"ga",platforms:$platforms,governance:"samba-ad-separate-signed-package"}' \
             "$RUNNER_TEMP/foundation-bom.json" > "$RUNNER_TEMP/foundation-bom.next.json"
           mv "$RUNNER_TEMP/foundation-bom.next.json" "$RUNNER_TEMP/foundation-bom.json"
 
           while IFS= read -r operand; do
             name="${operand#mirror/}"; name="${name%:edge}"
             repository="mirror/$name"
-            digest="$(crane digest "$REGISTRY/$repository:edge")"
+            digest="$(crane digest "$REGISTRY/$repository:ga")"
             platforms="$(jq -c --arg name "$name" '.images[] | select(.name == $name) | (.platforms // ["linux/amd64","linux/arm64"])' oci/mirrors.json)"
             jq --arg key "$name" --arg repository "$repository" --arg image "$REGISTRY/$repository@$digest" --argjson platforms "$platforms" \
-              '.operands[$key]={repository:$repository,image:$image,channel:"edge",platforms:$platforms}' \
+              '.operands[$key]={repository:$repository,image:$image,channel:"ga",platforms:$platforms}' \
               "$RUNNER_TEMP/foundation-bom.json" > "$RUNNER_TEMP/foundation-bom.next.json"
             mv "$RUNNER_TEMP/foundation-bom.next.json" "$RUNNER_TEMP/foundation-bom.json"
           done < <(jq -r '[.plugins[].operands[]] | unique[]' plugins/catalog.json)
@@ -450,7 +471,7 @@ jobs:
           predicate-type: https://opensphere.io/attestations/foundation-release-bom/v1
           predicate-path: ${{ runner.temp }}/foundation-bom.json
           push-to-registry: true
-      - name: Advance component edge tags with shell anchor last
+      - name: Advance component GA tags with shell anchor last
         shell: bash
         run: |
           set -euo pipefail
@@ -472,14 +493,14 @@ jobs:
           for key in $(jq -r '.components | keys[] | select(. != "shell" and . != "samba-ad")' "$bom"); do
             image="$(jq -r --arg key "$key" '.components[$key].image' "$bom")"
             publish_immutable_tag "$image"
-            crane tag "$image" edge
+            crane tag "$image" ga
           done
           anchor="$(jq -r '.components.shell.image' "$bom")"
           publish_immutable_tag "$anchor"
-          crane tag "$anchor" edge
+          crane tag "$anchor" ga
           for key in $(jq -r '.components | keys[] | select(. != "samba-ad")' "$bom"); do
             repository="$(jq -r --arg key "$key" '.components[$key].repository' "$bom")"
             expected="$(jq -r --arg key "$key" '.components[$key].image | split("@")[1]' "$bom")"
             test "$(crane digest "$REGISTRY/$repository:$release_tag")" = "$expected"
-            test "$(crane digest "$REGISTRY/$repository:edge")" = "$expected"
+            test "$(crane digest "$REGISTRY/$repository:ga")" = "$expected"
           done

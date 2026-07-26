@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -9,7 +10,12 @@ const project = Object.values(angular.projects)[0];
 const output = project.architect.build.options.outputPath;
 const outputRoot = typeof output === 'string' ? output : output.base;
 const appRoot = resolve(root, outputRoot, 'browser');
+const source = JSON.parse(readFileSync(resolve(root, 'ui-shell/ui-shell.manifest.source.json'), 'utf8'));
 const manifest = JSON.parse(readFileSync(resolve(root, 'ui-shell/ui-shell.manifest.json'), 'utf8'));
+const sourceProjection = structuredClone(manifest);
+delete sourceProjection.entrySha256;
+delete sourceProjection.assets;
+assert.deepEqual(sourceProjection, source, 'generated manifest source fields drifted');
 
 if (hash(readFileSync(resolve(root, 'ui-shell/ui-shell.plugin.js'))) !== manifest.entrySha256) throw new Error('ui-shell.plugin.js does not match manifest.entrySha256');
 const expected = new Map([
