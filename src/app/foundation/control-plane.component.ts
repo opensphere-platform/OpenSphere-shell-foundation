@@ -91,45 +91,37 @@ import { PluginPageHeaderComponent, PluginPageHeaderModel } from '../shared/plug
       </div>
     </section>
 
-    <div class="cp-alert" *ngIf="identityBlocked()">
-      <h3><os-cicon [icon]="iWarn" [size]="16"></os-cicon> Samba-AD 설치 BLOCK 원인</h3>
+    <div class="cp-alert" *ngIf="bootstrapBlocked()">
+      <h3><os-cicon [icon]="iWarn" [size]="16"></os-cicon> Foundation Control Plane 부트스트랩 미완료</h3>
       <p>
-        Crossplane core/provider는 준비되어 있어도, typed identity directory 계약인
-        <b>IdentityDirectoryClaim</b> / <b>IdentityDirectoryBinding</b> CRD가 없으면
-        Samba-AD consumer에게 LDAP endpointRef, secretRef, policyRef를 안전하게 발급할 수 없다.
+        Foundation subShell 화면과 실제 PFS Control Plane은 서로 다른 상태입니다.
+        필수 CRD, controller, RBAC와 owner workload가 모두 설치되고 실측 Ready가 되기 전에는
+        PFS 모듈 설치나 Claim 생성을 시작할 수 없습니다.
       </p>
       <p>
-        따라서 다음 작업은 Crossplane 재설치가 아니라 Foundation control-plane에 typed IdentityDirectory 계약과 reconciler를 추가하는 것이다.
+        현재 화면은 누락된 구성과 복구 대상을 읽기 전용으로 보고합니다. 브라우저에서 Kubernetes CRD를 직접 생성하지 않습니다.
       </p>
     </div>
 
-    <section class="cp-admin" *ngIf="identityBlocked()">
+    <section class="cp-admin" *ngIf="bootstrapBlocked()">
       <article class="cp-admin-card">
-        <h3>OpenSphere가 복구해야 할 일</h3>
+        <h3>관리형 부트스트랩이 수행할 일</h3>
         <p>
-          이것은 사용자 설정 문제가 아니라 Foundation control-plane의 계약 패키지 누락이다.
-          admin은 CRD YAML을 직접 작성하지 않고, OpenSphere가 제공하는
-          <b>Identity Directory Contract Pack</b> 복구/업데이트를 승인한다.
+          이 문제는 사용자 설정이 아니라 Foundation release bundle의 설치 누락입니다.
+          OpenSphere 설치 관리자는 서명·digest가 검증된 bundle만 적용하고 결과를 live status로 다시 검증해야 합니다.
         </p>
         <ol class="cp-admin-list">
-          <li>OpenSphere가 <b>IdentityDirectoryClaim</b>, <b>IdentityDirectoryBinding</b> CRD를 설치/업데이트한다.</li>
-          <li>Foundation control-plane이 typed 계약 reconciler로 Binding을 발급한다.</li>
-          <li>이 화면에서 Contracts와 Reconcilers가 Ready로 바뀌는지 확인한다.</li>
-          <li>Ready가 되면 Samba-AD Preflight로 돌아가 설치를 진행한다.</li>
+          <li>HIS Preflight와 Platform Support Profile의 선행 gate를 확인합니다.</li>
+          <li>Foundation core·typed 계약 CRD와 최소권한 RBAC를 적용합니다.</li>
+          <li><b>foundation-control-plane</b>과 <b>foundation-oaa-owner</b>를 exact digest로 배포합니다.</li>
+          <li>Controller Ready, FoundationModel schema, Claim→Binding 증거를 검증합니다.</li>
         </ol>
-        <div class="cp-admin-actions">
-          <button class="btn btn-primary" type="button" [disabled]="svc.repairBusy()" (click)="svc.repairIdentityDirectoryContracts()">
-            <span class="spinner spinner-inline" *ngIf="svc.repairBusy()"></span>
-            Repair Contract Pack
-          </button>
-          <span class="os-dim" *ngIf="svc.repairMessage()">{{ svc.repairMessage() }}</span>
-        </div>
       </article>
       <article class="cp-admin-card">
-        <h3>하지 말아야 할 일</h3>
-        <p><span class="cp-no">Crossplane 재설치 아님</span> — Crossplane은 실행/전달 엔진이며, typed identity 계약의 소유자가 아니다.</p>
-        <p><span class="cp-no">Samba-AD 강제 설치 아님</span> — 소비 계약이 없으면 Keycloak 같은 consumer에게 연결권을 안전하게 발급할 수 없다.</p>
-        <p><span class="cp-yes">제품 복구 대상</span> — 이 문제의 책임 경계는 OpenSphere Foundation control-plane이다.</p>
+        <h3>보안 및 책임 경계</h3>
+        <p><span class="cp-no">브라우저 직접 쓰기 금지</span> — CRD와 cluster-scoped RBAC를 UI 세션에서 생성하지 않습니다.</p>
+        <p><span class="cp-no">subShell 활성화와 혼동 금지</span> — UI Pod Ready는 PFS Established 증거가 아닙니다.</p>
+        <p><span class="cp-yes">제품 복구 대상</span> — 설치 관리자와 Foundation control-plane이 멱등적으로 복구해야 합니다.</p>
       </article>
     </section>
 
@@ -209,7 +201,8 @@ export class ControlPlaneComponent {
   contractPass(): number { return this.svc.contracts().filter((x) => x.state === 'pass').length; }
   writePathPass(): number { return this.svc.writePaths().filter((x) => x.state === 'pass').length; }
 
-  identityBlocked(): boolean {
-    return this.svc.contracts().some((x) => x.id.startsWith('identity-directory') && x.state === 'fail');
+  bootstrapBlocked(): boolean {
+    return this.svc.contracts().some((x) => x.required && x.state === 'fail')
+      || this.svc.workloads().some((x) => x.id === 'foundation-control-plane' && x.state !== 'pass');
   }
 }

@@ -3,6 +3,7 @@ import { Component, computed, inject } from '@angular/core';
 import { FoundationRegistryService } from '../registry/foundation-registry.service';
 import { EnginesService } from './engines.service';
 import { HisRequirementItem, HisRequirementsService, HisState } from './his-requirements.service';
+import { ControlPlaneService } from './control-plane.service';
 import { ViewRouter } from '../view-router';
 import { CarbonIcon } from '../carbon-icon';
 import { HostedPlugin } from '../registry/hosted-plugin';
@@ -76,6 +77,41 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
           <li><span>런타임 정상</span><b [class.ov-warn]="s().degraded">{{ s().healthy }}<i>/{{ s().hosted }}</i></b></li>
           <li><span>제공 capability</span><b>{{ s().capabilities }}</b></li>
         </ul>
+      </div>
+    </section>
+
+    <div class="os-sech">PFS 설립 상태 <span class="os-dim">— UI 활성화와 Control Plane 준비 상태를 분리해 표시</span></div>
+    <section class="pfs-establishment">
+      <div class="pfs-stage">
+        <span>Foundation UI</span>
+        <strong class="pfs-stage--ready">활성화됨</strong>
+        <small>subShell page/API workload</small>
+      </div>
+      <div class="pfs-stage">
+        <span>HIS Preflight</span>
+        <strong [ngClass]="his.status()?.state === 'Ready' ? 'pfs-stage--ready' : 'pfs-stage--blocked'">
+          {{ his.error() ? '계약 오류' : (his.status()?.state || '확인 중') }}
+        </strong>
+        <small>{{ his.status()?.summary?.coreReady || 0 }}/{{ his.status()?.summary?.coreTotal || 0 }} core ready</small>
+      </div>
+      <div class="pfs-stage">
+        <span>Foundation Control Plane</span>
+        <strong [ngClass]="controlPlaneReady() ? 'pfs-stage--ready' : 'pfs-stage--blocked'">
+          {{ cp.busy() && !cp.lastSync() ? '확인 중' : (controlPlaneReady() ? 'Ready' : '미설치 또는 미준비') }}
+        </strong>
+        <small>controller · RBAC · owner</small>
+      </div>
+      <div class="pfs-stage">
+        <span>필수 계약</span>
+        <strong [ngClass]="requiredContractsReady() ? 'pfs-stage--ready' : 'pfs-stage--blocked'">
+          {{ requiredContractTotal() > 0 ? (requiredContractPass() + '/' + requiredContractTotal()) : '확인 중' }}
+        </strong>
+        <small>CRD schema · Claim · Binding</small>
+      </div>
+      <div class="pfs-establishment-result">
+        <b>{{ pfsStage() }}</b>
+        <span>{{ pfsStageDetail() }}</span>
+        <button class="btn btn-sm" type="button" (click)="go('control-plane')">Control Plane 상태</button>
       </div>
     </section>
 
@@ -193,7 +229,12 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
         </span>
       </div>
       <div class="ov-empty" *ngIf="installedPlugins().length === 0">
-        설치된 PFS plugin이 없습니다. <button class="btn btn-link" type="button" (click)="go('modules')">PFS 모듈</button>에서 설치할 모듈을 선택하세요.
+        <ng-container *ngIf="reg.modelsLoaded() === 'ok'; else registryUnavailable">
+          선언된 PFS plugin이 없습니다. <button class="btn btn-link" type="button" (click)="go('modules')">PFS 모듈</button>에서 설치할 모듈을 선택하세요.
+        </ng-container>
+        <ng-template #registryUnavailable>
+          Foundation Control Plane과 FoundationModel API가 준비되지 않아 설치 모듈을 판정할 수 없습니다.
+        </ng-template>
       </div>
     </div>
   `,
@@ -202,6 +243,7 @@ export class FoundationOverviewComponent {
   readonly reg = inject(FoundationRegistryService);
   readonly engines = inject(EnginesService);
   readonly his = inject(HisRequirementsService);
+  readonly cp = inject(ControlPlaneService);
   private vr = inject(ViewRouter);
   readonly s = this.reg.summary;
   readonly installedPlugins = this.reg.enabledPlugins;
@@ -238,7 +280,33 @@ export class FoundationOverviewComponent {
     },
   ];
 
-  ngOnInit(): void { this.engines.start(); this.his.start(); }
+  ngOnInit(): void { this.engines.start(); this.his.start(); this.cp.start(); }
+
+  readonly controlPlaneReady = computed(() =>
+    this.cp.workloads().some((item) => item.id === 'foundation-control-plane' && item.state === 'pass'),
+  );
+  readonly requiredContractTotal = computed(() => this.cp.contracts().filter((item) => item.required).length);
+  readonly requiredContractPass = computed(() =>
+    this.cp.contracts().filter((item) => item.required && item.state === 'pass').length,
+  );
+  readonly requiredContractsReady = computed(() =>
+    this.requiredContractTotal() > 0 && this.requiredContractPass() === this.requiredContractTotal(),
+  );
+  readonly pfsStage = computed(() => {
+    if (this.his.busy() || this.cp.busy()) { return '상태 확인 중'; }
+    if (this.his.error()) { return 'Blocked · HIS 계약 오류'; }
+    if (!this.his.status() || this.his.status()?.state !== 'Ready') { return 'Blocked · HIS 선행조건 미충족'; }
+    if (!this.controlPlaneReady()) { return 'NotEstablished · Control Plane 미준비'; }
+    if (!this.requiredContractsReady()) { return 'Blocked · 필수 계약 미설치'; }
+    return 'Establishing · 설립 증거 확인 필요';
+  });
+  readonly pfsStageDetail = computed(() => {
+    if (this.his.error()) { return 'Cluster Manager의 versioned HIS 상태 계약을 먼저 복구해야 합니다.'; }
+    if (this.his.status()?.state !== 'Ready') { return 'Cluster Manager에서 HIS Core 요구조건을 모두 Ready로 만든 뒤 진행합니다.'; }
+    if (!this.controlPlaneReady()) { return '서명된 Foundation bootstrap bundle로 controller·RBAC·owner를 설치해야 합니다.'; }
+    if (!this.requiredContractsReady()) { return '필수 Foundation CRD schema를 설치하고 다시 검증해야 합니다.'; }
+    return 'Claim→Binding, finalizer와 Platform Support Profile live evidence가 확인되기 전에는 Established로 표시하지 않습니다.';
+  });
 
   readonly requiredHisItems = computed<HisRequirementItem[]>(() =>
     (this.his.status()?.items ?? []).filter((item) => item.effectiveRequired ?? item.required ?? item.profileSelected),

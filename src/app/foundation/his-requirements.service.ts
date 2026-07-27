@@ -23,6 +23,7 @@ export interface HisRequirementItem {
 }
 
 export interface HisStatus {
+  schema: 'his-status.opensphere.io/v1alpha1';
   stack: 'HIS';
   state: HisState;
   checkedAt: string;
@@ -60,8 +61,11 @@ export class HisRequirementsService {
         throw new Error(`Cluster Manager HIS status HTTP ${response.status}`);
       }
       const body = await response.json() as HisStatus;
-      if (body?.stack !== 'HIS' || !Array.isArray(body?.items)) {
-        throw new Error('Cluster Manager가 유효한 HIS status 계약을 반환하지 않았습니다.');
+      if (body?.schema !== 'his-status.opensphere.io/v1alpha1'
+        || body?.stack !== 'HIS'
+        || !Array.isArray(body?.items)
+        || !body?.summary) {
+        throw new Error('Cluster Manager가 지원되는 HIS 상태 계약(v1alpha1)을 반환하지 않았습니다.');
       }
       this.status.set(body);
       this.lastSync.set(body.checkedAt || new Date().toISOString());

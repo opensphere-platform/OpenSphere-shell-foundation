@@ -7,7 +7,8 @@ const path = require('node:path');
 const {
   verifySupabaseToken, k8sGroups, requireConsoleAdmin, requireFoundationOwner,
   requireClosedOwnerBody, requireOwnerReason, requireOwnerConfirm, requireK8sName,
-  requireFoundationLifecycle,
+  requireFoundationLifecycle, validateHisStatusContract, foundationBootstrapState,
+  HIS_STATUS_SCHEMA, FOUNDATION_CORE_CRDS,
   FOUNDATION_ENGINE_MODEL, FOUNDATION_CLAIM_MODELS,
 } = require('../server');
 
@@ -64,6 +65,41 @@ test('Foundation owner catalog is finite and does not accept arbitrary models or
   assert.equal(FOUNDATION_ENGINE_MODEL.shell, undefined);
 });
 
+test('Foundation accepts only the versioned canonical HIS status contract', () => {
+  const body = {
+    schema: HIS_STATUS_SCHEMA,
+    stack: 'HIS',
+    state: 'Blocked',
+    items: [],
+    summary: { coreReady: 2, coreTotal: 8, selectedProfilesReady: 0, selectedProfilesTotal: 0 },
+  };
+  assert.equal(validateHisStatusContract(body), '');
+  assert.match(validateHisStatusContract({ ...body, stack: 'HISS' }), /stack must be HIS/);
+  assert.match(validateHisStatusContract({ ...body, schema: 'legacy' }), /schema must be/);
+  assert.match(validateHisStatusContract({ ...body, summary: { ...body.summary, coreReady: -1 } }), /coreReady/);
+});
+
+test('Foundation bootstrap status distinguishes missing contracts from controller readiness', () => {
+  const missing = foundationBootstrapState(
+    FOUNDATION_CORE_CRDS.map(() => ({ ok: false, status: 404, json: { message: 'not found' } })),
+    { ok: false, status: 404, json: { message: 'not found' } },
+  );
+  assert.equal(missing.phase, 'NotEstablished');
+  assert.equal(missing.ready, false);
+  assert.equal(missing.contractsReady, false);
+  assert.equal(missing.controller.state, 'NotInstalled');
+  assert.equal(missing.blockers.length, FOUNDATION_CORE_CRDS.length + 1);
+
+  const ready = foundationBootstrapState(
+    FOUNDATION_CORE_CRDS.map(() => ({ ok: true, status: 200, json: {} })),
+    { ok: true, status: 200, json: { spec: { replicas: 2 }, status: { readyReplicas: 2, availableReplicas: 2 } } },
+  );
+  assert.equal(ready.phase, 'Establishing');
+  assert.equal(ready.ready, true);
+  assert.equal(ready.contractsReady, true);
+  assert.deepEqual(ready.blockers, []);
+});
+
 test('Foundation owner mutations independently enforce the platform lifecycle gate', async () => {
   const originalFetch = global.fetch;
   try {
@@ -92,6 +128,15 @@ test('Foundation owner workload is isolated from the generic proxy and uses leas
   assert.match(rbac, /resourceNames: \[identity, data\][\s\S]*verbs: \[patch\]/);
   assert.match(rbac, /resources: \[identitydirectoryclaims\][\s\S]*verbs: \[get, list, watch, create, delete\]/);
   assert.doesNotMatch(rbac, /resources: \[secrets\]/);
+});
+
+test('Foundation Control Plane UI is read-only and cannot create cluster-scoped contracts', () => {
+  const service = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'foundation', 'control-plane.service.ts'), 'utf8');
+  const component = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'foundation', 'control-plane.component.ts'), 'utf8');
+  assert.doesNotMatch(service, /method:\s*'(?:POST|PUT|PATCH|DELETE)'/);
+  assert.doesNotMatch(service, /writeHeaders|repairIdentityDirectoryContracts|customresourcedefinitions'\),\s*\{/);
+  assert.doesNotMatch(component, /Repair Contract Pack|repairIdentityDirectoryContracts/);
+  assert.match(component, /브라우저 직접 쓰기 금지/);
 });
 
 test('typed IdentityDirectory owner input cannot carry parameters or credential material', () => {

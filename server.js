@@ -54,6 +54,15 @@ const FOUNDATION_AUDIT_URL = (process.env.FOUNDATION_AUDIT_URL
 const SAMBA_BOOTSTRAP_SECRET = process.env.SAMBA_BOOTSTRAP_SECRET || 'foundation-identity-samba-creds';
 const SAMBA_BOOTSTRAP_SECRET_KEY = 'domain-password';
 const FOUNDATION_API = '/apis/foundation.opensphere.io/v1alpha1';
+const HIS_STATUS_SCHEMA = 'his-status.opensphere.io/v1alpha1';
+const FOUNDATION_CORE_CRDS = Object.freeze([
+  'foundationmodels.foundation.opensphere.io',
+  'foundationmoduledescriptors.foundation.opensphere.io',
+  'foundationclaims.foundation.opensphere.io',
+  'foundationbindings.foundation.opensphere.io',
+  'identitydirectoryclaims.foundation.opensphere.io',
+  'identitydirectorybindings.foundation.opensphere.io',
+]);
 const FOUNDATION_ENGINE_MODEL = Object.freeze({
   keycloak: 'identity',
   samba: 'identity',
@@ -246,30 +255,96 @@ async function foundationStatus(req, res) {
   if (req.method !== 'GET') return jsonRes(res, 405, { error: 'method not allowed' });
   try { await verifyToken(requestToken(req)); }
   catch (e) { return jsonRes(res, e.code || 401, { error: e.msg || 'unauthorized' }); }
-  const [models, claims, bindings, identityClaims, identityBindings, controller] = await Promise.all([
+  const [contractResults, controller] = await Promise.all([
+    Promise.all(FOUNDATION_CORE_CRDS.map((name) =>
+      k8sJson('GET', `/apis/apiextensions.k8s.io/v1/customresourcedefinitions/${name}`))),
+    k8sJson('GET', '/apis/apps/v1/namespaces/opensphere-system/deployments/foundation-control-plane'),
+  ]);
+  const bootstrap = foundationBootstrapState(contractResults, controller);
+  if (bootstrap.readError) {
+    return jsonRes(res, bootstrap.readError.status, { error: bootstrap.readError.message });
+  }
+  const base = {
+    schema: 'foundation-owner-status.opensphere.io/v1alpha1',
+    owner: 'Foundation control plane',
+    namespace: FND_NS,
+    phase: bootstrap.phase,
+    ready: bootstrap.ready,
+    controller: bootstrap.controller,
+    contracts: bootstrap.contracts,
+    blockers: bootstrap.blockers,
+    catalog: { engines: Object.keys(FOUNDATION_ENGINE_MODEL), claimModels: FOUNDATION_CLAIM_MODELS },
+  };
+  if (!bootstrap.contractsReady) {
+    return jsonRes(res, 200, {
+      ...base,
+      models: [], claims: [], bindings: [], identityDirectoryClaims: [], identityDirectoryBindings: [],
+    });
+  }
+  const [models, claims, bindings, identityClaims, identityBindings] = await Promise.all([
     k8sJson('GET', `${FOUNDATION_API}/foundationmodels`),
     k8sJson('GET', `${FOUNDATION_API}/namespaces/${FND_NS}/foundationclaims`),
     k8sJson('GET', `${FOUNDATION_API}/namespaces/${FND_NS}/foundationbindings`),
     k8sJson('GET', `${FOUNDATION_API}/namespaces/${FND_NS}/identitydirectoryclaims`),
     k8sJson('GET', `${FOUNDATION_API}/namespaces/${FND_NS}/identitydirectorybindings`),
-    k8sJson('GET', '/apis/apps/v1/namespaces/opensphere-system/deployments/foundation-control-plane'),
   ]);
-  const failed = [models, claims, bindings, identityClaims, identityBindings, controller].find((item) => !item.ok);
+  const failed = [models, claims, bindings, identityClaims, identityBindings].find((item) => !item.ok);
   if (failed) return jsonRes(res, failed.status, { error: k8sFailure(failed) });
-  const desired = Number(controller.json?.spec?.replicas || 0);
-  const ready = Number(controller.json?.status?.readyReplicas || 0);
   return jsonRes(res, 200, {
-    schema: 'foundation-owner-status.opensphere.io/v1alpha1',
-    owner: 'Foundation control plane', namespace: FND_NS,
-    ready: desired > 0 && ready === desired,
-    controller: { name: 'foundation-control-plane', desired, ready, available: Number(controller.json?.status?.availableReplicas || 0) },
-    catalog: { engines: Object.keys(FOUNDATION_ENGINE_MODEL), claimModels: FOUNDATION_CLAIM_MODELS },
+    ...base,
     models: (models.json?.items || []).map(foundationModelProjection),
     claims: (claims.json?.items || []).map(foundationClaimProjection),
     bindings: (bindings.json?.items || []).map(foundationBindingProjection),
     identityDirectoryClaims: (identityClaims.json?.items || []).map(identityDirectoryClaimProjection),
     identityDirectoryBindings: (identityBindings.json?.items || []).map(identityDirectoryBindingProjection),
   });
+}
+
+function foundationBootstrapState(contractResults, controllerResult) {
+  const contracts = FOUNDATION_CORE_CRDS.map((name, index) => {
+    const result = contractResults[index] || { ok: false, status: 0, json: null };
+    return {
+      name,
+      ready: Boolean(result.ok),
+      status: Number(result.status || 0),
+      reason: result.ok ? 'Installed' : result.status === 404 ? 'NotInstalled' : 'ReadFailed',
+    };
+  });
+  const readFailure = [...contractResults, controllerResult]
+    .find((result) => !result?.ok && Number(result?.status || 0) !== 404);
+  if (readFailure) {
+    return {
+      readError: { status: Number(readFailure.status || 503), message: k8sFailure(readFailure) },
+      contracts, contractsReady: false, ready: false, phase: 'Blocked',
+      controller: { name: 'foundation-control-plane', desired: 0, ready: 0, available: 0, state: 'ReadFailed' },
+      blockers: ['Foundation bootstrap state could not be read'],
+    };
+  }
+  const desired = Number(controllerResult?.json?.spec?.replicas || 0);
+  const readyReplicas = Number(controllerResult?.json?.status?.readyReplicas || 0);
+  const available = Number(controllerResult?.json?.status?.availableReplicas || 0);
+  const contractsReady = contracts.every((item) => item.ready);
+  const controllerReady = Boolean(controllerResult?.ok) && desired > 0 && readyReplicas === desired && available === desired;
+  const blockers = [
+    ...contracts.filter((item) => !item.ready).map((item) => `CRD ${item.name} is not installed`),
+    ...(!controllerResult?.ok ? ['Deployment opensphere-system/foundation-control-plane is not installed']
+      : !controllerReady ? [`foundation-control-plane is not Ready (${readyReplicas}/${desired})`] : []),
+  ];
+  return {
+    readError: null,
+    contracts,
+    contractsReady,
+    ready: contractsReady && controllerReady,
+    phase: contractsReady && controllerReady ? 'Establishing' : 'NotEstablished',
+    controller: {
+      name: 'foundation-control-plane',
+      desired,
+      ready: readyReplicas,
+      available,
+      state: !controllerResult?.ok ? 'NotInstalled' : controllerReady ? 'Ready' : 'NotReady',
+    },
+    blockers,
+  };
 }
 async function foundationEngineLifecycle(req, res) {
   if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
@@ -479,6 +554,20 @@ async function hisStatusProxy(req, res) {
       signal: AbortSignal.timeout(15000),
     });
     const text = await r.text();
+    if (r.ok) {
+      let body;
+      try { body = JSON.parse(text); }
+      catch { return jsonRes(res, 502, { error: 'Cluster Manager HIS status returned invalid JSON' }); }
+      const contractError = validateHisStatusContract(body);
+      if (contractError) {
+        return jsonRes(res, 502, {
+          error: `Cluster Manager HIS status contract mismatch: ${contractError}`,
+          expectedSchema: HIS_STATUS_SCHEMA,
+          observedSchema: body?.schema || null,
+          observedStack: body?.stack || null,
+        });
+      }
+    }
     res.writeHead(r.status, {
       'content-type': r.headers.get('content-type') || 'application/json',
       'cache-control': 'no-store',
@@ -487,6 +576,19 @@ async function hisStatusProxy(req, res) {
   } catch (e) {
     jsonRes(res, 502, { error: `Cluster Manager HIS status unavailable: ${String(e && (e.message || e))}` });
   }
+}
+
+function validateHisStatusContract(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return 'JSON object required';
+  if (body.schema !== HIS_STATUS_SCHEMA) return `schema must be ${HIS_STATUS_SCHEMA}`;
+  if (body.stack !== 'HIS') return 'stack must be HIS';
+  if (!['Ready', 'Blocked', 'Degraded'].includes(body.state)) return 'state is invalid';
+  if (!Array.isArray(body.items)) return 'items must be an array';
+  if (!body.summary || typeof body.summary !== 'object') return 'summary is required';
+  for (const key of ['coreReady', 'coreTotal', 'selectedProfilesReady', 'selectedProfilesTotal']) {
+    if (!Number.isInteger(body.summary[key]) || body.summary[key] < 0) return `summary.${key} must be a non-negative integer`;
+  }
+  return '';
 }
 
 const MIME = {
@@ -804,7 +906,9 @@ if (require.main === module) {
   module.exports = {
     verifySupabaseToken, k8sGroups, requireConsoleAdmin, requireFoundationOwner,
     requireClosedOwnerBody, requireOwnerReason, requireOwnerConfirm, requireK8sName,
-    requireFoundationLifecycle,
+    requireFoundationLifecycle, validateHisStatusContract,
+    foundationBootstrapState,
+    HIS_STATUS_SCHEMA, FOUNDATION_CORE_CRDS,
     FOUNDATION_ENGINE_MODEL, FOUNDATION_CLAIM_MODELS,
   };
 }
