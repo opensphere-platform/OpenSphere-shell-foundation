@@ -162,6 +162,8 @@ pg-metric { display: block; height: 100%; }
 .pfs-establishment-result { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(14rem, auto) minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 3.4rem; padding: 10px 14px; border-top: 1px solid var(--os-border); background: #f4f7fb; }
 .pfs-establishment-result b { color: var(--os-ink); font-size: 0.82rem; }
 .pfs-establishment-result span { color: var(--os-text-sec); font-size: 0.76rem; line-height: 1.4; }
+.pfs-establishment-result span > small { display: block; margin-top: 3px; color: var(--os-text-sec); font-size: 0.7rem; }
+.pfs-establishment-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 
 .stack-defs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .stack-def { background: #fff; border: 1px solid var(--os-border); border-radius: 6px; padding: 16px 18px; cursor: pointer; transition: box-shadow 0.12s, border-color 0.12s; }

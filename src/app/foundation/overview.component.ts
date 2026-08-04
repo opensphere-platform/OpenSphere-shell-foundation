@@ -84,34 +84,49 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
     <section class="pfs-establishment">
       <div class="pfs-stage">
         <span>Foundation UI</span>
-        <strong class="pfs-stage--ready">활성화됨</strong>
-        <small>subShell page/API workload</small>
+        <strong [ngClass]="pfsConditionReady('foundation-shell') ? 'pfs-stage--ready' : 'pfs-stage--blocked'">
+          {{ cp.establishment()?.extension?.phase || '확인 중' }}
+        </strong>
+        <small>Extension 상태이며 PFS 설립 상태와 별도</small>
       </div>
       <div class="pfs-stage">
-        <span>HIS Preflight</span>
-        <strong [ngClass]="his.status()?.state === 'Ready' ? 'pfs-stage--ready' : 'pfs-stage--blocked'">
-          {{ his.error() ? '계약 오류' : (his.status()?.state || '확인 중') }}
+        <span>Platform Support Profile</span>
+        <strong [ngClass]="cp.establishment()?.supportProfile?.ready ? 'pfs-stage--ready' : 'pfs-stage--blocked'">
+          {{ cp.establishment()?.supportProfile?.phase || '확인 중' }}
         </strong>
-        <small>{{ his.status()?.summary?.coreReady || 0 }}/{{ his.status()?.summary?.coreTotal || 0 }} core ready</small>
+        <small>HIS와 4개 지원 capability의 live evidence</small>
+      </div>
+      <div class="pfs-stage">
+        <span>설립 적용기</span>
+        <strong [ngClass]="pfsConditionReady('foundation-bootstrap-owner') ? 'pfs-stage--ready' : 'pfs-stage--blocked'">
+          {{ pfsConditionState('foundation-bootstrap-owner') }}
+        </strong>
+        <small>검토된 변경만 실행하는 전용 reconciler</small>
       </div>
       <div class="pfs-stage">
         <span>Foundation Control Plane</span>
-        <strong [ngClass]="controlPlaneReady() ? 'pfs-stage--ready' : 'pfs-stage--blocked'">
-          {{ cp.busy() && !cp.lastSync() ? '확인 중' : (controlPlaneReady() ? 'Ready' : '미설치 또는 미준비') }}
+        <strong [ngClass]="pfsConditionReady('foundation-control-plane') ? 'pfs-stage--ready' : 'pfs-stage--blocked'">
+          {{ pfsConditionState('foundation-control-plane') }}
         </strong>
-        <small>controller · RBAC · owner</small>
-      </div>
-      <div class="pfs-stage">
-        <span>필수 계약</span>
-        <strong [ngClass]="requiredContractsReady() ? 'pfs-stage--ready' : 'pfs-stage--blocked'">
-          {{ requiredContractTotal() > 0 ? (requiredContractPass() + '/' + requiredContractTotal()) : '확인 중' }}
-        </strong>
-        <small>CRD schema · Claim · Binding</small>
+        <small>계약 CRD · controller · model · binding</small>
       </div>
       <div class="pfs-establishment-result">
         <b>{{ pfsStage() }}</b>
-        <span>{{ pfsStageDetail() }}</span>
-        <button class="btn btn-sm" type="button" (click)="go('control-plane')">Control Plane 상태</button>
+        <span>
+          {{ pfsStageDetail() }}
+          <small *ngIf="bootstrapProgressDetail()">{{ bootstrapProgressDetail() }}</small>
+        </span>
+        <div class="pfs-establishment-actions">
+          <button class="btn btn-sm" type="button" (click)="go('control-plane')">Control Plane 상태</button>
+          <button
+            *ngIf="!cp.establishment()?.pfs?.established"
+            class="btn btn-sm btn-primary"
+            type="button"
+            [disabled]="bootstrapActionDisabled()"
+            (click)="openBootstrapChange()">
+            {{ bootstrapActionLabel() }}
+          </button>
+        </div>
       </div>
     </section>
 
@@ -293,20 +308,66 @@ export class FoundationOverviewComponent {
     this.requiredContractTotal() > 0 && this.requiredContractPass() === this.requiredContractTotal(),
   );
   readonly pfsStage = computed(() => {
-    if (this.his.busy() || this.cp.busy()) { return '상태 확인 중'; }
-    if (this.his.error()) { return 'Blocked · HIS 계약 오류'; }
-    if (!this.his.status() || this.his.status()?.state !== 'Ready') { return 'Blocked · HIS 선행조건 미충족'; }
-    if (!this.controlPlaneReady()) { return 'NotEstablished · Control Plane 미준비'; }
-    if (!this.requiredContractsReady()) { return 'Blocked · 필수 계약 미설치'; }
-    return 'Establishing · 설립 증거 확인 필요';
+    if (this.cp.busy() && !this.cp.lastSync()) { return '상태 확인 중'; }
+    if (this.cp.establishmentError()) { return 'Blocked · PFS 상태 권위 조회 실패'; }
+    const phase = this.cp.establishment()?.pfs?.phase;
+    if (!phase) { return 'Blocked · PFS 상태 계약 없음'; }
+    const labels: Record<string, string> = {
+      NotEstablished: '설립 전',
+      Establishing: '설립 진행 중',
+      Established: '설립 완료',
+      Blocked: '증거 조회 차단',
+    };
+    return `${phase} · ${labels[phase] || phase}`;
   });
   readonly pfsStageDetail = computed(() => {
-    if (this.his.error()) { return 'Cluster Manager의 versioned HIS 상태 계약을 먼저 복구해야 합니다.'; }
-    if (this.his.status()?.state !== 'Ready') { return 'Cluster Manager에서 HIS Core 요구조건을 모두 Ready로 만든 뒤 진행합니다.'; }
-    if (!this.controlPlaneReady()) { return '서명된 Foundation bootstrap bundle로 controller·RBAC·owner를 설치해야 합니다.'; }
-    if (!this.requiredContractsReady()) { return '필수 Foundation CRD schema를 설치하고 다시 검증해야 합니다.'; }
-    return 'Claim→Binding, finalizer와 Platform Support Profile live evidence가 확인되기 전에는 Established로 표시하지 않습니다.';
+    if (this.cp.establishmentError()) { return this.cp.establishmentError(); }
+    const pfs = this.cp.establishment()?.pfs;
+    if (!pfs) { return 'Console Platform Readiness의 versioned PFS 상태 계약이 필요합니다.'; }
+    if (pfs.established) {
+      return 'Support Profile, Foundation 계약·Control Plane, 보호된 Claim→Binding live evidence가 모두 확인되었습니다.';
+    }
+    return pfs.blockers?.[0]?.detail || 'PFS 설립에 필요한 live evidence가 아직 완성되지 않았습니다.';
   });
+  readonly bootstrapProgressDetail = computed(() => {
+    if (this.cp.bootstrapPlanError()) { return ` · 설립 변경 경로: ${this.cp.bootstrapPlanError()}`; }
+    const request = this.cp.bootstrapPlan()?.request;
+    if (!request) { return ''; }
+    const error = request.lastError ? ` · ${request.lastError}` : '';
+    return ` · 변경 요청 ${request.requestId} · ${request.phase}: ${request.message}${error}`;
+  });
+  readonly bootstrapActionDisabled = computed(() => {
+    const plan = this.cp.bootstrapPlan();
+    if (!plan) { return true; }
+    return !plan.readyToRequest && !plan.request && plan.gate.reason !== 'PlatformSupportProfileRequired';
+  });
+  readonly bootstrapActionLabel = computed(() => {
+    const plan = this.cp.bootstrapPlan();
+    if (!plan) { return '설립 경로 확인 중'; }
+    if (plan.request && !['Completed', 'Failed', 'NeedsAttention'].includes(plan.request.phase)) {
+      return '변경 요청 상태 보기';
+    }
+    if (plan.gate.reason === 'PlatformSupportProfileRequired') { return 'Support Profile 구성'; }
+    if (plan.request?.phase === 'Failed' || plan.request?.phase === 'NeedsAttention') { return '설립 변경 다시 요청'; }
+    return '설립 변경 요청';
+  });
+
+  pfsConditionReady(key: string): boolean {
+    return this.cp.establishment()?.pfs?.conditions?.find((item) => item.key === key)?.ready === true;
+  }
+  pfsConditionState(key: string): string {
+    const condition = this.cp.establishment()?.pfs?.conditions?.find((item) => item.key === key);
+    return condition?.ready ? 'Ready' : (condition?.state || '확인 중');
+  }
+  openBootstrapChange(): void {
+    if (this.cp.bootstrapPlan()?.gate.reason === 'PlatformSupportProfileRequired') {
+      window.location.assign('/manage/platform-control?tab=readiness');
+      return;
+    }
+    const url = this.cp.bootstrapPlan()?.changeControlUrl || '';
+    if (!url.startsWith('/manage/change-control?template=foundation-control-plane-bootstrap')) { return; }
+    window.location.assign(url);
+  }
 
   readonly requiredHisItems = computed<HisRequirementItem[]>(() =>
     (this.his.status()?.items ?? []).filter((item) => item.effectiveRequired ?? item.required ?? item.profileSelected),

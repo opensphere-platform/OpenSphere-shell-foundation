@@ -37,6 +37,7 @@ type config struct {
 	pgImage             string
 	psmdbImage          string
 	valkeyImage         string
+	valkeyExporterImage string
 	rustfsImage         string
 	opensearchImage     string
 	defaultStorageClass string // HostRequirements 기본값(§1.2) — Basic StorageClass 이름의 단일 선언점
@@ -55,10 +56,11 @@ func main() {
 	flag.StringVar(&cfg.collectorImage, "collector-image", "ghcr.io/opensphere-platform/mirror/opentelemetry-collector-contrib:0.111.0", "observability collector operand 이미지(GHCR 미러, origin=otel/opentelemetry-collector-contrib:0.111.0)")
 	flag.StringVar(&cfg.keycloakImage, "keycloak-image", "ghcr.io/opensphere-platform/mirror/keycloak:26.0", "identity Keycloak operand 이미지(GHCR 미러, origin=quay.io/keycloak/keycloak:26.0)")
 	flag.StringVar(&cfg.sambaImage, "samba-image", "ghcr.io/opensphere-platform/mirror/samba-domain:20260701025204", "(deprecated) samba operand는 plugin이 소유·렌더 — 이 플래그는 미사용(arg 호환)")
-	flag.StringVar(&cfg.sambaPluginSvc, "samba-plugin-svc", "samba-ad.opensphere-system.svc:8080", "samba operand 선언 제공 plugin svc(self-contained, GET /operand/manifests)")
+	flag.StringVar(&cfg.sambaPluginSvc, "samba-plugin-svc", "samba-ad.opensphere-console.svc:8080", "samba operand 선언 제공 plugin svc(self-contained, GET /operand/manifests)")
 	flag.StringVar(&cfg.pgImage, "pg-image", "ghcr.io/opensphere-platform/mirror/postgresql:19beta2-standard-trixie", "data PostgreSQL 19 beta operand 이미지(CloudNativePG Cluster) — image-source: OpenSphere curated GHCR mirror")
 	flag.StringVar(&cfg.psmdbImage, "psmdb-image", "ghcr.io/opensphere-platform/mirror/percona-server-mongodb:8.0", "data PSMDB operand image(GHCR mirror)")
 	flag.StringVar(&cfg.valkeyImage, "valkey-image", "ghcr.io/opensphere-platform/mirror/valkey:9.1.0-alpine", "data Valkey operand image(GHCR mirror)")
+	flag.StringVar(&cfg.valkeyExporterImage, "valkey-exporter-image", "ghcr.io/opensphere-platform/mirror/redis-exporter:1.75.0", "data Valkey Prometheus exporter image(GHCR mirror)")
 	flag.StringVar(&cfg.rustfsImage, "rustfs-image", "ghcr.io/opensphere-platform/mirror/rustfs:1.0.0-beta.10", "data RustFS operand image(GHCR mirror)")
 	// HostRequirements(§1.2 "Basic은 요구만 선언") 기본값 — 클러스터 실측 StorageClass 이름(rancher.io/local-path 기반 "standard").
 	flag.StringVar(&cfg.defaultStorageClass, "default-storage-class", "standard", "PVC가 참조할 Basic StorageClass 기본값(FoundationModel.spec.parameters.hostRequirements.storageClass로 모델별 override 가능)")

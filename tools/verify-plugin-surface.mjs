@@ -29,7 +29,6 @@ const surfaces = [
   ['Keycloak', 'src/app/modules/identity/keycloak.component.ts'],
   ['Roadmap modules', 'src/app/foundation/roadmap-module.component.ts'],
   ['OpenTelemetry', 'src/app/foundation/otel/otel.component.ts'],
-  ['Crossplane', 'src/app/foundation/crossplane/crossplane.component.ts'],
 ];
 
 for (const [name, file] of surfaces) {
@@ -53,7 +52,7 @@ for (const label of ['Operator', 'Cluster plan', 'Configuration', 'Backups', 'Cl
 for (const contract of [/role="tablist"/, /role="tab"/, /aria-selected/, /tabindex/, /ArrowRight/, /ArrowLeft/, /Home/, /End/]) {
   assert.match(sharedShell, contract, `공통 탭 접근성·키보드 계약 누락: ${contract}`);
 }
-for (const file of ['src/app/foundation/otel/otel.component.ts', 'src/app/foundation/crossplane/crossplane.component.ts']) {
+for (const file of ['src/app/foundation/otel/otel.component.ts']) {
   assert.match(read(file), /pgp-steps/, `${file}: PostgreSQL 3단계 진행 영역 누락`);
   assert.match(read(file), /pgp-dashboard/, `${file}: PostgreSQL overview dashboard 누락`);
 }
@@ -83,6 +82,25 @@ assert.match(outlet, /Registry 활성화와 digest·manifest signature·permissi
 assert.match(outlet, /href="\/manage\/extensions"/, 'child plugin 실패 복구 경로가 없습니다.');
 for (const [, file] of surfaces.slice(1)) {
   assert.match(read(file), /pfsPluginTabs/, `${file}: 공통 11탭 helper 미사용`);
+}
+
+// Platform Delivery 엔진은 PFS operand가 아니므로 11탭 PFS 계약을 가장하지 않는다.
+// 대신 관리자가 준비조건·설치/복구·실제 리소스·정책·upgrade·감사를 수행할 수 있는
+// delivery 전용 관리자 계약을 적용한다.
+for (const file of [
+  'src/app/foundation/argocd/argocd.component.ts',
+  'src/app/foundation/crossplane/crossplane.component.ts',
+]) {
+  const source = read(file);
+  assert.match(source, /pgp-page-frame/, `${file}: 공통 page frame 누락`);
+  assert.match(source, /osp-plugin-page-header/, `${file}: 공통 header 누락`);
+  assert.match(source, /osp-plugin-tabs/, `${file}: 공통 tabs 누락`);
+  assert.match(source, /deliveryAdminTabs/, `${file}: delivery 관리자 탭 helper 미사용`);
+  for (const capability of ['overview', 'prerequisites', 'install', 'resources', 'configuration', 'security', 'upgrade', 'events']) {
+    assert.match(sharedShell, new RegExp(`['\"]${capability}['\"]`), `${file}: ${capability} 관리자 surface 누락`);
+  }
+  assert.match(source, /pgp-steps/, `${file}: 관리자 운영 단계 영역 누락`);
+  assert.match(source, /pgp-dashboard/, `${file}: 관리자 overview dashboard 누락`);
 }
 
 // Samba-AD는 Foundation 안층에 마운트되지만 독립 서명 plugin이므로 Angular 공통

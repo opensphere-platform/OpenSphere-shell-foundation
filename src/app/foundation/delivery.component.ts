@@ -3,7 +3,8 @@ import { Component, inject } from '@angular/core';
 import { ClarityModule } from '@clr/angular';
 import { ViewRouter } from '../view-router';
 import { PluginPageHeaderComponent, PluginPageHeaderModel } from '../shared/plugin-page-shell.component';
-import { RoadmapModuleComponent, RoadmapModuleInput } from './roadmap-module.component';
+import { RoadmapModuleInput } from './roadmap-module.component';
+import { ArgoCdComponent } from './argocd/argocd.component';
 import { CrossplaneComponent } from './crossplane/crossplane.component';
 
 interface DeliveryEngine extends RoadmapModuleInput {
@@ -14,18 +15,14 @@ interface DeliveryEngine extends RoadmapModuleInput {
 @Component({
   selector: 'app-foundation-delivery',
   standalone: true,
-  imports: [CommonModule, ClarityModule, PluginPageHeaderComponent, RoadmapModuleComponent, CrossplaneComponent],
+  imports: [CommonModule, ClarityModule, PluginPageHeaderComponent, ArgoCdComponent, CrossplaneComponent],
   template: `
-    <app-roadmap-module *ngIf="vr.tab()==='argocd'" [module]="argocd" />
+    <app-argocd *ngIf="vr.tab()==='argocd'" />
     <app-crossplane *ngIf="vr.tab()==='crossplane'" />
     <clr-alert *ngIf="!['overview','argocd','crossplane'].includes(vr.tab())" clrAlertType="warning" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">존재하지 않는 Platform Delivery 경로입니다.</span></clr-alert-item></clr-alert>
 
     <ng-container *ngIf="vr.tab()==='overview'">
       <osp-plugin-page-header [model]="header" headingId="platform-delivery-title" />
-      <section class="stack-inline">
-        <div><span class="stack-kicker">Foundation native</span><strong>PFS와 구분되는 배포 실행 기반</strong><p>PFS capability를 제공하는 서비스가 아니라, desired state를 클러스터에 전달하고 외부 리소스를 provisioning하는 관리 계층입니다.</p></div>
-        <div class="stack-members"><span class="stack-chip">Argo CD · primary write-path</span><span class="stack-chip">Crossplane · optional adapter</span></div>
-      </section>
       <clr-alert clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">Argo CD는 기본 GitOps 경로이고 Crossplane은 Provider가 필요한 영역에서만 사용하는 선택적 adapter입니다. 둘을 PFS capability로 계산하지 않습니다.</span></clr-alert-item></clr-alert>
 
       <section class="hc-section">
@@ -59,9 +56,13 @@ export class FoundationDeliveryComponent {
   };
   readonly engines: DeliveryEngine[] = [this.argocd, this.crossplane];
   readonly header: PluginPageHeaderModel = {
-    name:'Platform Delivery', logo:'', monogram:'PD', capability:'foundation.delivery',
-    description:'GitOps write-path와 선택적 provisioning adapter를 PFS capability와 분리하여 관리합니다.',
-    lifecycle:'Foundation native', lifecycleClass:'label-info', version:'contract v1', profile:'delivery', namespace:'multiple',
+    name:'Platform Delivery', logo:'', stack:'Foundation', capability:'foundation.delivery',
+    logos:[
+      { src:'https://logos.opl.io.kr/i/argocd', alt:'Argo CD' },
+      { src:'https://logos.opl.io.kr/i/crossplane-non-typo', alt:'Crossplane' },
+    ],
+    description:'PFS capability가 아닌 Foundation 배포 실행 계층으로, Argo CD 기본 write-path와 Crossplane 선택적 provisioning adapter를 관리합니다.',
+    lifecycle:'Foundation native', lifecycleClass:'label-info', version:'contract v1', profile:'primary + optional', namespace:'argocd · crossplane-system',
   };
   logoUrl(logo:string):string{return /^https?:\/\//.test(logo)?logo:`https://logos.opl.io.kr/i/${logo}`;}
   open(id:string):void{this.vr.setTab(id);}

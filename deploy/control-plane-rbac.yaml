@@ -66,6 +66,10 @@ rules:
   - apiGroups: ["psmdb.percona.com"]
     resources: [perconaservermongodbs]
     verbs: [get, list, watch, create, patch, delete, deletecollection]
+  # 승인된 Valkey 관측 계약: 이 namespace의 ServiceMonitor만 선언·회수한다.
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: [servicemonitors]
+    verbs: [get, list, watch, create, patch, delete, deletecollection]
   - apiGroups: [""]
     resources: [secrets]
     verbs: [get, list, watch, create, patch, delete]

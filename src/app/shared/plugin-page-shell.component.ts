@@ -4,7 +4,9 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 export interface PluginPageHeaderModel {
   name: string;
   logo: string;
+  logos?: Array<{ src: string; alt: string }>;
   monogram?: string;
+  stack?: string;
   capability: string;
   description: string;
   lifecycle: string;
@@ -20,6 +22,24 @@ export interface PluginPageTab {
   label: string;
   disabled?: boolean;
   badge?: string | number;
+}
+
+/** Platform Delivery 엔진의 관리자 과업 중심 상세 화면 계약. */
+export type DeliveryAdminTabId =
+  | 'overview' | 'prerequisites' | 'install' | 'resources'
+  | 'configuration' | 'security' | 'upgrade' | 'events';
+
+export function deliveryAdminTabs(resourceLabel: string): PluginPageTab[] {
+  return [
+    { id: 'overview', label: 'Overview' },
+    { id: 'prerequisites', label: 'Prerequisites' },
+    { id: 'install', label: 'Install & Repair' },
+    { id: 'resources', label: resourceLabel },
+    { id: 'configuration', label: 'Configuration' },
+    { id: 'security', label: 'Security & Policy' },
+    { id: 'upgrade', label: 'Upgrade & Rollback' },
+    { id: 'events', label: 'Events & Audit' },
+  ];
 }
 
 /** PostgreSQL plugin이 확립한 PFS 상세 화면의 정본 11탭 계약. */
@@ -54,9 +74,17 @@ export function pfsPluginTabs(domainLabel: string): PluginPageTab[] {
   template: `
     <section class="pfs-plugin-head" [attr.aria-labelledby]="headingId">
       <div class="pfs-plugin-brand">
-        <div class="pfs-plugin-logo"><img *ngIf="model.logo" [src]="model.logo" [alt]="model.name" /><span *ngIf="!model.logo" class="pfs-plugin-monogram">{{ model.monogram || model.name.slice(0, 2) }}</span></div>
+        <div class="pfs-plugin-logo" [class.pfs-plugin-logo-pair]="model.logos?.length">
+          <ng-container *ngIf="model.logos?.length; else singleLogo">
+            <img *ngFor="let logo of model.logos" [src]="logo.src" [alt]="logo.alt" />
+          </ng-container>
+          <ng-template #singleLogo>
+            <img *ngIf="model.logo" [src]="model.logo" [alt]="model.name" />
+            <span *ngIf="!model.logo" class="pfs-plugin-monogram">{{ model.monogram || model.name.slice(0, 2) }}</span>
+          </ng-template>
+        </div>
         <div>
-          <span class="vl-eyebrow">PFS · {{ model.capability }}</span>
+          <span class="vl-eyebrow">{{ model.stack || 'PFS' }} · {{ model.capability }}</span>
           <h1 [id]="headingId">{{ model.name }}</h1>
           <p>{{ model.description }}</p>
         </div>
@@ -69,6 +97,23 @@ export function pfsPluginTabs(domainLabel: string): PluginPageTab[] {
       </dl>
     </section>
   `,
+  styles: [`
+    .pfs-plugin-logo-pair {
+      width: auto;
+      min-width: 3.4rem;
+      padding: 0.28rem 0.38rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.28rem;
+    }
+    .pfs-plugin-logo-pair img {
+      width: 1.35rem;
+      height: 1.35rem;
+      object-fit: contain;
+      flex: 0 0 auto;
+    }
+  `],
 })
 export class PluginPageHeaderComponent {
   @Input({ required: true }) model!: PluginPageHeaderModel;

@@ -1,4 +1,4 @@
-# Foundation 모듈 전용 읽기 권한 — CloudNativePG·OpenSearch operator·provisioning Claim·Foundation CRD.
+# Foundation 모듈 전용 읽기 권한 — CloudNativePG·OpenSearch operator·Platform Delivery·provisioning Claim·Foundation CRD.
 # cluster-reader(impersonate 포함) 본체와 분리한 최소권한 read-only ClusterRole.
 # 모듈 상태 카드(PG Cluster CR phase/primary/image, OpenSearch CR, Claim 목록)와
 # Host 연결 페이지(FoundationModel/FoundationModuleDescriptor 개수)가 데이터를 읽기 위함.
@@ -24,6 +24,9 @@ rules:
   - apiGroups: ["helm.crossplane.io","helm.m.crossplane.io"]
     resources: ["releases","providerconfigs","providerconfigusages"]
     verbs: ["get","list","watch"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications","appprojects","applicationsets"]
+    verbs: ["get","list","watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -31,3 +34,25 @@ metadata: { name: foundation-backing-read-system }
 roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: foundation-backing-read }
 subjects:
   - { kind: ServiceAccount, name: opensphere-foundation, namespace: opensphere-system }
+  - { kind: ServiceAccount, name: opensphere-foundation, namespace: opensphere-console }
+---
+# Platform Delivery의 Console 관리자 작업은 선언된 CR에만 제한한다.
+# Argo runtime/CRD/Secret/Project 설치와 Crossplane core/Provider package 설치는
+# 각각 Main Shell과 Cluster Manager HISS 소유이므로 이 역할에 포함하지 않는다.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: foundation-platform-delivery-admin }
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["get","list","watch","patch","update"]
+  - apiGroups: ["helm.crossplane.io","helm.m.crossplane.io"]
+    resources: ["providerconfigs"]
+    verbs: ["get","list","watch","create","patch","update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: foundation-platform-delivery-admins }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: foundation-platform-delivery-admin }
+subjects:
+  - { kind: Group, name: opensphere-console-admins, apiGroup: rbac.authorization.k8s.io }

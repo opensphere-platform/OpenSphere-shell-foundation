@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -38,6 +39,36 @@ func configuredSambaRealm(fm *unstructured.Unstructured) string {
 		return v
 	}
 	return "OPENSPHERE.LOCAL"
+}
+
+func configuredSambaValue(fm *unstructured.Unstructured, key, fallback string) string {
+	v, found, _ := unstructured.NestedString(fm.Object, "spec", "parameters", "samba", key)
+	v = strings.TrimSpace(v)
+	if found && v != "" {
+		return v
+	}
+	return fallback
+}
+
+// sambaOperandURL keeps FoundationModel access in the Foundation control-plane.
+// The separately signed plugin only renders the non-secret values supplied by
+// its lifecycle owner and therefore needs no FoundationModel RBAC.
+func sambaOperandURL(service string, fm *unstructured.Unstructured) string {
+	raw := strings.TrimSpace(service)
+	if !strings.Contains(raw, "://") {
+		raw = "http://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw + "/operand/manifests"
+	}
+	u.Path = strings.TrimRight(u.Path, "/") + "/operand/manifests"
+	q := u.Query()
+	q.Set("domain", configuredSambaRealm(fm))
+	q.Set("storageClass", configuredSambaValue(fm, "storageClass", "standard"))
+	q.Set("dnsForwarder", configuredSambaValue(fm, "dnsForwarder", "8.8.8.8"))
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 type identityEngineOpts struct {
@@ -147,7 +178,7 @@ func buildIdentityBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstruc
 	}
 	// samba operand = plugin 소유. enabled면 plugin에서 fetch해 라벨 스탬프 후 합류(disabled면 미포함→회수).
 	if engineEnabled(fm, "samba") {
-		sobjs, ferr := fetchPluginOperand("http://" + cfg.sambaPluginSvc + "/operand/manifests")
+		sobjs, ferr := fetchPluginOperand(sambaOperandURL(cfg.sambaPluginSvc, fm))
 		if ferr != nil {
 			return nil, fmt.Errorf("samba operand(plugin) 조회 실패: %w", ferr)
 		}

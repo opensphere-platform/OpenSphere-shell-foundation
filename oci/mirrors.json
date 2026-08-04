@@ -83,6 +83,13 @@
       ]
     },
     {
+      "name": "redis-exporter",
+      "edgeVersion": "1.75.0",
+      "versions": [
+        { "version": "1.75.0", "source": "ghcr.io/oliver006/redis_exporter:v1.75.0" }
+      ]
+    },
+    {
       "name": "apache-syncope",
       "edgeVersion": "4.1.1",
       "versions": [

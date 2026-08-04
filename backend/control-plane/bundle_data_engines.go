@@ -25,7 +25,7 @@ var psmdbGVK = schema.GroupVersionKind{Group: "psmdb.percona.com", Version: "v1"
 type dataEngineOpts struct {
 	version, image, storageClass, storageSize, resourceProfile string
 	cpuRequest, memoryRequest, cpuLimit, memoryLimit           string
-	authSecret, heap, persistenceMode                          string
+	authSecret, heap, persistenceMode, maxmemoryPolicy         string
 	replicas                                                   int64
 	monitoring, tls                                            bool
 	backup                                                     backupOpts
@@ -66,6 +66,11 @@ func dataEngineParams(fm *unstructured.Unstructured, cfg *config, id string) dat
 	}
 	o.version = pStr(p, "version", o.version)
 	o.image = imageWithTag(base, o.version)
+	// FoundationModel은 사람이 읽는 제품 버전만 보존하고, OCI 변형은
+	// control-plane의 canonical mirror tag로 매핑한다.
+	if id == "valkey" && o.version == "9.1.0" {
+		o.image = imageWithTag(base, "9.1.0-alpine")
+	}
 	o.storageClass = pStr(p, "storageClass", o.storageClass)
 	o.storageSize = pStr(p, "storageSize", o.storageSize)
 	o.resourceProfile = pStr(p, "resourceProfile", o.resourceProfile)
@@ -76,6 +81,7 @@ func dataEngineParams(fm *unstructured.Unstructured, cfg *config, id string) dat
 	o.authSecret = pStr(p, "authSecret", "")
 	o.heap = pStr(p, "heap", "-Xms1g -Xmx1g")
 	o.persistenceMode = pStr(p, "persistenceMode", "aof-everysec")
+	o.maxmemoryPolicy = pStr(p, "maxmemoryPolicy", "allkeys-lru")
 	o.replicas = pInt(p, "replicas", o.replicas)
 	o.monitoring = pBool(p, "monitoring", false)
 	o.tls = pBool(p, "tls", false)
@@ -144,17 +150,124 @@ func buildValkeyBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructu
 	if o.authSecret == "" {
 		return nil, fmt.Errorf("valkey authSecret is required")
 	}
-	c := map[string]interface{}{
-		"name": "valkey", "ports": []interface{}{map[string]interface{}{"name": "valkey", "containerPort": int64(6379)}},
-		"env":     []interface{}{map[string]interface{}{"name": "VALKEY_PASSWORD", "valueFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": o.authSecret, "key": "password"}}}},
-		"command": []interface{}{"sh", "-ec"}, "args": []interface{}{`exec valkey-server --appendonly yes --appendfsync everysec --requirepass "$VALKEY_PASSWORD"`},
-		"readinessProbe": map[string]interface{}{"exec": map[string]interface{}{"command": []interface{}{"sh", "-ec", `valkey-cli -a "$VALKEY_PASSWORD" ping | grep PONG`}}, "initialDelaySeconds": int64(5), "periodSeconds": int64(5)},
+	if o.replicas < 1 || o.replicas > 9 {
+		return nil, fmt.Errorf("valkey replicas must be in range 1..9")
 	}
-	return []*unstructured.Unstructured{
-		engineStatefulSet("valkey", valkeyName, ns, owner, o, c, "/data"),
-		engineService("valkey", valkeyName, ns, []interface{}{map[string]interface{}{"name": "valkey", "port": int64(6379), "targetPort": int64(6379)}}, owner),
-		engineNetworkPolicy("valkey", valkeyName, ns, owner, 6379),
-	}, nil
+	appendOnly, appendFsync := "yes", "everysec"
+	switch o.persistenceMode {
+	case "aof-always":
+		appendFsync = "always"
+	case "aof-everysec", "":
+	case "rdb-aof":
+	case "rdb":
+		appendOnly = "no"
+	default:
+		return nil, fmt.Errorf("unsupported valkey persistenceMode %q", o.persistenceMode)
+	}
+	allowedPolicies := map[string]bool{"noeviction": true, "allkeys-lru": true, "allkeys-lfu": true, "allkeys-random": true, "volatile-lru": true, "volatile-lfu": true, "volatile-ttl": true, "volatile-random": true}
+	if !allowedPolicies[o.maxmemoryPolicy] {
+		return nil, fmt.Errorf("unsupported valkey maxmemoryPolicy %q", o.maxmemoryPolicy)
+	}
+	start := fmt.Sprintf(`
+umask 077
+[ -f /data/users.acl ] || : > /data/users.acl
+COMMON="--bind 0.0.0.0 --port 6379 --dir /data --dbfilename dump.rdb --appenddirname appendonlydir --appendonly %s --appendfsync %s --aclfile /data/users.acl --requirepass $VALKEY_PASSWORD --maxmemory-policy %s"
+case "$HOSTNAME" in
+  *-0) exec valkey-server $COMMON ;;
+  *) exec valkey-server $COMMON --replicaof %s-0.%s-headless.%s.svc 6379 --masterauth "$VALKEY_PASSWORD" --replica-read-only yes ;;
+esac`, appendOnly, appendFsync, o.maxmemoryPolicy, valkeyName, valkeyName, ns)
+	labels := engineLabels("valkey", valkeyName)
+	passwordEnv := map[string]interface{}{"name": "VALKEY_PASSWORD", "valueFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": o.authSecret, "key": "password"}}}
+	valkey := map[string]interface{}{
+		"name": "valkey", "image": o.image,
+		"ports": []interface{}{map[string]interface{}{"name": "valkey", "containerPort": int64(6379)}},
+		"env": []interface{}{passwordEnv}, "command": []interface{}{"sh", "-ec"}, "args": []interface{}{start},
+		"resources": engineResources(o),
+		"securityContext": map[string]interface{}{"allowPrivilegeEscalation": false, "runAsNonRoot": true, "runAsUser": int64(1000), "runAsGroup": int64(1000), "capabilities": map[string]interface{}{"drop": []interface{}{"ALL"}}},
+		"volumeMounts": []interface{}{map[string]interface{}{"name": "data", "mountPath": "/data"}},
+		"startupProbe": map[string]interface{}{"exec": map[string]interface{}{"command": []interface{}{"sh", "-ec", `valkey-cli --no-auth-warning -a "$VALKEY_PASSWORD" ping | grep -qx PONG`}}, "failureThreshold": int64(30), "periodSeconds": int64(5)},
+		"readinessProbe": map[string]interface{}{"exec": map[string]interface{}{"command": []interface{}{"sh", "-ec", `valkey-cli --no-auth-warning -a "$VALKEY_PASSWORD" ping | grep -qx PONG`}}, "periodSeconds": int64(5)},
+		"livenessProbe": map[string]interface{}{"exec": map[string]interface{}{"command": []interface{}{"sh", "-ec", `valkey-cli --no-auth-warning -a "$VALKEY_PASSWORD" ping | grep -qx PONG`}}, "periodSeconds": int64(10), "failureThreshold": int64(6)},
+	}
+	containers := []interface{}{valkey}
+	if o.monitoring {
+		containers = append(containers, map[string]interface{}{
+			"name": "metrics", "image": cfg.valkeyExporterImage,
+			"ports": []interface{}{map[string]interface{}{"name": "metrics", "containerPort": int64(9121)}},
+			"env": []interface{}{map[string]interface{}{"name": "REDIS_ADDR", "value": "redis://127.0.0.1:6379"}, map[string]interface{}{"name": "REDIS_PASSWORD", "valueFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": o.authSecret, "key": "password"}}}},
+			"args": []interface{}{`--redis.addr=redis://127.0.0.1:6379`, `--web.listen-address=:9121`},
+			"resources": map[string]interface{}{"requests": map[string]interface{}{"cpu": "25m", "memory": "32Mi"}, "limits": map[string]interface{}{"cpu": "200m", "memory": "128Mi"}},
+			"securityContext": map[string]interface{}{"allowPrivilegeEscalation": false, "runAsNonRoot": true, "runAsUser": int64(59000), "runAsGroup": int64(59000), "capabilities": map[string]interface{}{"drop": []interface{}{"ALL"}}},
+			"readinessProbe": map[string]interface{}{"httpGet": map[string]interface{}{"path": "/metrics", "port": "metrics"}, "periodSeconds": int64(10)},
+		})
+	}
+	sts := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "apps/v1", "kind": "StatefulSet", "metadata": map[string]interface{}{"name": valkeyName, "namespace": ns},
+		"spec": map[string]interface{}{
+			"serviceName": valkeyName + "-headless", "replicas": o.replicas, "selector": map[string]interface{}{"matchLabels": labels},
+			"updateStrategy": map[string]interface{}{"type": "RollingUpdate"},
+			"template": map[string]interface{}{"metadata": map[string]interface{}{"labels": labels}, "spec": map[string]interface{}{
+				"imagePullSecrets": []interface{}{map[string]interface{}{"name": "opensphere-ghcr-pull"}}, "terminationGracePeriodSeconds": int64(60),
+				"securityContext": map[string]interface{}{"runAsNonRoot": true, "fsGroup": int64(1000), "fsGroupChangePolicy": "OnRootMismatch"},
+				"affinity": map[string]interface{}{"podAntiAffinity": map[string]interface{}{"preferredDuringSchedulingIgnoredDuringExecution": []interface{}{map[string]interface{}{"weight": int64(100), "podAffinityTerm": map[string]interface{}{"labelSelector": map[string]interface{}{"matchLabels": labels}, "topologyKey": "kubernetes.io/hostname"}}}}},
+				"containers": containers,
+			}},
+			"volumeClaimTemplates": []interface{}{map[string]interface{}{"metadata": map[string]interface{}{"name": "data", "labels": map[string]interface{}{lblEngine: "valkey"}}, "spec": map[string]interface{}{"accessModes": []interface{}{"ReadWriteOnce"}, "storageClassName": o.storageClass, "resources": map[string]interface{}{"requests": map[string]interface{}{"storage": o.storageSize}}}}},
+		},
+	}}
+	stampLabels(sts, "data", owner)
+	markEngine(sts, "valkey")
+	objects := []*unstructured.Unstructured{
+		sts,
+		valkeyService(valkeyName+"-headless", ns, owner, labels, true, o.monitoring),
+		valkeyService(valkeyName, ns, owner, map[string]interface{}{"statefulset.kubernetes.io/pod-name": valkeyName + "-0"}, false, false),
+		valkeyService(valkeyName+"-read", ns, owner, labels, false, false),
+		valkeyNetworkPolicy(ns, owner, labels, o.monitoring),
+	}
+	if o.monitoring {
+		objects = append(objects, valkeyServiceMonitor(ns, owner))
+	}
+	return objects, nil
+}
+
+func valkeyService(name, ns, owner string, selector map[string]interface{}, headless, metrics bool) *unstructured.Unstructured {
+	labels := map[string]interface{}{lblEngine: "valkey", "app.kubernetes.io/name": name}
+	ports := []interface{}{map[string]interface{}{"name": "valkey", "port": int64(6379), "targetPort": "valkey"}}
+	if metrics {
+		ports = append(ports, map[string]interface{}{"name": "metrics", "port": int64(9121), "targetPort": "metrics"})
+		labels["foundation.opensphere.io/metrics"] = "valkey"
+	}
+	spec := map[string]interface{}{"selector": selector, "ports": ports}
+	if headless {
+		spec["clusterIP"] = "None"
+		spec["publishNotReadyAddresses"] = true
+	}
+	u := &unstructured.Unstructured{Object: map[string]interface{}{"apiVersion": "v1", "kind": "Service", "metadata": map[string]interface{}{"name": name, "namespace": ns, "labels": labels}, "spec": spec}}
+	stampLabels(u, "data", owner)
+	markEngine(u, "valkey")
+	return u
+}
+
+func valkeyNetworkPolicy(ns, owner string, labels map[string]interface{}, monitoring bool) *unstructured.Unstructured {
+	ports := []interface{}{map[string]interface{}{"protocol": "TCP", "port": int64(6379)}}
+	if monitoring {
+		ports = append(ports, map[string]interface{}{"protocol": "TCP", "port": int64(9121)})
+	}
+	allowed := map[string]interface{}{"matchExpressions": []interface{}{map[string]interface{}{"key": "kubernetes.io/metadata.name", "operator": "In", "values": []interface{}{ns, "opensphere-console", "monitoring"}}}}
+	u := &unstructured.Unstructured{Object: map[string]interface{}{"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": map[string]interface{}{"name": valkeyName + "-internal", "namespace": ns}, "spec": map[string]interface{}{"podSelector": map[string]interface{}{"matchLabels": labels}, "policyTypes": []interface{}{"Ingress"}, "ingress": []interface{}{map[string]interface{}{"from": []interface{}{map[string]interface{}{"namespaceSelector": allowed}}, "ports": ports}}}}}
+	stampLabels(u, "data", owner)
+	markEngine(u, "valkey")
+	return u
+}
+
+func valkeyServiceMonitor(ns, owner string) *unstructured.Unstructured {
+	u := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "monitoring.coreos.com/v1", "kind": "ServiceMonitor", "metadata": map[string]interface{}{"name": valkeyName, "namespace": ns},
+		"spec": map[string]interface{}{"namespaceSelector": map[string]interface{}{"matchNames": []interface{}{ns}}, "selector": map[string]interface{}{"matchLabels": map[string]interface{}{"foundation.opensphere.io/metrics": "valkey"}}, "endpoints": []interface{}{map[string]interface{}{"port": "metrics", "path": "/metrics", "interval": "15s", "scrapeTimeout": "10s"}}},
+	}}
+	stampLabels(u, "data", owner)
+	markEngine(u, "valkey")
+	return u
 }
 
 func buildRustFSBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructured.Unstructured, error) {

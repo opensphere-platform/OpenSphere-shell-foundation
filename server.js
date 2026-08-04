@@ -6,6 +6,8 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const net = require('net');
+const crypto = require('crypto');
 const { WebSocketServer, WebSocket } = require('ws');
 const COOKIE = 'osng_token'; // 브라우저 WS는 커스텀 헤더를 못 실음 → 신원 토큰을 HttpOnly 쿠키로 전달
 // ⚠️ 'bearer' 쿠키는 Console Supabase access token이 아님 — 읽지 말 것.
@@ -53,6 +55,9 @@ const FOUNDATION_AUDIT_URL = (process.env.FOUNDATION_AUDIT_URL
   || 'http://opensphere-console-dupa-controller.opensphere-console.svc.cluster.local:8080').replace(/\/$/, '');
 const SAMBA_BOOTSTRAP_SECRET = process.env.SAMBA_BOOTSTRAP_SECRET || 'foundation-identity-samba-creds';
 const SAMBA_BOOTSTRAP_SECRET_KEY = 'domain-password';
+const VALKEY_SERVICE = process.env.VALKEY_SERVICE || `foundation-data-valkey.${FND_NS}.svc`;
+const VALKEY_PORT = Number(process.env.VALKEY_PORT || 6379);
+const VALKEY_DEFAULT_SECRET = 'foundation-data-valkey-auth';
 const FOUNDATION_API = '/apis/foundation.opensphere.io/v1alpha1';
 const HIS_STATUS_SCHEMA = 'his-status.opensphere.io/v1alpha1';
 const FOUNDATION_CORE_CRDS = Object.freeze([
@@ -73,6 +78,7 @@ const FOUNDATION_ENGINE_MODEL = Object.freeze({
   rustfs: 'data',
 });
 const FOUNDATION_CLAIM_MODELS = Object.freeze(['identity', 'data']);
+const FOUNDATION_BOOTSTRAP_TEMPLATE_ID = 'foundation-control-plane-bootstrap';
 const K8S_NAME_RE = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
 function k8sGroups(groups) {
   return [...new Set((groups || []).map((role) => K8S_GROUP_BY_CONSOLE_ROLE[role]).filter(Boolean))];
@@ -226,6 +232,16 @@ async function publishFoundationAudit(actor, action, target, result, reason) {
   }
 }
 async function requireFoundationLifecycle(rawToken) {
+  const body = await platformReadinessAuthority(rawToken);
+  const prerequisites = Array.isArray(body.prerequisites) ? body.prerequisites : [];
+  const clusterManager = prerequisites.find((item) => item.key === 'cluster-manager');
+  const hisBinding = prerequisites.find((item) => item.key === 'his-binding');
+  if (!clusterManager?.ready || !hisBinding?.ready) {
+    const reason = clusterManager?.ready ? 'his_preflight_not_ready' : 'cluster_manager_not_activated';
+    throw { code: 409, msg: `Foundation mutation gate closed: ${reason}` };
+  }
+}
+async function platformReadinessAuthority(rawToken) {
   let response;
   try {
     response = await fetch(`${FOUNDATION_AUDIT_URL}/api/admin/platform-readiness/status`, {
@@ -237,12 +253,119 @@ async function requireFoundationLifecycle(rawToken) {
   }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw { code: response.status, msg: body.error || `Foundation lifecycle HTTP ${response.status}` };
-  const prerequisites = Array.isArray(body.prerequisites) ? body.prerequisites : [];
-  const clusterManager = prerequisites.find((item) => item.key === 'cluster-manager');
-  const hisBinding = prerequisites.find((item) => item.key === 'his-binding');
-  if (!clusterManager?.ready || !hisBinding?.ready) {
-    const reason = clusterManager?.ready ? 'his_preflight_not_ready' : 'cluster_manager_not_activated';
-    throw { code: 409, msg: `Foundation mutation gate closed: ${reason}` };
+  return body;
+}
+function foundationEstablishmentView(body) {
+  if (!body || body.kind !== 'PlatformReadinessStatus') {
+    throw { code: 502, msg: 'Platform lifecycle authority returned an invalid kind' };
+  }
+  if (body.pfs?.schema !== 'foundation-establishment.opensphere.io/v1alpha1') {
+    throw { code: 502, msg: 'Platform lifecycle authority did not return the canonical PFS establishment contract' };
+  }
+  if (!['NotEstablished', 'Establishing', 'Established', 'Blocked'].includes(body.pfs.phase)) {
+    throw { code: 502, msg: 'Platform lifecycle authority returned an invalid PFS phase' };
+  }
+  return {
+    schema: 'foundation-lifecycle-view.opensphere.io/v1alpha1',
+    observedAt: body.observedAt || '',
+    supportProfile: {
+      phase: body.phase || 'Unknown',
+      ready: body.ready === true,
+      declared: body.profile?.declared === true,
+      name: body.profile?.name || '',
+    },
+    extension: {
+      phase: body.pfs.extensionPhase || 'NotInstalled',
+      desiredState: body.pfs.extensionDesiredState || 'Absent',
+    },
+    pfs: body.pfs,
+    prerequisites: Array.isArray(body.prerequisites) ? body.prerequisites : [],
+    capabilities: Array.isArray(body.capabilities) ? body.capabilities : [],
+    admission: {
+      foundationActivationAllowed: body.admission?.foundationActivationAllowed === true,
+      pfsPluginActivationAllowed: body.admission?.pfsPluginActivationAllowed === true,
+      reason: body.admission?.reason || '',
+    },
+  };
+}
+async function foundationEstablishmentStatus(req, res) {
+  if (req.method !== 'GET') return jsonRes(res, 405, { error: 'method not allowed' });
+  const rawToken = requestToken(req);
+  try {
+    await verifyToken(rawToken);
+    return jsonRes(res, 200, foundationEstablishmentView(await platformReadinessAuthority(rawToken)));
+  } catch (e) {
+    return jsonRes(res, e.code || 503, { error: e.msg || e.message || 'Foundation lifecycle authority unavailable' });
+  }
+}
+async function consoleAdminRead(pathname, rawToken) {
+  let response;
+  try {
+    response = await fetch(`${CONSOLE_IDENTITY_URL}${pathname}`, {
+      headers: { authorization: `Bearer ${rawToken}`, accept: 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    throw { code: 503, msg: 'Console governed change authority unavailable' };
+  }
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw { code: response.status, msg: body.error || `Console change authority HTTP ${response.status}` };
+  return body;
+}
+function foundationBootstrapPlanView(lifecycle, template, requestStatus) {
+  if (lifecycle?.schema !== 'foundation-lifecycle-view.opensphere.io/v1alpha1') {
+    throw { code: 502, msg: 'Foundation lifecycle view is unavailable' };
+  }
+  if (template?.id !== FOUNDATION_BOOTSTRAP_TEMPLATE_ID
+    || template?.consumerId !== 'foundation-bootstrap'
+    || template?.action !== 'apply'
+    || template?.target !== 'foundation-control-plane/v1alpha1') {
+    throw { code: 502, msg: 'Foundation bootstrap template does not match the closed release contract' };
+  }
+  const current = requestStatus?.current || null;
+  const requestActive = Boolean(current && !['Completed', 'Failed', 'NeedsAttention'].includes(current.phase));
+  const established = lifecycle.pfs?.established === true;
+  const supportReady = lifecycle.supportProfile?.ready === true;
+  return {
+    schema: 'foundation-bootstrap-plan.opensphere.io/v1alpha1',
+    checkedAt: requestStatus?.checkedAt || new Date().toISOString(),
+    readyToRequest: supportReady && !established && !requestActive,
+    changeControlUrl: `/manage/change-control?template=${FOUNDATION_BOOTSTRAP_TEMPLATE_ID}&returnTo=${encodeURIComponent('/p/foundation')}`,
+    gate: {
+      supportProfileReady: supportReady,
+      pfsEstablished: established,
+      reason: established ? 'PFSAlreadyEstablished'
+        : !supportReady ? 'PlatformSupportProfileRequired'
+          : requestActive ? 'BootstrapRequestInProgress' : '',
+    },
+    template: {
+      id: template.id,
+      displayName: template.displayName,
+      target: template.target,
+      reasonPlaceholder: template.reasonPlaceholder,
+      desiredState: template.desiredState,
+    },
+    request: current,
+    blockers: Array.isArray(lifecycle.pfs?.blockers) ? lifecycle.pfs.blockers : [],
+  };
+}
+async function foundationBootstrapPlan(req, res) {
+  if (req.method !== 'GET') return jsonRes(res, 405, { error: 'method not allowed' });
+  const rawToken = requestToken(req);
+  try {
+    await verifyToken(rawToken);
+    const [readiness, template, requestStatus] = await Promise.all([
+      platformReadinessAuthority(rawToken),
+      consoleAdminRead(`/api/platform/change-templates/${FOUNDATION_BOOTSTRAP_TEMPLATE_ID}`, rawToken),
+      consoleAdminRead(`/api/platform/change-templates/${FOUNDATION_BOOTSTRAP_TEMPLATE_ID}/status`, rawToken),
+    ]);
+    return jsonRes(res, 200, foundationBootstrapPlanView(
+      foundationEstablishmentView(readiness),
+      template,
+      requestStatus,
+    ));
+  } catch (e) {
+    return jsonRes(res, e.code || 503, { error: e.msg || e.message || 'Foundation bootstrap plan unavailable' });
   }
 }
 async function foundationOwnerActor(req) {
@@ -504,12 +627,86 @@ async function identityDirectoryClaimRelease(req, res) {
   }
 }
 
+function sambaBootstrapSecretEvidence(result) {
+  const secretRef = { namespace: FND_NS, name: SAMBA_BOOTSTRAP_SECRET, key: SAMBA_BOOTSTRAP_SECRET_KEY };
+  if (result.status === 404) return { exists: false, secretRef };
+  if (!result.ok) throw { code: result.status, msg: k8sFailure(result) };
+  return { exists: true, secretRef };
+}
+
+function sambaReadinessProjection(modelResult, secretResult) {
+  const bootstrapSecret = sambaBootstrapSecretEvidence(secretResult);
+  if (modelResult.status === 404) {
+    return {
+      authority: 'foundation',
+      model: { found: false, status: 404, phase: 'Missing', engineOpt: 'disabled' },
+      config: { domain: 'OPENSPHERE.LOCAL', replicas: 1, storageClass: 'standard', dnsForwarder: '8.8.8.8' },
+      backup: {},
+      bootstrapSecret,
+    };
+  }
+  if (!modelResult.ok) throw { code: modelResult.status, msg: k8sFailure(modelResult) };
+  const fm = modelResult.json || {};
+  const samba = fm.spec?.parameters?.samba || {};
+  return {
+    authority: 'foundation',
+    model: {
+      found: true,
+      status: 200,
+      phase: fm.status?.phase || 'Unknown',
+      observed: Array.isArray(fm.status?.observed) ? fm.status.observed.slice(0, 64) : [],
+      ldapURL: fm.status?.ldapURL || `ldap://foundation-identity-samba.${FND_NS}.svc:389`,
+      directoryRealm: fm.status?.directoryRealm || '',
+      controlPlane: fm.status?.controlPlane || '',
+      observedAt: fm.status?.observedAt || '',
+      engineOpt: fm.spec?.parameters?.engines?.samba || 'enabled',
+    },
+    config: {
+      domain: samba.domain || 'OPENSPHERE.LOCAL',
+      domainSource: samba.domain ? 'FoundationModel.spec.parameters.samba' : 'plugin default',
+      replicas: 1,
+      replicasSource: samba.replicas ? 'FoundationModel.spec.parameters.samba' : 'plugin default',
+      storageClass: samba.storageClass || 'standard',
+      storageClassSource: samba.storageClass ? 'FoundationModel.spec.parameters.samba' : 'plugin default',
+      dnsForwarder: samba.dnsForwarder || '8.8.8.8',
+      dnsForwarderSource: samba.dnsForwarder ? 'FoundationModel.spec.parameters.samba' : 'plugin default',
+    },
+    backup: samba.backup || {},
+    bootstrapSecret,
+  };
+}
+
+async function sambaReadiness(req, res) {
+  if (req.method !== 'GET') return jsonRes(res, 405, { error: 'read-only endpoint' });
+  let actor;
+  try { actor = await verifyToken(requestToken(req)); requireConsoleAdmin(actor); }
+  catch (e) { return jsonRes(res, e.code || 401, { error: e.msg || 'unauthorized' }); }
+  try {
+    const [modelResult, secretResult] = await Promise.all([
+      k8sJson('GET', `${FOUNDATION_API}/foundationmodels/identity`),
+      k8sJson('GET', `/api/v1/namespaces/${FND_NS}/secrets/${SAMBA_BOOTSTRAP_SECRET}`, undefined, actor),
+    ]);
+    return jsonRes(res, 200, sambaReadinessProjection(modelResult, secretResult));
+  } catch (e) {
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 500, { error: e.msg || e.message || String(e) });
+  }
+}
+
 async function saveSambaBootstrapSecret(req, res) {
   let actor;
   try { actor = await verifyToken(requestToken(req)); }
   catch (e) { return jsonRes(res, e.code || 401, { error: e.msg || 'unauthorized' }); }
   try { requireConsoleAdmin(actor); }
   catch (e) { return jsonRes(res, e.code || 403, { error: e.msg || 'forbidden' }); }
+  const path = `/api/v1/namespaces/${FND_NS}/secrets`;
+  if (req.method === 'GET') {
+    try {
+      const evidence = sambaBootstrapSecretEvidence(await k8sJson('GET', `${path}/${SAMBA_BOOTSTRAP_SECRET}`, undefined, actor));
+      return jsonRes(res, 200, evidence);
+    } catch (e) {
+      return jsonRes(res, typeof e.code === 'number' ? e.code : 500, { error: e.msg || e.message || String(e) });
+    }
+  }
   if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
   let body;
   try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); }
@@ -527,7 +724,6 @@ async function saveSambaBootstrapSecret(req, res) {
     type: 'Opaque',
     stringData: { [SAMBA_BOOTSTRAP_SECRET_KEY]: password },
   };
-  const path = `/api/v1/namespaces/${FND_NS}/secrets`;
   let r = await k8sJson('POST', path, obj, actor);
   if (r.status === 409) {
     r = await k8sJson('PATCH', `${path}/${SAMBA_BOOTSTRAP_SECRET}`, {
@@ -537,7 +733,7 @@ async function saveSambaBootstrapSecret(req, res) {
   }
   console.log(`[audit] user=${actor.username} action=samba-bootstrap-secret-upsert target=${FND_NS}/${SAMBA_BOOTSTRAP_SECRET} status=${r.status} ${new Date().toISOString()}`);
   if (!r.ok) return jsonRes(res, r.status, { error: r.json?.message || r.json?.error || `kubernetes HTTP ${r.status}` });
-  return jsonRes(res, 200, { ok: true, secretRef: { namespace: FND_NS, name: SAMBA_BOOTSTRAP_SECRET, key: SAMBA_BOOTSTRAP_SECRET_KEY } });
+  return jsonRes(res, 200, { ok: true, ...sambaBootstrapSecretEvidence(r) });
 }
 
 // HIS의 운영·판정 소유자는 Cluster Manager다. Foundation은 자신의 승인된 API base 안에서
@@ -705,6 +901,273 @@ function serveFrom(root, rel, res) {
   });
 }
 
+// ── Valkey PFSS management boundary ───────────────────────────────────────
+// Browser가 pods/exec나 raw TCP를 직접 사용하지 않는다. 이 경계는 Console 신원을
+// 검증하고 exact Secret 하나만 읽은 뒤 allowlisted RESP 명령만 수행한다.
+class RespNeedMore extends Error {}
+class RespServerError extends Error {}
+function respLine(buffer, offset) {
+  const end = buffer.indexOf('\r\n', offset);
+  if (end < 0) throw new RespNeedMore();
+  return [buffer.subarray(offset, end).toString('utf8'), end + 2];
+}
+function parseResp(buffer, offset = 0) {
+  if (offset >= buffer.length) throw new RespNeedMore();
+  const type = String.fromCharCode(buffer[offset]);
+  let line, next;
+  if (['+', '-', ':', '$', '*'].includes(type)) [line, next] = respLine(buffer, offset + 1);
+  if (type === '+') return { value: line, next };
+  if (type === '-') return { value: new RespServerError(line), next };
+  if (type === ':') return { value: Number(line), next };
+  if (type === '$') {
+    const length = Number(line);
+    if (length === -1) return { value: null, next };
+    if (!Number.isInteger(length) || length < 0 || buffer.length < next + length + 2) throw new RespNeedMore();
+    if (buffer[next + length] !== 13 || buffer[next + length + 1] !== 10) throw new RespServerError('invalid RESP bulk terminator');
+    return { value: buffer.subarray(next, next + length), next: next + length + 2 };
+  }
+  if (type === '*') {
+    const count = Number(line);
+    if (count === -1) return { value: null, next };
+    if (!Number.isInteger(count) || count < 0 || count > 100000) throw new RespServerError('invalid RESP array length');
+    const values = [];
+    let cursor = next;
+    for (let i = 0; i < count; i++) {
+      const item = parseResp(buffer, cursor);
+      values.push(item.value);
+      cursor = item.next;
+    }
+    return { value: values, next: cursor };
+  }
+  throw new RespServerError(`unsupported RESP type ${type}`);
+}
+function encodeRespCommand(args) {
+  const parts = [Buffer.from(`*${args.length}\r\n`)];
+  for (const arg of args) {
+    const value = Buffer.isBuffer(arg) ? arg : Buffer.from(String(arg), 'utf8');
+    parts.push(Buffer.from(`$${value.length}\r\n`), value, Buffer.from('\r\n'));
+  }
+  return Buffer.concat(parts);
+}
+function valkeyRun(password, db, commands, socketFactory = () => net.createConnection({ host: VALKEY_SERVICE, port: VALKEY_PORT })) {
+  const all = [['AUTH', password], ...(db === undefined || db === null ? [] : [['SELECT', String(db)]]), ...commands];
+  return new Promise((resolve, reject) => {
+    const socket = socketFactory();
+    let pending = Buffer.alloc(0);
+    let offset = 0;
+    const results = [];
+    let settled = false;
+    const finish = (err, value) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      if (err) reject(err); else resolve(value);
+    };
+    socket.setTimeout(5000, () => finish(new Error('Valkey command timeout')));
+    socket.on('error', (error) => finish(error));
+    socket.on('connect', () => socket.write(Buffer.concat(all.map(encodeRespCommand))));
+    socket.on('data', (chunk) => {
+      pending = offset ? Buffer.concat([pending.subarray(offset), chunk]) : Buffer.concat([pending, chunk]);
+      offset = 0;
+      try {
+        while (results.length < all.length) {
+          const item = parseResp(pending, offset);
+          offset = item.next;
+          if (item.value instanceof RespServerError) return finish(item.value);
+          results.push(item.value);
+        }
+        finish(null, results.slice(all.length - commands.length));
+      } catch (error) {
+        if (!(error instanceof RespNeedMore)) finish(error);
+      }
+    });
+  });
+}
+function respText(value) {
+  if (Buffer.isBuffer(value)) return value.toString('utf8');
+  if (Array.isArray(value)) return value.map(respText);
+  return value;
+}
+function parseInfo(value) {
+  const out = {};
+  for (const line of String(respText(value) || '').split(/\r?\n/)) {
+    if (!line || line.startsWith('#')) continue;
+    const i = line.indexOf(':');
+    if (i > 0) out[line.slice(0, i)] = line.slice(i + 1);
+  }
+  return out;
+}
+function sanitizeAclLine(value) {
+  return String(respText(value) || '').replace(/#[a-f0-9]{64}/gi, '#<password-hash>');
+}
+function requireValkeyDb(value) {
+  const db = Number(value ?? 0);
+  if (!Number.isInteger(db) || db < 0 || db > 15) throw { code: 400, msg: 'database must be an integer in range 0..15' };
+  return db;
+}
+function requireValkeyKey(value) {
+  const key = String(value ?? '');
+  if (!key || Buffer.byteLength(key, 'utf8') > 512 || key.includes('\0')) throw { code: 400, msg: 'key must be 1..512 UTF-8 bytes without NUL' };
+  return key;
+}
+async function valkeyContext(actor) {
+  const model = await k8sJson('GET', `${FOUNDATION_API}/foundationmodels/data`);
+  if (!model.ok) throw { code: model.status, msg: k8sFailure(model) };
+  if (model.json?.spec?.parameters?.engines?.valkey !== 'enabled') throw { code: 409, msg: 'Valkey engine is not enabled' };
+  const cfg = model.json?.spec?.parameters?.dataEngines?.valkey || {};
+  const secretName = requireK8sName(cfg.authSecret || VALKEY_DEFAULT_SECRET);
+  const secret = await k8sJson('GET', `/api/v1/namespaces/${FND_NS}/secrets/${secretName}`, undefined, actor);
+  if (!secret.ok) throw { code: secret.status, msg: `Valkey credential unavailable: ${k8sFailure(secret)}` };
+  const encoded = secret.json?.data?.password;
+  if (!encoded) throw { code: 409, msg: `Secret/${secretName} has no password key` };
+  return { model: model.json, config: cfg, secretName, password: Buffer.from(encoded, 'base64').toString('utf8') };
+}
+async function valkeyAdminActor(req, aal2 = false) {
+  const actor = await verifyToken(requestToken(req));
+  return aal2 ? requireFoundationOwner(actor) : requireConsoleAdmin(actor);
+}
+async function valkeySummary(req, res) {
+  if (req.method !== 'GET') return jsonRes(res, 405, { error: 'read-only endpoint' });
+  try {
+    const actor = await valkeyAdminActor(req);
+    const ctx = await valkeyContext(actor);
+    const [server, clients, memory, stats, replication, persistence, keyspace, dbsize, config, acl, aclLog] = await valkeyRun(ctx.password, 0, [
+      ['INFO', 'server'], ['INFO', 'clients'], ['INFO', 'memory'], ['INFO', 'stats'], ['INFO', 'replication'], ['INFO', 'persistence'], ['INFO', 'keyspace'],
+      ['DBSIZE'], ['CONFIG', 'GET', 'maxmemory', 'maxmemory-policy', 'appendonly', 'appendfsync'], ['ACL', 'LIST'], ['ACL', 'LOG', '20'],
+    ]);
+    const sections = { ...parseInfo(server), ...parseInfo(clients), ...parseInfo(memory), ...parseInfo(stats), ...parseInfo(replication), ...parseInfo(persistence), ...parseInfo(keyspace) };
+    const configPairs = respText(config) || [];
+    const configView = {};
+    for (let i = 0; i < configPairs.length; i += 2) configView[configPairs[i]] = configPairs[i + 1];
+    const databases = Object.entries(sections).filter(([key]) => /^db\d+$/.test(key)).map(([name, raw]) => ({ name, raw, ...Object.fromEntries(String(raw).split(',').map((item) => item.split('='))) }));
+    return jsonRes(res, 200, {
+      authority: 'Valkey RESP allowlist', observedAt: new Date().toISOString(), version: sections.valkey_version || sections.redis_version || ctx.config.version || 'unknown',
+      role: sections.role || 'unknown', uptimeSeconds: Number(sections.uptime_in_seconds || 0), clients: Number(sections.connected_clients || 0), blockedClients: Number(sections.blocked_clients || 0),
+      usedMemory: Number(sections.used_memory || 0), usedMemoryHuman: sections.used_memory_human || '—', peakMemoryHuman: sections.used_memory_peak_human || '—', maxmemoryPolicy: configView['maxmemory-policy'] || ctx.config.maxmemoryPolicy || 'unknown',
+      commandsProcessed: Number(sections.total_commands_processed || 0), opsPerSec: Number(sections.instantaneous_ops_per_sec || 0), hits: Number(sections.keyspace_hits || 0), misses: Number(sections.keyspace_misses || 0), evictedKeys: Number(sections.evicted_keys || 0), expiredKeys: Number(sections.expired_keys || 0),
+      connectedReplicas: Number(sections.connected_slaves || 0), masterLinkStatus: sections.master_link_status || (sections.role === 'master' ? 'self' : 'unknown'), masterReplicationOffset: Number(sections.master_repl_offset || 0), replicaReplicationOffset: Number(sections.slave_repl_offset || 0),
+      persistence: { aofEnabled: sections.aof_enabled === '1', aofRewriteStatus: sections.aof_last_bgrewrite_status || 'n/a', rdbSaveStatus: sections.rdb_last_bgsave_status || 'n/a', loading: sections.loading === '1' },
+      dbsize: Number(dbsize || 0), databases, config: configView, acl: (respText(acl) || []).map(sanitizeAclLine), aclLog: respText(aclLog) || [],
+      desired: ctx.config, secretRef: { namespace: FND_NS, name: ctx.secretName, key: 'password' },
+    });
+  } catch (error) { return jsonRes(res, error.code || 502, { error: error.msg || error.message || String(error) }); }
+}
+async function valkeyScan(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  try {
+    const actor = await valkeyAdminActor(req);
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['db', 'cursor', 'pattern', 'count', 'type']);
+    const ctx = await valkeyContext(actor);
+    const db = requireValkeyDb(body.db);
+    const cursor = /^\d+$/.test(String(body.cursor ?? '0')) ? String(body.cursor ?? '0') : '0';
+    const pattern = String(body.pattern || '*');
+    if (Buffer.byteLength(pattern, 'utf8') > 128) throw { code: 400, msg: 'pattern is limited to 128 bytes' };
+    const count = Math.max(1, Math.min(200, Number(body.count || 50)));
+    const type = String(body.type || '');
+    if (type && !['string', 'list', 'set', 'zset', 'hash', 'stream'].includes(type)) throw { code: 400, msg: 'unsupported key type filter' };
+    const command = ['SCAN', cursor, 'MATCH', pattern, 'COUNT', String(count), ...(type ? ['TYPE', type] : [])];
+    const [scan] = await valkeyRun(ctx.password, db, [command]);
+    const next = String(respText(scan?.[0]) || '0');
+    const names = (scan?.[1] || []).map(respText);
+    const probes = names.flatMap((name) => [['TYPE', name], ['PTTL', name], ['MEMORY', 'USAGE', name]]);
+    const probeValues = probes.length ? await valkeyRun(ctx.password, db, probes) : [];
+    const keys = names.map((name, index) => ({ name, type: respText(probeValues[index * 3]) || 'unknown', ttlMs: Number(probeValues[index * 3 + 1] ?? -2), memoryBytes: probeValues[index * 3 + 2] == null ? null : Number(probeValues[index * 3 + 2]) }));
+    return jsonRes(res, 200, { db, cursor: next, complete: next === '0', count: keys.length, keys });
+  } catch (error) { return jsonRes(res, error.code || 502, { error: error.msg || error.message || String(error) }); }
+}
+async function valkeyKey(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  try {
+    const actor = await valkeyAdminActor(req);
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['db', 'key']);
+    const ctx = await valkeyContext(actor);
+    const db = requireValkeyDb(body.db), key = requireValkeyKey(body.key);
+    const [typeRaw, ttl, memory, encoding] = await valkeyRun(ctx.password, db, [['TYPE', key], ['PTTL', key], ['MEMORY', 'USAGE', key], ['OBJECT', 'ENCODING', key]]);
+    const type = String(respText(typeRaw) || 'none');
+    let command;
+    if (type === 'string') command = ['GETRANGE', key, '0', '65535'];
+    if (type === 'hash') command = ['HSCAN', key, '0', 'COUNT', '100'];
+    if (type === 'list') command = ['LRANGE', key, '0', '99'];
+    if (type === 'set') command = ['SSCAN', key, '0', 'COUNT', '100'];
+    if (type === 'zset') command = ['ZRANGE', key, '0', '99', 'WITHSCORES'];
+    if (type === 'stream') command = ['XRANGE', key, '-', '+', 'COUNT', '50'];
+    const value = command ? (await valkeyRun(ctx.password, db, [command]))[0] : null;
+    return jsonRes(res, 200, { db, key, type, ttlMs: Number(ttl ?? -2), memoryBytes: memory == null ? null : Number(memory), encoding: respText(encoding), value: respText(value), truncated: type === 'string' && Buffer.isBuffer(value) && value.length >= 65536 });
+  } catch (error) { return jsonRes(res, error.code || 502, { error: error.msg || error.message || String(error) }); }
+}
+async function valkeyMutation(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  try {
+    const actor = await valkeyAdminActor(req, true);
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['action', 'db', 'key', 'value', 'ttlSeconds', 'reason']);
+    const reason = requireOwnerReason(body.reason), action = String(body.action || '');
+    const ctx = await valkeyContext(actor), db = requireValkeyDb(body.db), key = requireValkeyKey(body.key);
+    let command;
+    if (action === 'set') {
+      const value = String(body.value ?? '');
+      if (Buffer.byteLength(value, 'utf8') > 65536) throw { code: 400, msg: 'value is limited to 64 KiB' };
+      const ttl = Number(body.ttlSeconds || 0);
+      command = ['SET', key, value, ...(ttl > 0 ? ['EX', String(Math.floor(ttl))] : [])];
+    } else if (action === 'delete') command = ['DEL', key];
+    else if (action === 'expire') command = ['EXPIRE', key, String(Math.max(1, Math.floor(Number(body.ttlSeconds || 0))))];
+    else if (action === 'persist') command = ['PERSIST', key];
+    else throw { code: 400, msg: 'unsupported mutation action' };
+    await publishFoundationAudit(actor, `valkey-key-${action}`, `Valkey/db${db}/${key}`, 'attempt', reason);
+    const [result] = await valkeyRun(ctx.password, db, [command]);
+    await publishFoundationAudit(actor, `valkey-key-${action}`, `Valkey/db${db}/${key}`, 'accepted', reason);
+    return jsonRes(res, 200, { ok: true, action, result: respText(result) });
+  } catch (error) { return jsonRes(res, error.code || 502, { error: error.msg || error.message || String(error) }); }
+}
+async function valkeyAcl(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  try {
+    const actor = await valkeyAdminActor(req, true);
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['action', 'username', 'password', 'keyPattern', 'profile', 'reason']);
+    const reason = requireOwnerReason(body.reason), action = String(body.action || ''), username = String(body.username || '');
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(username) || username === 'default') throw { code: 400, msg: 'managed ACL username is invalid or protected' };
+    const ctx = await valkeyContext(actor);
+    let commands;
+    if (action === 'setuser') {
+      const password = String(body.password || '');
+      if (password.length < 12 || password.length > 128 || /\s/.test(password)) throw { code: 400, msg: 'ACL password must be 12..128 non-space characters' };
+      const pattern = String(body.keyPattern || '*');
+      if (!pattern || pattern.length > 128 || /\s/.test(pattern)) throw { code: 400, msg: 'ACL key pattern is invalid' };
+      const profile = String(body.profile || 'readonly');
+      const categories = profile === 'readwrite' ? ['+@read', '+@write', '+@connection', '-@dangerous'] : profile === 'readonly' ? ['+@read', '+@connection'] : null;
+      if (!categories) throw { code: 400, msg: 'ACL profile must be readonly or readwrite' };
+      commands = [['ACL', 'SETUSER', username, 'reset', 'on', `>${password}`, `~${pattern}`, '&*', '-@all', ...categories], ['ACL', 'SAVE']];
+    } else if (action === 'deluser') commands = [['ACL', 'DELUSER', username], ['ACL', 'SAVE']];
+    else throw { code: 400, msg: 'unsupported ACL action' };
+    await publishFoundationAudit(actor, `valkey-acl-${action}`, `Valkey/ACL/${username}`, 'attempt', reason);
+    const results = await valkeyRun(ctx.password, 0, commands);
+    await publishFoundationAudit(actor, `valkey-acl-${action}`, `Valkey/ACL/${username}`, 'accepted', reason);
+    return jsonRes(res, 200, { ok: true, action, username, results: respText(results) });
+  } catch (error) { return jsonRes(res, error.code || 502, { error: error.msg || error.message || String(error) }); }
+}
+async function valkeyCredential(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  try {
+    const actor = await valkeyAdminActor(req, true);
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['name', 'reason']);
+    const name = requireK8sName(body.name || VALKEY_DEFAULT_SECRET), reason = requireOwnerReason(body.reason);
+    const password = crypto.randomBytes(24).toString('base64url');
+    const secretPath = `/api/v1/namespaces/${FND_NS}/secrets`;
+    const secret = { apiVersion: 'v1', kind: 'Secret', metadata: { name, namespace: FND_NS, labels: { 'foundation.opensphere.io/engine': 'valkey', 'opensphere.io/managed-by': 'foundation' } }, type: 'Opaque', stringData: { password } };
+    await publishFoundationAudit(actor, 'valkey-credential-create', `Secret/${FND_NS}/${name}`, 'attempt', reason);
+    let result = await k8sJson('POST', secretPath, secret, actor);
+    if (result.status === 409) result = await k8sJson('PATCH', `${secretPath}/${name}`, { metadata: { labels: secret.metadata.labels }, stringData: secret.stringData }, actor);
+    if (!result.ok) throw { code: result.status, msg: k8sFailure(result) };
+    await publishFoundationAudit(actor, 'valkey-credential-create', `Secret/${FND_NS}/${name}`, 'accepted', reason);
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    return res.end(JSON.stringify({ ok: true, secretRef: { namespace: FND_NS, name, key: 'password' }, password, oneTime: true }));
+  } catch (error) { return jsonRes(res, error.code || 502, { error: error.msg || error.message || String(error) }); }
+}
+
 // 제네릭 K8s API 프록시: /api/k8s/<표준 K8s 경로> → APISERVER.
 // 모든 요청은 Supabase session을 먼저 검증한다. 읽기는 제한된 ServiceAccount 권한으로,
 // 쓰기는 평가된 Console role을 제한된 Kubernetes group으로 매핑해 Impersonate-User로 수행한다.
@@ -823,8 +1286,17 @@ const server = http.createServer(async (req, res) => {
       });
       return res.end(JSON.stringify({ user: actor.username }));
     }
+    if (p === '/api/foundation/samba/readiness') return sambaReadiness(req, res);
     if (p === '/api/foundation/samba/bootstrap-secret') return saveSambaBootstrapSecret(req, res);
+    if (p === '/api/foundation/valkey/summary') return valkeySummary(req, res);
+    if (p === '/api/foundation/valkey/scan') return valkeyScan(req, res);
+    if (p === '/api/foundation/valkey/key') return valkeyKey(req, res);
+    if (p === '/api/foundation/valkey/mutation') return valkeyMutation(req, res);
+    if (p === '/api/foundation/valkey/acl') return valkeyAcl(req, res);
+    if (p === '/api/foundation/valkey/credential') return valkeyCredential(req, res);
     if (p === '/api/foundation/his-status') return hisStatusProxy(req, res);
+    if (p === '/api/foundation/establishment/status') return foundationEstablishmentStatus(req, res);
+    if (p === '/api/foundation/bootstrap/plan') return foundationBootstrapPlan(req, res);
     if (p === '/api/foundation/oaa/status') return foundationStatus(req, res);
     if (p === '/api/foundation/oaa/engines/lifecycle') return foundationEngineLifecycle(req, res);
     if (p === '/api/foundation/oaa/claims/create') return foundationClaimCreate(req, res);
@@ -906,7 +1378,10 @@ if (require.main === module) {
   module.exports = {
     verifySupabaseToken, k8sGroups, requireConsoleAdmin, requireFoundationOwner,
     requireClosedOwnerBody, requireOwnerReason, requireOwnerConfirm, requireK8sName,
-    requireFoundationLifecycle, validateHisStatusContract,
+    requireFoundationLifecycle, platformReadinessAuthority, foundationEstablishmentView,
+    foundationBootstrapPlanView, sambaBootstrapSecretEvidence, sambaReadinessProjection,
+    validateHisStatusContract,
+    parseResp, encodeRespCommand, parseInfo, sanitizeAclLine, requireValkeyDb, requireValkeyKey,
     foundationBootstrapState,
     HIS_STATUS_SCHEMA, FOUNDATION_CORE_CRDS,
     FOUNDATION_ENGINE_MODEL, FOUNDATION_CLAIM_MODELS,

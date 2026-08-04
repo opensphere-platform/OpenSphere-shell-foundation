@@ -29,7 +29,7 @@ spec:
       containers:
         - name: manager
           # image-source: ghcr-mirror(ok, 자체빌드) — 다이제스트 핀(2026-06-27 빌드와 동일 콘텐츠, 태그만 정정)
-          image: ghcr.io/opensphere-platform/foundation-control-plane@sha256:b1275c9315c48580629afe16fad7a81e16e0a666bfc3903f31a865066aa83db4
+          image: ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:b1275c9315c48580629afe16fad7a81e16e0a666bfc3903f31a865066aa83db4
           imagePullPolicy: IfNotPresent
           args:
             - --managed-namespace=opensphere-foundation
@@ -40,7 +40,8 @@ spec:
             # image-source: OpenSphere curated GHCR mirror, origin=ghcr.io/cloudnative-pg/postgresql:19beta2-standard-trixie
             - --pg-image=ghcr.io/opensphere-platform/mirror/postgresql:19beta2-standard-trixie
             - --psmdb-image=ghcr.io/opensphere-platform/mirror/percona-server-mongodb:8.0
-            - --valkey-image=ghcr.io/opensphere-platform/mirror/valkey:9.1.0
+            - --valkey-image=ghcr.io/opensphere-platform/mirror/valkey:9.1.0-alpine
+            - --valkey-exporter-image=ghcr.io/opensphere-platform/mirror/redis-exporter:1.75.0
             - --rustfs-image=ghcr.io/opensphere-platform/mirror/rustfs:1.0.0-beta.10
             - --opensearch-image=ghcr.io/opensphere-platform/mirror/opensearch:3.7.0
             - --default-storage-class=standard

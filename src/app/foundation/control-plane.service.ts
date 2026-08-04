@@ -33,6 +33,86 @@ export interface CpWritePath {
   message: string;
 }
 
+export interface PfsEstablishmentCondition {
+  key: string;
+  label: string;
+  ready: boolean;
+  state: string;
+  detail: string;
+}
+
+export interface PfsEstablishment {
+  schema: 'foundation-establishment.opensphere.io/v1alpha1';
+  phase: 'NotEstablished' | 'Establishing' | 'Established' | 'Blocked';
+  established: boolean;
+  shellReady: boolean;
+  conditions: PfsEstablishmentCondition[];
+  blockers: Array<{ key: string; state: string; detail: string }>;
+  evidence: {
+    contractCRDs: Array<{ name: string; ready: boolean }>;
+    models: number;
+    descriptors: number;
+    bindings: number;
+    connectedBindings: number;
+    protectedConnectedBindings: number;
+  };
+  extensionPhase?: string;
+  extensionDesiredState?: string;
+}
+
+export interface FoundationLifecycleView {
+  schema: 'foundation-lifecycle-view.opensphere.io/v1alpha1';
+  observedAt: string;
+  supportProfile: { phase: string; ready: boolean; declared: boolean; name: string };
+  extension: { phase: string; desiredState: string };
+  pfs: PfsEstablishment;
+  prerequisites: Array<{ key: string; label: string; ready: boolean; detail: string; route?: string }>;
+  capabilities: Array<{ type: string; status: string; reason: string; message: string }>;
+  admission: {
+    foundationActivationAllowed: boolean;
+    pfsPluginActivationAllowed: boolean;
+    reason: string;
+  };
+}
+
+export interface FoundationBootstrapPlan {
+  schema: 'foundation-bootstrap-plan.opensphere.io/v1alpha1';
+  checkedAt: string;
+  readyToRequest: boolean;
+  changeControlUrl: string;
+  gate: {
+    supportProfileReady: boolean;
+    pfsEstablished: boolean;
+    reason: '' | 'PFSAlreadyEstablished' | 'PlatformSupportProfileRequired' | 'BootstrapRequestInProgress';
+  };
+  template: {
+    id: string;
+    displayName: string;
+    target: string;
+    reasonPlaceholder: string;
+    desiredState: {
+      contract?: string;
+      catalog?: { version?: string; sha256?: string };
+      components?: string[];
+      verification?: string[];
+      securityBoundaries?: string[];
+    };
+  };
+  request: {
+    requestId: string;
+    phase: string;
+    message: string;
+    reason?: string;
+    pullRequest?: { number?: number; url?: string };
+    reconciler?: string;
+    reconcilerStatus?: string;
+    approvalCount?: number;
+    lastError?: string;
+    checkedAt?: string;
+  } | null;
+  blockers: Array<{ key: string; state?: string; detail: string }>;
+}
+
 const CONTRACTS = [
   {
     id: 'foundation-model',
@@ -140,6 +220,10 @@ export class ControlPlaneService {
   readonly contracts = signal<CpItem[]>([]);
   readonly workloads = signal<CpWorkload[]>([]);
   readonly writePaths = signal<CpWritePath[]>([]);
+  readonly establishment = signal<FoundationLifecycleView | null>(null);
+  readonly establishmentError = signal('');
+  readonly bootstrapPlan = signal<FoundationBootstrapPlan | null>(null);
+  readonly bootstrapPlanError = signal('');
   readonly busy = signal(false);
   readonly lastSync = signal('');
   readonly error = signal('');
@@ -173,14 +257,20 @@ export class ControlPlaneService {
     this.busy.set(true);
     this.error.set('');
     try {
-      const [contracts, workloads, writePaths] = await Promise.all([
+      const [contracts, workloads, writePaths, establishment, bootstrapPlan] = await Promise.all([
         this.loadContracts(),
         this.loadWorkloads(),
         this.loadWritePaths(),
+        this.loadEstablishment(),
+        this.loadBootstrapPlan(),
       ]);
       this.contracts.set(contracts);
       this.workloads.set(workloads);
       this.writePaths.set(writePaths);
+      this.establishment.set(establishment.view);
+      this.establishmentError.set(establishment.error);
+      this.bootstrapPlan.set(bootstrapPlan.plan);
+      this.bootstrapPlanError.set(bootstrapPlan.error);
       this.lastSync.set(new Date().toLocaleTimeString());
     } catch (e) {
       this.error.set(String(e));
@@ -200,6 +290,50 @@ export class ControlPlaneService {
       return { ok: false, status: 0, body: null };
     }
   }
+
+  private async loadEstablishment(): Promise<{ view: FoundationLifecycleView | null; error: string }> {
+    try {
+      const r = await hostFetch(`${apiBase()}/api/foundation/establishment/status`);
+      const text = await r.text();
+      let body: any = null;
+      try { body = text ? JSON.parse(text) : null; }
+      catch { return { view: null, error: 'PFS 설립 권위가 JSON이 아닌 응답을 반환했습니다.' }; }
+      if (!r.ok) {
+        return { view: null, error: body?.error || `PFS 설립 권위 조회 실패 HTTP ${r.status}` };
+      }
+      const phases = ['NotEstablished', 'Establishing', 'Established', 'Blocked'];
+      if (body?.schema !== 'foundation-lifecycle-view.opensphere.io/v1alpha1'
+        || body?.pfs?.schema !== 'foundation-establishment.opensphere.io/v1alpha1'
+        || !phases.includes(body?.pfs?.phase)) {
+        return { view: null, error: 'PFS 설립 권위의 versioned contract가 올바르지 않습니다.' };
+      }
+      return { view: body as FoundationLifecycleView, error: '' };
+    } catch {
+      return { view: null, error: 'PFS 설립 권위에 연결할 수 없습니다.' };
+    }
+  }
+
+  private async loadBootstrapPlan(): Promise<{ plan: FoundationBootstrapPlan | null; error: string }> {
+    try {
+      const r = await hostFetch(`${apiBase()}/api/foundation/bootstrap/plan`);
+      const text = await r.text();
+      let body: any = null;
+      try { body = text ? JSON.parse(text) : null; }
+      catch { return { plan: null, error: 'Foundation bootstrap 계획이 JSON이 아닌 응답을 반환했습니다.' }; }
+      if (!r.ok) {
+        return { plan: null, error: body?.error || `Foundation bootstrap 계획 조회 실패 HTTP ${r.status}` };
+      }
+      if (body?.schema !== 'foundation-bootstrap-plan.opensphere.io/v1alpha1'
+        || body?.template?.id !== 'foundation-control-plane-bootstrap'
+        || typeof body?.changeControlUrl !== 'string') {
+        return { plan: null, error: 'Foundation bootstrap 계획의 versioned contract가 올바르지 않습니다.' };
+      }
+      return { plan: body as FoundationBootstrapPlan, error: '' };
+    } catch {
+      return { plan: null, error: 'Foundation bootstrap 계획 권위에 연결할 수 없습니다.' };
+    }
+  }
+
   private async loadContracts(): Promise<CpItem[]> {
     const out: CpItem[] = [];
     for (const c of CONTRACTS) {

@@ -56,6 +56,7 @@ export interface DataEngineInstallParameters {
   authSecret: string;
   heap?: string;
   persistenceMode?: string;
+  maxmemoryPolicy?: string;
   backup: {
     enabled: boolean;
     s3Endpoint: string;
