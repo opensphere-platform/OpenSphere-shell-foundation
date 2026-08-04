@@ -45,6 +45,13 @@ test('Valkey management surface exposes typed allowlists and no raw command term
   assert.doesNotMatch(component, /xterm|valkey-cli|pods\/exec/i);
 });
 
+test('Foundation control plane preserves deployed CLI compatibility while adding Valkey exporter', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'backend', 'control-plane', 'main.go'), 'utf8');
+  for (const flag of ['keycloak-pg-image', 'pgbouncer-image', 'velero-namespace', 'valkey-exporter-image']) {
+    assert.match(source, new RegExp(`flag\\.StringVar\\([^\\n]+\"${flag}\"`), `missing deployed flag compatibility: ${flag}`);
+  }
+});
+
 test('Foundation delegates Console identity validation to the Supabase authority', async () => {
   let call;
   const actor = await verifySupabaseToken('supabase-access-token', async (url, init) => {
