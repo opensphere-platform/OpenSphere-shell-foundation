@@ -173,8 +173,20 @@ func buildValkeyBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructu
 	}
 	start := fmt.Sprintf(`
 umask 077
-[ -f /data/users.acl ] || : > /data/users.acl
-COMMON="--bind 0.0.0.0 --port 6379 --dir /data --dbfilename dump.rdb --appenddirname appendonlydir --appendonly %s --appendfsync %s --aclfile /data/users.acl --requirepass $VALKEY_PASSWORD --maxmemory-policy %s"
+PASS_SHA="$(printf %%s "$VALKEY_PASSWORD" | sha256sum | awk '{print $1}')"
+if [ -f /data/users.acl ]; then
+  grep -v '^user default ' /data/users.acl > /data/users.acl.next || true
+else
+  : > /data/users.acl.next
+fi
+{
+  printf 'user default on #%%s ~* &* +@all\n' "$PASS_SHA"
+  cat /data/users.acl.next
+} > /data/users.acl.new
+chmod 600 /data/users.acl.new
+mv /data/users.acl.new /data/users.acl
+rm -f /data/users.acl.next
+COMMON="--bind 0.0.0.0 --port 6379 --dir /data --dbfilename dump.rdb --appenddirname appendonlydir --appendonly %s --appendfsync %s --aclfile /data/users.acl --maxmemory-policy %s"
 case "$HOSTNAME" in
   *-0) exec valkey-server $COMMON ;;
   *) exec valkey-server $COMMON --replicaof %s-0.%s-headless.%s.svc 6379 --masterauth "$VALKEY_PASSWORD" --replica-read-only yes ;;

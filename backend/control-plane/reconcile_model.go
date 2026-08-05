@@ -108,11 +108,15 @@ func (r *modelReconciler) install(ctx context.Context, fm *unstructured.Unstruct
 	// Valkey의 기본 자격증명은 플랫폼 설치 단계가 최초 1회 부트스트랩한다.
 	// Control Plane은 exact Secret의 선행조건만 검증하고, Console은 exact-name
 	// patch로만 회전한다. 비활성화·재설치에서도 Secret은 보존한다.
-	if err := r.ensureValkeyCredential(ctx, fm, ns); err != nil {
+	valkeyCredentialRevision, err := r.ensureValkeyCredential(ctx, fm, ns)
+	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("valkey credential ensure: %w", err)
 	}
 	objs, err := b.build(r.cfg, fm)
 	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if err := stampValkeyCredentialRevision(objs, valkeyCredentialRevision); err != nil {
 		return reconcile.Result{}, err
 	}
 	for _, o := range objs {
