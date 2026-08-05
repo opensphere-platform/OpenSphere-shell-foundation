@@ -70,11 +70,11 @@ rules:
   - apiGroups: ["monitoring.coreos.com"]
     resources: [servicemonitors]
     verbs: [get, list, watch, create, patch, delete, deletecollection]
-  # Valkey 자격은 platform installer가 최초 생성한다. Control Plane은
-  # exact Secret 존재와 password key만 검증하며 생성·회전·삭제하지 않는다.
+  # Data engine 자격은 platform installer가 최초 생성한다. Control Plane은
+  # exact Secret 존재와 필수 key만 검증하며 생성·회전·삭제하지 않는다.
   - apiGroups: [""]
     resources: [secrets]
-    resourceNames: [foundation-data-valkey-auth]
+    resourceNames: [foundation-data-valkey-auth, rustfs-credentials]
     verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

@@ -48,7 +48,7 @@ import { PgMetric } from '../postgres/ui/pg-metric';
             <dt>S3 API</dt><dd class="os-mono">{{ svc.s3 }}</dd>
             <dt>콘솔</dt><dd class="os-mono">{{ svc.consoleEp }}</dd>
             <dt>자격 Secret</dt><dd class="os-mono">{{ svc.credSecret }}</dd>
-            <dt>access/secret</dt><dd class="os-mono">rustfsadmin / rustfsadmin (dev)</dd>
+            <dt>access/secret</dt><dd>Secret 값은 화면에 재표시하지 않습니다.</dd>
           </dl>
           <p class="os-sub">S3 호환 — aws-sdk·mc·boto3로 소비. 키 host/access_key/secret_key (값은 Secret).</p>
         </div>

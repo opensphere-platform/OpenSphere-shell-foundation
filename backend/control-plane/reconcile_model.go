@@ -112,11 +112,18 @@ func (r *modelReconciler) install(ctx context.Context, fm *unstructured.Unstruct
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("valkey credential ensure: %w", err)
 	}
+	rustfsCredentialRevision, err := r.ensureRustFSCredential(ctx, fm, ns)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("rustfs credential ensure: %w", err)
+	}
 	objs, err := b.build(r.cfg, fm)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 	if err := stampValkeyCredentialRevision(objs, valkeyCredentialRevision); err != nil {
+		return reconcile.Result{}, err
+	}
+	if err := stampRustFSCredentialRevision(objs, rustfsCredentialRevision); err != nil {
 		return reconcile.Result{}, err
 	}
 	for _, o := range objs {

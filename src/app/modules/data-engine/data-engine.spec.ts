@@ -99,10 +99,10 @@ export const DATA_ENGINE_SPECS: Record<DataEngineId, DataEngineSpec> = {
     claims: [{ name: 'BucketClaim', status: 'planned', description: '앱별 bucket/access key/policy 발급 계약' }],
     policies: [
       { name: 'Credentials', description: '기존 Secret 참조와 키 회전' },
-      { name: 'Durability', description: '개발 single-node, 운영 distributed profile' },
+      { name: 'Durability', description: '현재 단일 노드 + 영속 PVC; 분산 토폴로지는 미구현' },
       { name: 'Console', description: '관리 UI는 기본 ClusterIP; 공개 시 OIDC ingress' },
     ],
-    hostPrerequisites: ['RWO PersistentVolume', '운영 profile은 4개 이상 PVC 권장'],
+    hostPrerequisites: ['RWO PersistentVolume', '현재 관리 계약은 단일 노드만 지원'],
   },
   opensearch: {
     id: 'opensearch', name: 'OpenSearch', capability: 'data.search.opensearch', provider: 'Foundation Control Plane',

@@ -287,8 +287,14 @@ func valkeyServiceMonitor(ns, owner string) *unstructured.Unstructured {
 
 func buildRustFSBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructured.Unstructured, error) {
 	o, ns, owner := dataEngineParams(fm, cfg, "rustfs"), dataNS(cfg, fm), fm.GetName()
-	if o.authSecret == "" {
-		return nil, fmt.Errorf("rustfs authSecret is required")
+	if o.authSecret != rustfsDefaultAuthSecret {
+		return nil, fmt.Errorf("rustfs authSecret must be %q", rustfsDefaultAuthSecret)
+	}
+	// A StatefulSet replica count alone is not a distributed RustFS topology.
+	// Until endpoint-set/erasure-coding orchestration is implemented, expose the
+	// truthful and recoverable single-node contract only.
+	if o.replicas != 1 {
+		return nil, fmt.Errorf("rustfs currently supports exactly one managed instance; distributed topology is not implemented")
 	}
 	c := map[string]interface{}{
 		"name": "rustfs", "ports": []interface{}{map[string]interface{}{"name": "s3", "containerPort": int64(9000)}, map[string]interface{}{"name": "console", "containerPort": int64(9001)}},
@@ -296,7 +302,9 @@ func buildRustFSBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructu
 			map[string]interface{}{"name": "RUSTFS_VOLUMES", "value": "/data"}, map[string]interface{}{"name": "RUSTFS_ADDRESS", "value": "0.0.0.0:9000"}, map[string]interface{}{"name": "RUSTFS_CONSOLE_ADDRESS", "value": "0.0.0.0:9001"}, map[string]interface{}{"name": "RUSTFS_CONSOLE_ENABLE", "value": "true"},
 			map[string]interface{}{"name": "RUSTFS_ACCESS_KEY", "valueFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": o.authSecret, "key": "access_key"}}}, map[string]interface{}{"name": "RUSTFS_SECRET_KEY", "valueFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": o.authSecret, "key": "secret_key"}}},
 		},
-		"readinessProbe": map[string]interface{}{"tcpSocket": map[string]interface{}{"port": "s3"}, "initialDelaySeconds": int64(8), "periodSeconds": int64(8)},
+		"startupProbe":   map[string]interface{}{"tcpSocket": map[string]interface{}{"port": "s3"}, "periodSeconds": int64(5), "failureThreshold": int64(36)},
+		"readinessProbe": map[string]interface{}{"tcpSocket": map[string]interface{}{"port": "s3"}, "periodSeconds": int64(8), "failureThreshold": int64(3)},
+		"livenessProbe":  map[string]interface{}{"tcpSocket": map[string]interface{}{"port": "s3"}, "periodSeconds": int64(20), "failureThreshold": int64(3)},
 	}
 	return []*unstructured.Unstructured{
 		engineStatefulSet("rustfs", rustfsName, ns, owner, o, c, "/data"),

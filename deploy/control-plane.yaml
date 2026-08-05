@@ -42,7 +42,7 @@ spec:
             - --psmdb-image=ghcr.io/opensphere-platform/mirror/percona-server-mongodb:8.0
             - --valkey-image=ghcr.io/opensphere-platform/mirror/valkey:9.1.0-alpine
             - --valkey-exporter-image=ghcr.io/opensphere-platform/mirror/redis-exporter:1.75.0
-            - --rustfs-image=ghcr.io/opensphere-platform/mirror/rustfs:1.0.0-beta.10
+            - --rustfs-image=ghcr.io/opensphere-platform/mirror/rustfs@sha256:60f4f2f41ce95216f8cac676e69f9d90c0bfec458a3bc7fd7fb9b7c2452ac57a
             - --opensearch-image=ghcr.io/opensphere-platform/mirror/opensearch:3.7.0
             - --default-storage-class=standard
           env:

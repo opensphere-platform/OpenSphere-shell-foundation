@@ -58,6 +58,8 @@ const SAMBA_BOOTSTRAP_SECRET_KEY = 'domain-password';
 const VALKEY_SERVICE = process.env.VALKEY_SERVICE || `foundation-data-valkey.${FND_NS}.svc`;
 const VALKEY_PORT = Number(process.env.VALKEY_PORT || 6379);
 const VALKEY_DEFAULT_SECRET = 'foundation-data-valkey-auth';
+const RUSTFS_SERVICE = process.env.RUSTFS_SERVICE || `opensphere-rustfs.${FND_NS}.svc:9000`;
+const RUSTFS_DEFAULT_SECRET = 'rustfs-credentials';
 const FOUNDATION_API = '/apis/foundation.opensphere.io/v1alpha1';
 const HIS_STATUS_SCHEMA = 'his-status.opensphere.io/v1alpha1';
 const FOUNDATION_CORE_CRDS = Object.freeze([
@@ -1174,6 +1176,138 @@ async function valkeyCredential(req, res) {
   } catch (error) { return jsonRes(res, error.code || 502, { error: error.msg || error.message || String(error) }); }
 }
 
+function rustfsXmlText(xml, tag) {
+  const match = String(xml || '').match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`));
+  return match ? match[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&') : '';
+}
+function rustfsBuckets(xml) {
+  return [...String(xml || '').matchAll(/<Bucket>([\s\S]*?)<\/Bucket>/g)].map((match) => ({
+    name: rustfsXmlText(match[1], 'Name'),
+    createdAt: rustfsXmlText(match[1], 'CreationDate'),
+  })).filter((bucket) => bucket.name);
+}
+function rustfsEncode(value) {
+  return encodeURIComponent(String(value)).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+function rustfsSigningKey(secret, date, region = 'us-east-1') {
+  const hmac = (key, value) => crypto.createHmac('sha256', key).update(value).digest();
+  return hmac(hmac(hmac(hmac(`AWS4${secret}`, date), region), 's3'), 'aws4_request');
+}
+async function rustfsRequest(ctx, method, objectPath = '/', query = {}, body = '') {
+  const now = new Date(), amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, ''), shortDate = amzDate.slice(0, 8);
+  const canonicalPath = objectPath.split('/').map(rustfsEncode).join('/') || '/';
+  const canonicalQuery = Object.entries(query).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `${rustfsEncode(key)}=${rustfsEncode(value)}`).join('&');
+  const payload = Buffer.isBuffer(body) ? body : Buffer.from(String(body));
+  const payloadHash = crypto.createHash('sha256').update(payload).digest('hex');
+  const canonicalHeaders = `host:${RUSTFS_SERVICE}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
+  const signedHeaders = 'host;x-amz-content-sha256;x-amz-date';
+  const canonicalRequest = [method, canonicalPath, canonicalQuery, canonicalHeaders, signedHeaders, payloadHash].join('\n');
+  const scope = `${shortDate}/us-east-1/s3/aws4_request`;
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, crypto.createHash('sha256').update(canonicalRequest).digest('hex')].join('\n');
+  const signature = crypto.createHmac('sha256', rustfsSigningKey(ctx.secretKey, shortDate)).update(stringToSign).digest('hex');
+  const url = `http://${RUSTFS_SERVICE}${canonicalPath}${canonicalQuery ? `?${canonicalQuery}` : ''}`;
+  const response = await fetch(url, {
+    method,
+    headers: {
+      authorization: `AWS4-HMAC-SHA256 Credential=${ctx.accessKey}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+      'x-amz-content-sha256': payloadHash,
+      'x-amz-date': amzDate,
+    },
+    body: method === 'GET' || method === 'HEAD' ? undefined : payload,
+    signal: AbortSignal.timeout(8000),
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    const code = rustfsXmlText(text, 'Code') || `HTTP ${response.status}`;
+    const message = rustfsXmlText(text, 'Message') || text.slice(0, 300) || response.statusText;
+    throw { code: response.status >= 400 && response.status < 500 ? response.status : 502, msg: `RustFS ${code}: ${message}` };
+  }
+  return { status: response.status, headers: response.headers, text };
+}
+async function rustfsContext() {
+  const model = await k8sJson('GET', `${FOUNDATION_API}/foundationmodels/data`);
+  if (!model.ok) throw { code: model.status, msg: k8sFailure(model) };
+  if (model.json?.spec?.parameters?.engines?.rustfs !== 'enabled') throw { code: 409, msg: 'RustFS engine is not enabled' };
+  const config = model.json?.spec?.parameters?.dataEngines?.rustfs || {};
+  const secretName = requireK8sName(config.authSecret || RUSTFS_DEFAULT_SECRET);
+  if (secretName !== RUSTFS_DEFAULT_SECRET) throw { code: 409, msg: `RustFS credential must be Secret/${RUSTFS_DEFAULT_SECRET}` };
+  const secret = await k8sJson('GET', `/api/v1/namespaces/${FND_NS}/secrets/${secretName}`);
+  if (!secret.ok) throw { code: secret.status, msg: `RustFS credential unavailable: ${k8sFailure(secret)}` };
+  const access = secret.json?.data?.access_key, secretKey = secret.json?.data?.secret_key;
+  if (!access || !secretKey) throw { code: 409, msg: `Secret/${secretName} requires access_key and secret_key` };
+  return { model: model.json, config, secretName, accessKey: Buffer.from(access, 'base64').toString('utf8'), secretKey: Buffer.from(secretKey, 'base64').toString('utf8') };
+}
+async function rustfsAdminActor(req, aal2 = false) {
+  const actor = await verifyToken(requestToken(req));
+  return aal2 ? requireFoundationOwner(actor) : requireConsoleAdmin(actor);
+}
+async function rustfsSummary(req, res) {
+  if (req.method !== 'GET') return jsonRes(res, 405, { error: 'read-only endpoint' });
+  try {
+    await rustfsAdminActor(req);
+    const ctx = await rustfsContext();
+    const result = await rustfsRequest(ctx, 'GET');
+    const buckets = rustfsBuckets(result.text);
+    return jsonRes(res, 200, {
+      authority: 'RustFS S3 SigV4 allowlist', observedAt: new Date().toISOString(), version: ctx.config.version || '1.0.0-beta.10',
+      endpoint: RUSTFS_SERVICE, bucketCount: buckets.length, buckets,
+      desired: ctx.config, secretRef: { namespace: FND_NS, name: ctx.secretName, keys: ['access_key', 'secret_key'] },
+    });
+  } catch (error) { return jsonRes(res, error.code || 502, { error: error.msg || error.message || String(error) }); }
+}
+function requireRustFSBucket(value) {
+  const name = String(value || '').trim();
+  if (name.length < 3 || name.length > 63 || !/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(name) || name.includes('..') || /^\d+\.\d+\.\d+\.\d+$/.test(name)) {
+    throw { code: 400, msg: 'bucket name must be 3..63 lowercase DNS-compatible characters' };
+  }
+  return name;
+}
+async function rustfsBucket(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  try {
+    const actor = await rustfsAdminActor(req, true);
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['action', 'name', 'reason']);
+    const action = String(body.action || ''), name = requireRustFSBucket(body.name), reason = requireOwnerReason(body.reason);
+    if (!['create', 'delete'].includes(action)) throw { code: 400, msg: 'bucket action must be create or delete' };
+    const ctx = await rustfsContext();
+    await publishFoundationAudit(actor, `rustfs-bucket-${action}`, `RustFS/Bucket/${name}`, 'attempt', reason);
+    await rustfsRequest(ctx, action === 'create' ? 'PUT' : 'DELETE', `/${name}`);
+    await publishFoundationAudit(actor, `rustfs-bucket-${action}`, `RustFS/Bucket/${name}`, 'accepted', reason);
+    return jsonRes(res, 200, { ok: true, action, name });
+  } catch (error) { return jsonRes(res, error.code || 502, { error: error.msg || error.message || String(error) }); }
+}
+async function rustfsCredential(req, res) {
+  if (req.method === 'GET') {
+    try {
+      await rustfsAdminActor(req);
+      const result = await k8sJson('GET', `/api/v1/namespaces/${FND_NS}/secrets/${RUSTFS_DEFAULT_SECRET}`);
+      if (result.status === 404) return jsonRes(res, 200, { present: false, validKeys: false, name: RUSTFS_DEFAULT_SECRET });
+      if (!result.ok) throw { code: result.status, msg: k8sFailure(result) };
+      const data = result.json?.data || {};
+      return jsonRes(res, 200, { present: true, validKeys: Boolean(data.access_key && data.secret_key), name: RUSTFS_DEFAULT_SECRET });
+    } catch (error) { return jsonRes(res, error.code || 502, { error: error.msg || error.message || String(error) }); }
+  }
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  try {
+    const actor = await rustfsAdminActor(req, true);
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['name', 'reason']);
+    const name = requireK8sName(body.name || RUSTFS_DEFAULT_SECRET), reason = requireOwnerReason(body.reason);
+    if (name !== RUSTFS_DEFAULT_SECRET) throw { code: 400, msg: `credential name must be ${RUSTFS_DEFAULT_SECRET}` };
+    const accessKey = `opensphere-${crypto.randomBytes(9).toString('hex')}`;
+    const secretKey = crypto.randomBytes(32).toString('base64url');
+    const secretPath = `/api/v1/namespaces/${FND_NS}/secrets/${name}?fieldManager=foundation-console&force=true`;
+    const secret = { apiVersion: 'v1', kind: 'Secret', metadata: { name, namespace: FND_NS, labels: { 'foundation.opensphere.io/engine': 'rustfs', 'opensphere.io/managed-by': 'foundation' } }, type: 'Opaque', stringData: { access_key: accessKey, secret_key: secretKey } };
+    await publishFoundationAudit(actor, 'rustfs-credential-create', `Secret/${FND_NS}/${name}`, 'attempt', reason);
+    const result = await k8sJson('PATCH', secretPath, secret, undefined, 'application/apply-patch+yaml');
+    if (!result.ok) throw { code: result.status, msg: k8sFailure(result) };
+    await publishFoundationAudit(actor, 'rustfs-credential-create', `Secret/${FND_NS}/${name}`, 'accepted', reason);
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    return res.end(JSON.stringify({ ok: true, secretRef: { namespace: FND_NS, name, keys: ['access_key', 'secret_key'] }, accessKey, secretKey, oneTime: true }));
+  } catch (error) { return jsonRes(res, error.code || 502, { error: error.msg || error.message || String(error) }); }
+}
+
 // 제네릭 K8s API 프록시: /api/k8s/<표준 K8s 경로> → APISERVER.
 // 모든 요청은 Supabase session을 먼저 검증한다. 읽기는 제한된 ServiceAccount 권한으로,
 // 쓰기는 평가된 Console role을 제한된 Kubernetes group으로 매핑해 Impersonate-User로 수행한다.
@@ -1300,6 +1434,9 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/foundation/valkey/mutation') return valkeyMutation(req, res);
     if (p === '/api/foundation/valkey/acl') return valkeyAcl(req, res);
     if (p === '/api/foundation/valkey/credential') return valkeyCredential(req, res);
+    if (p === '/api/foundation/rustfs/summary') return rustfsSummary(req, res);
+    if (p === '/api/foundation/rustfs/bucket') return rustfsBucket(req, res);
+    if (p === '/api/foundation/rustfs/credential') return rustfsCredential(req, res);
     if (p === '/api/foundation/his-status') return hisStatusProxy(req, res);
     if (p === '/api/foundation/establishment/status') return foundationEstablishmentStatus(req, res);
     if (p === '/api/foundation/bootstrap/plan') return foundationBootstrapPlan(req, res);

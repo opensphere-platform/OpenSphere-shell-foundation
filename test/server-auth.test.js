@@ -287,8 +287,20 @@ test('Valkey credential path is exact-name and ServiceAccount scoped', () => {
   assert.match(handler, /name !== VALKEY_DEFAULT_SECRET/);
   assert.match(handler, /application\/apply-patch\+yaml/);
   assert.match(handler, /k8sJson\('PATCH', secretPath, secret, undefined/);
-  assert.match(rbac, /name: foundation-console-valkey-secret-manager[\s\S]*resourceNames: \["foundation-data-valkey-auth"\][\s\S]*verbs: \["get", "patch"\]/);
+  assert.match(rbac, /name: foundation-console-valkey-secret-manager[\s\S]*resourceNames: \["foundation-data-valkey-auth", "rustfs-credentials"\][\s\S]*verbs: \["get", "patch"\]/);
   assert.match(rbac, /kind: ServiceAccount[\s\S]*name: opensphere-foundation[\s\S]*namespace: opensphere-console/);
+});
+
+test('RustFS credential and bucket paths use exact Secret and allowlisted S3 operations', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const start = source.indexOf('async function rustfsContext');
+  const end = source.indexOf('// 제네릭 K8s API 프록시', start);
+  const handlers = source.slice(start, end);
+  assert.match(handlers, /secretName !== RUSTFS_DEFAULT_SECRET/);
+  assert.match(handlers, /name !== RUSTFS_DEFAULT_SECRET/);
+  assert.match(handlers, /application\/apply-patch\+yaml/);
+  assert.match(handlers, /\['create', 'delete'\]\.includes\(action\)/);
+  assert.doesNotMatch(handlers, /listObjects|putObject|raw command/i);
 });
 
 test('OpenSearch preparation follows the current Console plugin authority contract', () => {
