@@ -105,9 +105,9 @@ func (r *modelReconciler) install(ctx context.Context, fm *unstructured.Unstruct
 	if err := applyObj(ctx, r.direct, ensureNamespace(ns)); err != nil {
 		return reconcile.Result{}, fmt.Errorf("ns ensure: %w", err)
 	}
-	// Valkey의 기본 자격증명은 브라우저가 아니라 Control Plane이 최초 1회만
-	// 부트스트랩한다. Console에는 exact-name get/patch만 부여하여 namespace-wide
-	// Secret create 권한을 피하고, 이후 회전은 동일 Secret의 patch로 제한한다.
+	// Valkey의 기본 자격증명은 플랫폼 설치 단계가 최초 1회 부트스트랩한다.
+	// Control Plane은 exact Secret의 선행조건만 검증하고, Console은 exact-name
+	// patch로만 회전한다. 비활성화·재설치에서도 Secret은 보존한다.
 	if err := r.ensureValkeyCredential(ctx, fm, ns); err != nil {
 		return reconcile.Result{}, fmt.Errorf("valkey credential ensure: %w", err)
 	}

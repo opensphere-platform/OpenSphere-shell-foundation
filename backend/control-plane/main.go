@@ -5,7 +5,7 @@
 //	B) claimReconciler  : FoundationClaim watch → FoundationBinding 발급 + 연결담보 finalizer + release.
 //
 // ADR-005R1(INV-1) 정합: 인프라는 SSA/DeleteAllOf로만 바꾼다(명령형 0).
-// Secret은 Valkey 기본 자격의 최초 1회 bootstrap 등 명시된 exact-name lifecycle만 소유한다.
+// Secret은 플랫폼 installer가 최초 생성하고, Control Plane은 exact-name 선행조건만 검증한다.
 package main
 
 import (

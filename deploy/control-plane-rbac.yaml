@@ -70,9 +70,12 @@ rules:
   - apiGroups: ["monitoring.coreos.com"]
     resources: [servicemonitors]
     verbs: [get, list, watch, create, patch, delete, deletecollection]
+  # Valkey 자격은 platform installer가 최초 생성한다. Control Plane은
+  # exact Secret 존재와 password key만 검증하며 생성·회전·삭제하지 않는다.
   - apiGroups: [""]
     resources: [secrets]
-    verbs: [get, list, watch, create, patch, delete]
+    resourceNames: [foundation-data-valkey-auth]
+    verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

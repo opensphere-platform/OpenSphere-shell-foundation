@@ -37,7 +37,10 @@ func nestedDataEngineParams(fm *unstructured.Unstructured, id string) map[string
 }
 
 func imageWithTag(base, tag string) string {
-	if tag == "" {
+	// Release가 exact digest로 고정한 canonical image는 사람이 선택한 제품
+	// version으로 다시 tag 변환하지 않는다. @sha256를 ':' tag로 오인하면
+	// admission의 release-pinned image 계약을 깨뜨린다.
+	if tag == "" || strings.Contains(base, "@sha256:") {
 		return base
 	}
 	i := strings.LastIndex(base, ":")
@@ -181,24 +184,24 @@ esac`, appendOnly, appendFsync, o.maxmemoryPolicy, valkeyName, valkeyName, ns)
 	valkey := map[string]interface{}{
 		"name": "valkey", "image": o.image,
 		"ports": []interface{}{map[string]interface{}{"name": "valkey", "containerPort": int64(6379)}},
-		"env": []interface{}{passwordEnv}, "command": []interface{}{"sh", "-ec"}, "args": []interface{}{start},
-		"resources": engineResources(o),
+		"env":   []interface{}{passwordEnv}, "command": []interface{}{"sh", "-ec"}, "args": []interface{}{start},
+		"resources":       engineResources(o),
 		"securityContext": map[string]interface{}{"allowPrivilegeEscalation": false, "runAsNonRoot": true, "runAsUser": int64(1000), "runAsGroup": int64(1000), "capabilities": map[string]interface{}{"drop": []interface{}{"ALL"}}},
-		"volumeMounts": []interface{}{map[string]interface{}{"name": "data", "mountPath": "/data"}},
-		"startupProbe": map[string]interface{}{"exec": map[string]interface{}{"command": []interface{}{"sh", "-ec", `valkey-cli --no-auth-warning -a "$VALKEY_PASSWORD" ping | grep -qx PONG`}}, "failureThreshold": int64(30), "periodSeconds": int64(5)},
-		"readinessProbe": map[string]interface{}{"exec": map[string]interface{}{"command": []interface{}{"sh", "-ec", `valkey-cli --no-auth-warning -a "$VALKEY_PASSWORD" ping | grep -qx PONG`}}, "periodSeconds": int64(5)},
-		"livenessProbe": map[string]interface{}{"exec": map[string]interface{}{"command": []interface{}{"sh", "-ec", `valkey-cli --no-auth-warning -a "$VALKEY_PASSWORD" ping | grep -qx PONG`}}, "periodSeconds": int64(10), "failureThreshold": int64(6)},
+		"volumeMounts":    []interface{}{map[string]interface{}{"name": "data", "mountPath": "/data"}},
+		"startupProbe":    map[string]interface{}{"exec": map[string]interface{}{"command": []interface{}{"sh", "-ec", `valkey-cli --no-auth-warning -a "$VALKEY_PASSWORD" ping | grep -qx PONG`}}, "failureThreshold": int64(30), "periodSeconds": int64(5)},
+		"readinessProbe":  map[string]interface{}{"exec": map[string]interface{}{"command": []interface{}{"sh", "-ec", `valkey-cli --no-auth-warning -a "$VALKEY_PASSWORD" ping | grep -qx PONG`}}, "periodSeconds": int64(5)},
+		"livenessProbe":   map[string]interface{}{"exec": map[string]interface{}{"command": []interface{}{"sh", "-ec", `valkey-cli --no-auth-warning -a "$VALKEY_PASSWORD" ping | grep -qx PONG`}}, "periodSeconds": int64(10), "failureThreshold": int64(6)},
 	}
 	containers := []interface{}{valkey}
 	if o.monitoring {
 		containers = append(containers, map[string]interface{}{
 			"name": "metrics", "image": cfg.valkeyExporterImage,
-			"ports": []interface{}{map[string]interface{}{"name": "metrics", "containerPort": int64(9121)}},
-			"env": []interface{}{map[string]interface{}{"name": "REDIS_ADDR", "value": "redis://127.0.0.1:6379"}, map[string]interface{}{"name": "REDIS_PASSWORD", "valueFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": o.authSecret, "key": "password"}}}},
-			"args": []interface{}{`--redis.addr=redis://127.0.0.1:6379`, `--web.listen-address=:9121`},
-			"resources": map[string]interface{}{"requests": map[string]interface{}{"cpu": "25m", "memory": "32Mi"}, "limits": map[string]interface{}{"cpu": "200m", "memory": "128Mi"}},
+			"ports":           []interface{}{map[string]interface{}{"name": "metrics", "containerPort": int64(9121)}},
+			"env":             []interface{}{map[string]interface{}{"name": "REDIS_ADDR", "value": "redis://127.0.0.1:6379"}, map[string]interface{}{"name": "REDIS_PASSWORD", "valueFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": o.authSecret, "key": "password"}}}},
+			"args":            []interface{}{`--redis.addr=redis://127.0.0.1:6379`, `--web.listen-address=:9121`},
+			"resources":       map[string]interface{}{"requests": map[string]interface{}{"cpu": "25m", "memory": "32Mi"}, "limits": map[string]interface{}{"cpu": "200m", "memory": "128Mi"}},
 			"securityContext": map[string]interface{}{"allowPrivilegeEscalation": false, "runAsNonRoot": true, "runAsUser": int64(59000), "runAsGroup": int64(59000), "capabilities": map[string]interface{}{"drop": []interface{}{"ALL"}}},
-			"readinessProbe": map[string]interface{}{"httpGet": map[string]interface{}{"path": "/metrics", "port": "metrics"}, "periodSeconds": int64(10)},
+			"readinessProbe":  map[string]interface{}{"httpGet": map[string]interface{}{"path": "/metrics", "port": "metrics"}, "periodSeconds": int64(10)},
 		})
 	}
 	sts := &unstructured.Unstructured{Object: map[string]interface{}{
@@ -209,8 +212,8 @@ esac`, appendOnly, appendFsync, o.maxmemoryPolicy, valkeyName, valkeyName, ns)
 			"template": map[string]interface{}{"metadata": map[string]interface{}{"labels": labels}, "spec": map[string]interface{}{
 				"imagePullSecrets": []interface{}{map[string]interface{}{"name": "opensphere-ghcr-pull"}}, "terminationGracePeriodSeconds": int64(60),
 				"securityContext": map[string]interface{}{"runAsNonRoot": true, "fsGroup": int64(1000), "fsGroupChangePolicy": "OnRootMismatch"},
-				"affinity": map[string]interface{}{"podAntiAffinity": map[string]interface{}{"preferredDuringSchedulingIgnoredDuringExecution": []interface{}{map[string]interface{}{"weight": int64(100), "podAffinityTerm": map[string]interface{}{"labelSelector": map[string]interface{}{"matchLabels": labels}, "topologyKey": "kubernetes.io/hostname"}}}}},
-				"containers": containers,
+				"affinity":        map[string]interface{}{"podAntiAffinity": map[string]interface{}{"preferredDuringSchedulingIgnoredDuringExecution": []interface{}{map[string]interface{}{"weight": int64(100), "podAffinityTerm": map[string]interface{}{"labelSelector": map[string]interface{}{"matchLabels": labels}, "topologyKey": "kubernetes.io/hostname"}}}}},
+				"containers":      containers,
 			}},
 			"volumeClaimTemplates": []interface{}{map[string]interface{}{"metadata": map[string]interface{}{"name": "data", "labels": map[string]interface{}{lblEngine: "valkey"}}, "spec": map[string]interface{}{"accessModes": []interface{}{"ReadWriteOnce"}, "storageClassName": o.storageClass, "resources": map[string]interface{}{"requests": map[string]interface{}{"storage": o.storageSize}}}}},
 		},
