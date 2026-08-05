@@ -18,7 +18,7 @@ spec:
   serviceAccountName: opensphere-foundation
   image:
     repository: ghcr.io/opensphere-platform/opensphere-shell-foundation
-    digest: sha256:a87bec7344fd41f15315333880c74c56de912bb6e795b30169bdb08e9c6831cd
+    digest: sha256:08e4fef5310e02a307eb0842195f6cebb006ed738c94a424f3a10fcf83ba1d17
   nav:
     band: "운영 Operate"
     label: "Foundation"
@@ -27,7 +27,7 @@ spec:
     sha256: "3fd85b27a19e28af74af7e09949a2b8aba9337c49a634ac632e4c3bac14bb97c"
     signaturePath: /plugins/ui-shell.manifest.json.sig
   trust:
-    keyId: opensphere-plugins-v4
+    keyId: opensphere-edge-local-v1
   shellCompat: ">=0.2.0 <0.9.0"
   permissions:
     - page:register
