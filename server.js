@@ -1313,7 +1313,7 @@ async function rustfsCredential(req, res) {
 }
 
 // ── Percona Server for MongoDB PFSS management boundary ──────────────────
-// Connection URI와 TLS CA는 exact Secret allowlist 안에서만 소비하고 브라우저에
+// Connection URI와 mTLS material은 exact Secret allowlist 안에서만 소비하고 브라우저에
 // 반환하지 않는다. 데이터 작업은 database/collection과 declarative user 계약으로
 // 제한하며 raw MongoDB command 실행기는 제공하지 않는다.
 function requireMongoIdentifier(value, field) {
@@ -1339,18 +1339,27 @@ async function psmdbContext() {
   const encoded = data.databaseAdmin_rs0_connectionString || Object.entries(data).find(([key]) => /connectionString$/i.test(key))?.[1];
   if (!encoded) throw { code: 409, msg: `Secret/${PSMDB_CONNECTION_SECRET} has no databaseAdmin rs0 connection string` };
   const tls = await k8sJson('GET', `/api/v1/namespaces/${FND_NS}/secrets/${PSMDB_TLS_SECRET}`);
-  const caEncoded = tls.ok ? (tls.json?.data?.['ca.crt'] || tls.json?.data?.ca) : '';
+  if (!tls.ok) throw { code: tls.status, msg: `PSMDB mTLS Secret/${PSMDB_TLS_SECRET} unavailable: ${k8sFailure(tls)}` };
+  const tlsData = tls.json?.data || {};
+  const caEncoded = tlsData['ca.crt'] || tlsData.ca;
+  const certEncoded = tlsData['tls.crt'];
+  const keyEncoded = tlsData['tls.key'];
+  if (!caEncoded || !certEncoded || !keyEncoded) {
+    throw { code: 409, msg: `Secret/${PSMDB_TLS_SECRET} must contain ca.crt, tls.crt, and tls.key for MongoDB mTLS` };
+  }
   return {
     model: model.json, resource: resource.json,
     uri: Buffer.from(String(encoded), 'base64').toString('utf8'),
-    ca: caEncoded ? Buffer.from(String(caEncoded), 'base64') : undefined,
+    ca: Buffer.from(String(caEncoded), 'base64'),
+    cert: Buffer.from(String(certEncoded), 'base64'),
+    key: Buffer.from(String(keyEncoded), 'base64'),
   };
 }
 async function withPsmdb(fn) {
   const ctx = await psmdbContext();
   const client = new MongoClient(ctx.uri, {
     serverSelectionTimeoutMS: 8000, connectTimeoutMS: 8000,
-    ...(ctx.ca ? { ca: ctx.ca } : {}),
+    ca: ctx.ca, cert: ctx.cert, key: ctx.key,
   });
   try {
     await client.connect();

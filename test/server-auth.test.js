@@ -311,6 +311,8 @@ test('PSMDB management uses exact Secrets and bounded database contracts', () =>
   const handlers = source.slice(start, end);
   assert.match(handlers, /PSMDB_CONNECTION_SECRET/);
   assert.match(handlers, /databaseAdmin_rs0_connectionString/);
+  assert.match(handlers, /must contain ca\.crt, tls\.crt, and tls\.key for MongoDB mTLS/);
+  assert.match(handlers, /ca: ctx\.ca, cert: ctx\.cert, key: ctx\.key/);
   assert.match(handlers, /requireClosedOwnerBody\(body, \['action', 'database', 'collection', 'reason'\]\)/);
   assert.match(handlers, /\['create', 'drop'\]\.includes\(action\)/);
   assert.match(handlers, /\['read', 'readWrite', 'dbAdmin'\]\.includes\(role\)/);
