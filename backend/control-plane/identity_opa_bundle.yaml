@@ -37,6 +37,13 @@ data:
       input.path[1] == "data"
       input.path[2] == "opensphere"
     }
+
+    # Kubelet and Prometheus reach only the NetworkPolicy-restricted diagnostic
+    # listener. These are the only anonymous read endpoints.
+    allow if {
+      input.method == "GET"
+      input.path in [["health"], ["metrics"]]
+    }
   bootstrap.rego: |
     package opensphere.authz
 

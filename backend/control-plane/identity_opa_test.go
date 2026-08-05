@@ -56,7 +56,7 @@ func TestOPABundleIsFailClosedAndMonitored(t *testing.T) {
 			}
 		case "ConfigMap":
 			data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
-			foundPolicy = strings.Contains(data["bootstrap.rego"], "default allow := false") && strings.Contains(data["system-authz.rego"], "input.method == \"POST\"")
+			foundPolicy = strings.Contains(data["bootstrap.rego"], "default allow := false") && strings.Contains(data["system-authz.rego"], "input.method == \"POST\"") && strings.Contains(data["system-authz.rego"], "input.path in [[\"health\"], [\"metrics\"]]")
 		}
 	}
 	if !foundDeployment || !foundMonitor || !foundPolicy {
