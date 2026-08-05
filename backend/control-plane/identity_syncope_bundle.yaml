@@ -113,7 +113,6 @@ data:
     security.aesSecretKey=${SYNCOPE_AES_SECRET_KEY}
     management.endpoints.web.exposure.include=health,info
     management.endpoint.health.probes.enabled=true
-    management.health.mail.enabled=false
     server.shutdown=graceful
 ---
 apiVersion: v1
@@ -207,7 +206,6 @@ spec:
             - { name: SERVER_SSL_KEY_STORE, value: "file:/etc/syncope/tls/keystore.p12" }
             - { name: SERVER_SSL_KEY_STORE_TYPE, value: "PKCS12" }
             - { name: SERVER_PORT, value: "8080" }
-            - { name: MANAGEMENT_HEALTH_MAIL_ENABLED, value: "false" }
             - name: OPENJPA_REMOTE_COMMIT
               value: "tcp(Port=5636,Addresses=foundation-identity-syncope-0.foundation-identity-syncope-headless.__NAMESPACE__.svc.cluster.local;foundation-identity-syncope-1.foundation-identity-syncope-headless.__NAMESPACE__.svc.cluster.local,TransmitPersistedObjectIds=true)"
           command: ["/bin/sh", "-ec"]

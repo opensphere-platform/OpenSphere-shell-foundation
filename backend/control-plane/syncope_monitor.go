@@ -5,7 +5,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -42,6 +44,47 @@ type syncopeMonitor struct {
 	lastAuditTime prometheus.Gauge
 	probeDuration prometheus.Histogram
 	probeErrors   prometheus.Counter
+}
+
+type syncopeHealthComponent struct {
+	Status string `json:"status"`
+}
+
+type syncopeHealthResponse struct {
+	Status     string                            `json:"status"`
+	Components map[string]syncopeHealthComponent `json:"components"`
+}
+
+// Syncope 4.0.7 always registers its MailHealthIndicator, even when SMTP is not
+// configured. Production readiness therefore ignores only that optional
+// component and still requires every Core component plus the key readiness
+// components to report UP.
+func syncopeCoreHealthy(statusCode int, body io.Reader) bool {
+	if statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices {
+		return true
+	}
+	if statusCode != http.StatusServiceUnavailable {
+		return false
+	}
+	var health syncopeHealthResponse
+	if err := json.NewDecoder(io.LimitReader(body, 1<<20)).Decode(&health); err != nil {
+		return false
+	}
+	for name, component := range health.Components {
+		if strings.EqualFold(name, "mail") {
+			continue
+		}
+		if !strings.EqualFold(component.Status, "UP") {
+			return false
+		}
+	}
+	for _, name := range []string{"domains", "livenessState", "readinessState", "ping"} {
+		component, ok := health.Components[name]
+		if !ok || !strings.EqualFold(component.Status, "UP") {
+			return false
+		}
+	}
+	return strings.EqualFold(health.Components["mail"].Status, "DOWN")
 }
 
 func newSyncopeMonitor(opts syncopeMonitorOptions, registry *prometheus.Registry) (*syncopeMonitor, error) {
@@ -84,8 +127,9 @@ func (m *syncopeMonitor) sample(ctx context.Context) {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, m.syncopeURL, nil)
 	req.SetBasicAuth(m.username, m.password)
 	resp, err := m.client.Do(req)
-	healthy := err == nil && resp.StatusCode >= 200 && resp.StatusCode < 300
+	healthy := false
 	if resp != nil {
+		healthy = err == nil && syncopeCoreHealthy(resp.StatusCode, resp.Body)
 		_ = resp.Body.Close()
 	}
 	m.probeDuration.Observe(time.Since(started).Seconds())
