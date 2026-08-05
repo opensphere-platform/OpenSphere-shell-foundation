@@ -3,13 +3,13 @@ import { Component, inject } from '@angular/core';
 import { ClarityModule } from '@clr/angular';
 import { CarbonIcon } from '../../../carbon-icon';
 import Renew16 from '@carbon/icons/es/renew/16';
-import { PgChart } from '../../postgres/ui/pg-chart';
+import { CarbonLineChart, CarbonLineSeries } from '../../../shared/carbon-line-chart';
 import { OsMetricsService } from '../os-metrics.service';
 
 @Component({
   selector: 'os-monitoring',
   standalone: true,
-  imports: [CommonModule, ClarityModule, CarbonIcon, PgChart],
+  imports: [CommonModule, ClarityModule, CarbonIcon, CarbonLineChart],
   template: `
     <section class="osm">
       <div class="osm-head">
@@ -31,10 +31,10 @@ import { OsMetricsService } from '../os-metrics.service';
         <article><span>Rejected tasks</span><strong>{{number(metrics.latestRejected(),0)}}</strong><small>last 5 minutes</small></article>
       </div>
       <div class="osm-charts" *ngIf="metrics.state()==='ok'">
-        <article><h3>JVM heap & CPU</h3><p>노드 중 최대 사용률</p><pg-chart kind="line" [labels]="metrics.series().labels" [series]="percentSeries()" ariaLabel="OpenSearch JVM heap과 CPU 사용률" /></article>
-        <article><h3>Documents</h3><p>클러스터 문서 수</p><pg-chart kind="line" [labels]="metrics.series().labels" [series]="documentSeries()" ariaLabel="OpenSearch 문서 수" /></article>
-        <article><h3>Storage</h3><p>가용 디스크와 index store, GiB</p><pg-chart kind="line" [labels]="metrics.series().labels" [series]="storageSeries()" ariaLabel="OpenSearch 디스크와 index store" /></article>
-        <article><h3>Thread-pool rejections</h3><p>5분 구간 거부 작업 합계</p><pg-chart kind="line" [labels]="metrics.series().labels" [series]="rejectedSeries()" ariaLabel="OpenSearch thread pool 거부 작업" /></article>
+        <article><h3>JVM heap & CPU</h3><p>노드 중 최대 사용률</p><os-carbon-line-chart [labels]="metrics.series().labels" [series]="percentSeries()" valueAxisTitle="Percent" ariaLabel="OpenSearch JVM heap과 CPU 사용률" /></article>
+        <article><h3>Documents</h3><p>클러스터 문서 수</p><os-carbon-line-chart [labels]="metrics.series().labels" [series]="documentSeries()" valueAxisTitle="Documents" ariaLabel="OpenSearch 문서 수" /></article>
+        <article><h3>Storage</h3><p>가용 디스크와 index store, GiB</p><os-carbon-line-chart [labels]="metrics.series().labels" [series]="storageSeries()" valueAxisTitle="GiB" ariaLabel="OpenSearch 디스크와 index store" /></article>
+        <article><h3>Thread-pool rejections</h3><p>5분 구간 거부 작업 합계</p><os-carbon-line-chart [labels]="metrics.series().labels" [series]="rejectedSeries()" valueAxisTitle="Rejected / 5m" ariaLabel="OpenSearch thread pool 거부 작업" /></article>
       </div>
       <p class="os-dim">{{metrics.hint()}} · 마지막 확인 {{metrics.lastSync() || '—'}}</p>
     </section>
@@ -49,8 +49,8 @@ export class OsMonitoringTab {
   number(value: number, digits: number): string { return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: digits }); }
   integer(value: number): string { return Math.round(value || 0).toLocaleString(); }
   bytes(value: number): string { const n=Number(value||0);return n>=1099511627776?`${(n/1099511627776).toFixed(1)} TiB`:n>=1073741824?`${(n/1073741824).toFixed(1)} GiB`:n>=1048576?`${(n/1048576).toFixed(1)} MiB`:`${Math.round(n)} B`; }
-  percentSeries(){const s=this.metrics.series();return[{label:'heap %',data:s.heap,color:'#0f62fe'},{label:'CPU %',data:s.cpu,color:'#8a3ffc'}];}
-  documentSeries(){return[{label:'documents',data:this.metrics.series().documents,color:'#24a148'}];}
-  storageSeries(){const s=this.metrics.series();return[{label:'available GiB',data:s.diskAvailable.map(v=>v/1073741824),color:'#0f62fe'},{label:'store GiB',data:s.storeBytes.map(v=>v/1073741824),color:'#fa4d56'}];}
-  rejectedSeries(){return[{label:'rejected / 5m',data:this.metrics.series().rejected,color:'#da1e28'}];}
+  percentSeries(): CarbonLineSeries[]{const s=this.metrics.series();return[{label:'heap %',data:s.heap,color:'#0f62fe'},{label:'CPU %',data:s.cpu,color:'#8a3ffc'}];}
+  documentSeries(): CarbonLineSeries[]{return[{label:'documents',data:this.metrics.series().documents,color:'#24a148'}];}
+  storageSeries(): CarbonLineSeries[]{const s=this.metrics.series();return[{label:'available GiB',data:s.diskAvailable.map(v=>v/1073741824),color:'#0f62fe'},{label:'store GiB',data:s.storeBytes.map(v=>v/1073741824),color:'#fa4d56'}];}
+  rejectedSeries(): CarbonLineSeries[]{return[{label:'rejected / 5m',data:this.metrics.series().rejected,color:'#da1e28'}];}
 }

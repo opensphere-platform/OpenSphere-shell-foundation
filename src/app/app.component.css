@@ -4,6 +4,7 @@
    구조·컴포넌트는 Clarity(clr-vertical-nav·clr-datagrid·clr-tabs·clr-alert·.card·.label·.btn),
    정체성은 토큰, os-* 는 Clarity 부재 표현(muted/mono/metric/section)만 — 등록 유틸. 인라인 style 0. */
 @import '@clr/ui/clr-ui.min.css';
+@import '@carbon/charts/styles.css';
 
 :host {
   /* 라이트 디자인 토큰(os-* 유틸이 소비). 크롬(내비·breadcrumb·레이아웃)은 app.component.ts 인라인 styles가 소유. */

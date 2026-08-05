@@ -145,6 +145,17 @@ const css = read('src/app/app.component.css');
 assert.match(css, /\.pgp-page-frame \.pfs-plugin-logo \{ border: 0; border-radius: 0;/, '장식 없는 공통 logo header 규칙 누락');
 assert.match(css, /\.pgp-page-frame \.pfs-plugin-tabs/, 'header와 tabs의 단일 frame 규칙 누락');
 
+// Monitoring 시계열은 PFSS 시각화 규칙인 Carbon Charts를 직접 사용한다.
+// PostgreSQL의 데이터·레이아웃 선례는 재사용하되 Chart.js PgChart로 회귀하지 않는다.
+const openSearchMonitoring = read('src/app/modules/opensearch/tabs/os-monitoring.tab.ts');
+const carbonLineChart = read('src/app/shared/carbon-line-chart.ts');
+assert.match(openSearchMonitoring, /CarbonLineChart/, 'OpenSearch Monitoring: Carbon Charts adapter 누락');
+assert.match(openSearchMonitoring, /os-carbon-line-chart/, 'OpenSearch Monitoring: Carbon line chart surface 누락');
+assert.doesNotMatch(openSearchMonitoring, /PgChart|pg-chart/, 'OpenSearch Monitoring: Chart.js PgChart 사용 금지');
+assert.match(carbonLineChart, /from '@carbon\/charts'/, 'Carbon Charts 공식 package import 누락');
+assert.match(carbonLineChart, /new LineChart\(/, 'Carbon Charts LineChart renderer 누락');
+assert.match(css, /@import '@carbon\/charts\/styles\.css'/, 'Shadow DOM Carbon Charts stylesheet 누락');
+
 const entry = read('ui-shell/ui-shell.plugin.js');
 const manualCount = (entry.match(/\['[^']+-operations-ko'/g) || []).length;
 assert.equal(manualCount, 21, '모든 Foundation plugin/module의 Manual 등록이 필요합니다.');
