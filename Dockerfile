@@ -25,7 +25,7 @@ LABEL org.opencontainers.image.title="OpenSphere Platform Foundation Service Sta
       io.opensphere.module.descriptor.key-id=$OS_MODULE_KEY_ID
 RUN apk upgrade --no-cache
 WORKDIR /app
-RUN npm install --omit=dev --no-audit --no-fund --no-save ws@8.21.0 mongodb@7.5.0 \
+RUN npm install --omit=dev --no-audit --no-fund --no-save ws@8.21.0 mongodb@7.5.0 pg@8.22.0 \
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 COPY --chmod=0644 server.js /app/server.js
 COPY ui-shell/ /app/plugins/

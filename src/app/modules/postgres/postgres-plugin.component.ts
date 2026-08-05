@@ -16,12 +16,13 @@ import { PgDatabasesTab } from './tabs/pg-databases.tab';
 import { PgBackupsTab } from './tabs/pg-backups.tab';
 import { PgEventsTab } from './tabs/pg-events.tab';
 import { PgClaimsTab } from './tabs/pg-claims.tab';
+import { PgAdminTab } from './admin/pg-admin.tab';
 import ArrowLeft16 from '@carbon/icons/es/arrow--left/16';
 import Download16 from '@carbon/icons/es/download/16';
 import WarningAlt16 from '@carbon/icons/es/warning--alt/16';
 import { PluginPageHeaderComponent, PluginPageHeaderModel, PluginPageTab, PluginTabsComponent } from '../../shared/plugin-page-shell.component';
 
-type PackageTab = 'overview' | 'operator' | 'cluster' | 'topology' | 'config' | 'databases' | 'backups' | 'events' | 'claims' | 'upgrade' | 'documentation';
+type PackageTab = 'overview' | 'operator' | 'cluster' | 'topology' | 'config' | 'databases' | 'admin' | 'backups' | 'events' | 'claims' | 'upgrade' | 'documentation';
 type Profile = 'development' | 'production' | 'custom';
 
 interface StorageClassRow {
@@ -68,7 +69,7 @@ const DEFAULT_FORM: PgForm = {
   styles: [':host { display: block; min-width: 0; }'],
   imports: [
     CommonModule, FormsModule, ClarityModule, CarbonIcon, PluginPageHeaderComponent, PluginTabsComponent,
-    PgOverviewTab, PgTopologyTab, PgConfigTab, PgDatabasesTab, PgBackupsTab, PgEventsTab, PgClaimsTab,
+    PgOverviewTab, PgTopologyTab, PgConfigTab, PgDatabasesTab, PgAdminTab, PgBackupsTab, PgEventsTab, PgClaimsTab,
   ],
   template: `
     <a class="vl-back" (click)="back()" (keydown.enter)="back()" role="button" tabindex="0">
@@ -234,6 +235,7 @@ const DEFAULT_FORM: PgForm = {
     <pg-topology *ngIf="tab() === 'topology' && clusterExists()"></pg-topology>
     <pg-config *ngIf="tab() === 'config' && clusterExists()"></pg-config>
     <pg-databases *ngIf="tab() === 'databases' && clusterExists()"></pg-databases>
+    <pg-admin *ngIf="tab() === 'admin' && clusterExists()"></pg-admin>
     <pg-backups *ngIf="tab() === 'backups' && clusterExists()"></pg-backups>
     <pg-events *ngIf="tab() === 'events' && clusterExists()"></pg-events>
     <pg-claims *ngIf="tab() === 'claims' && clusterExists()"></pg-claims>
@@ -281,6 +283,7 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
     { id: 'topology', label: 'Topology', requiresCluster: true },
     { id: 'config', label: 'Configuration', requiresCluster: true },
     { id: 'databases', label: 'Databases & Roles', requiresCluster: true, badge: true },
+    { id: 'admin', label: 'Database Objects', requiresCluster: true },
     { id: 'backups', label: 'Backups', requiresCluster: true, badge: true },
     { id: 'events', label: 'Events', requiresCluster: true, badge: true },
     { id: 'claims', label: 'Claims', requiresCluster: true },

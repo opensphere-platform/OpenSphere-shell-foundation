@@ -9,6 +9,7 @@ const path = require('path');
 const net = require('net');
 const crypto = require('crypto');
 const { MongoClient } = require('mongodb');
+const { Pool } = require('pg');
 const { WebSocketServer, WebSocket } = require('ws');
 const COOKIE = 'osng_token'; // 브라우저 WS는 커스텀 헤더를 못 실음 → 신원 토큰을 HttpOnly 쿠키로 전달
 // ⚠️ 'bearer' 쿠키는 Console Supabase access token이 아님 — 읽지 말 것.
@@ -64,6 +65,24 @@ const RUSTFS_DEFAULT_SECRET = 'rustfs-credentials';
 const PSMDB_NAME = 'foundation-data-mongodb';
 const PSMDB_CONNECTION_SECRET = `${PSMDB_NAME}-databaseadmin-conn-str`;
 const PSMDB_TLS_SECRET = `${PSMDB_NAME}-ssl`;
+const POSTGRES_ADMIN = Object.freeze({
+  namespace: FND_NS,
+  cluster: 'foundation-data-pg',
+  secret: 'foundation-data-pg-app',
+  service: `foundation-data-pg-rw.${FND_NS}.svc`,
+  port: 5432,
+  statementTimeoutMs: 10000,
+  rowLimit: 500,
+});
+const PG_NAME_RE = /^[A-Za-z_][A-Za-z0-9_$-]{0,62}$/;
+const PG_COLUMN_TYPES = Object.freeze(new Set([
+  'bigint', 'bigserial', 'boolean', 'bytea', 'date', 'double precision', 'integer',
+  'json', 'jsonb', 'numeric', 'real', 'smallint', 'text', 'time',
+  'timestamp', 'timestamp with time zone', 'uuid', 'varchar(255)',
+]));
+const PG_DEFAULTS = Object.freeze(new Set(['', 'now()', 'gen_random_uuid()', 'true', 'false']));
+const pgPools = new Map();
+let pgCredentialCache = null;
 const FOUNDATION_API = '/apis/foundation.opensphere.io/v1alpha1';
 const HIS_STATUS_SCHEMA = 'his-status.opensphere.io/v1alpha1';
 const FOUNDATION_CORE_CRDS = Object.freeze([
@@ -147,6 +166,214 @@ const k8sJson = async (method, path, body, actor, contentType) => {
   try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
   return { ok: r.ok, status: r.status, json, text };
 };
+
+function pgName(value, field = 'name') {
+  const name = String(value || '').trim();
+  if (!PG_NAME_RE.test(name)) throw { code: 400, msg: `${field} is not a supported PostgreSQL identifier` };
+  return name;
+}
+function pgIdentifier(value, field = 'name') {
+  return `"${pgName(value, field).replace(/"/g, '""')}"`;
+}
+function decodeSecretValue(data, key) {
+  const encoded = data?.[key];
+  return encoded ? Buffer.from(encoded, 'base64').toString('utf8') : '';
+}
+async function postgresCredentials(actor) {
+  if (pgCredentialCache && pgCredentialCache.expiresAt > Date.now()) return pgCredentialCache.value;
+  const result = await k8sJson('GET', `/api/v1/namespaces/${POSTGRES_ADMIN.namespace}/secrets/${POSTGRES_ADMIN.secret}`, undefined, actor);
+  if (!result.ok) throw { code: result.status, msg: `PostgreSQL connection Secret unavailable: ${k8sFailure(result)}` };
+  const data = result.json?.data || {};
+  const value = {
+    host: decodeSecretValue(data, 'host') || POSTGRES_ADMIN.service,
+    port: Number(decodeSecretValue(data, 'port') || POSTGRES_ADMIN.port),
+    database: decodeSecretValue(data, 'dbname') || 'app',
+    user: decodeSecretValue(data, 'username') || 'app',
+    password: decodeSecretValue(data, 'password'),
+  };
+  if (!value.password) throw { code: 503, msg: `PostgreSQL Secret ${POSTGRES_ADMIN.secret} has no password` };
+  pgCredentialCache = { value, expiresAt: Date.now() + 30000 };
+  return value;
+}
+async function postgresPool(database, actor) {
+  const credentials = await postgresCredentials(actor);
+  const db = database ? pgName(database, 'database') : credentials.database;
+  const key = `${credentials.host}:${credentials.port}/${db}/${credentials.user}`;
+  if (!pgPools.has(key)) {
+    const pool = new Pool({
+      ...credentials, database: db, max: 4, idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000, statement_timeout: POSTGRES_ADMIN.statementTimeoutMs,
+      application_name: 'opensphere-foundation-db-admin',
+    });
+    pool.on('error', (error) => console.warn(`[postgres-admin] idle pool error database=${db}: ${error.message}`));
+    pgPools.set(key, pool);
+  }
+  return pgPools.get(key);
+}
+async function pgRows(client, text, values = []) {
+  const result = await client.query({ text, values });
+  return result.rows;
+}
+async function postgresAdminCatalog(req, res, url) {
+  if (req.method !== 'GET') return jsonRes(res, 405, { error: 'method not allowed' });
+  try {
+    const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
+    const requestedDatabase = url.searchParams.get('database') || '';
+    const basePool = await postgresPool(undefined, actor);
+    const databases = await pgRows(basePool, `
+      SELECT datname AS name, pg_get_userbyid(datdba) AS owner,
+             pg_encoding_to_char(encoding) AS encoding,
+             datcollate AS collation, datconnlimit AS connection_limit,
+             pg_database_size(datname)::bigint AS size_bytes
+      FROM pg_database WHERE datallowconn AND NOT datistemplate ORDER BY datname`);
+    const credentials = await postgresCredentials(actor);
+    const selected = requestedDatabase || databases.find((item) => item.name === credentials.database)?.name || databases[0]?.name;
+    if (!selected || !databases.some((item) => item.name === selected)) throw { code: 404, msg: `database not found: ${selected || requestedDatabase}` };
+    const pool = await postgresPool(selected, actor);
+    const [schemas, objects, columns, indexes, constraints, functions, extensions, roles, activity] = await Promise.all([
+      pgRows(pool, `SELECT nspname AS name, pg_get_userbyid(nspowner) AS owner
+        FROM pg_namespace WHERE nspname NOT LIKE 'pg_toast%' ORDER BY CASE WHEN nspname='public' THEN 0 ELSE 1 END, nspname`),
+      pgRows(pool, `SELECT n.nspname AS schema, c.relname AS name,
+        CASE c.relkind WHEN 'r' THEN 'table' WHEN 'p' THEN 'partitioned table' WHEN 'v' THEN 'view'
+          WHEN 'm' THEN 'materialized view' WHEN 'S' THEN 'sequence' WHEN 'f' THEN 'foreign table' ELSE c.relkind::text END AS kind,
+        pg_get_userbyid(c.relowner) AS owner, c.reltuples::bigint AS estimated_rows,
+        pg_total_relation_size(c.oid)::bigint AS size_bytes
+        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE c.relkind IN ('r','p','v','m','S','f') AND n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema'
+        ORDER BY n.nspname, kind, c.relname`),
+      pgRows(pool, `SELECT table_schema AS schema, table_name AS table, ordinal_position, column_name AS name,
+        data_type, udt_name, is_nullable='YES' AS nullable, column_default
+        FROM information_schema.columns
+        WHERE table_schema NOT LIKE 'pg_%' AND table_schema <> 'information_schema'
+        ORDER BY table_schema, table_name, ordinal_position`),
+      pgRows(pool, `SELECT schemaname AS schema, tablename AS table, indexname AS name, indexdef AS definition
+        FROM pg_indexes WHERE schemaname NOT LIKE 'pg_%' AND schemaname <> 'information_schema'
+        ORDER BY schemaname, tablename, indexname`),
+      pgRows(pool, `SELECT n.nspname AS schema, c.relname AS table, con.conname AS name,
+        CASE con.contype WHEN 'p' THEN 'primary key' WHEN 'f' THEN 'foreign key' WHEN 'u' THEN 'unique'
+          WHEN 'c' THEN 'check' WHEN 'x' THEN 'exclusion' ELSE con.contype::text END AS kind,
+        pg_get_constraintdef(con.oid, true) AS definition
+        FROM pg_constraint con JOIN pg_class c ON c.oid=con.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema'
+        ORDER BY n.nspname, c.relname, con.conname`),
+      pgRows(pool, `SELECT n.nspname AS schema, p.proname AS name,
+        pg_get_function_identity_arguments(p.oid) AS arguments,
+        pg_get_function_result(p.oid) AS result, l.lanname AS language
+        FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_language l ON l.oid=p.prolang
+        WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema'
+        ORDER BY n.nspname, p.proname LIMIT 500`),
+      pgRows(pool, `SELECT extname AS name, extversion AS version, n.nspname AS schema
+        FROM pg_extension e JOIN pg_namespace n ON n.oid=e.extnamespace ORDER BY extname`),
+      pgRows(pool, `SELECT rolname AS name, rolsuper AS superuser, rolcreatedb AS create_database,
+        rolcreaterole AS create_role, rolcanlogin AS login, rolreplication AS replication,
+        rolconnlimit AS connection_limit FROM pg_roles ORDER BY rolname`),
+      pgRows(pool, `SELECT datname AS database, COALESCE(state,'unknown') AS state, count(*)::int AS sessions
+        FROM pg_stat_activity GROUP BY datname, state ORDER BY datname, state`),
+    ]);
+    return jsonRes(res, 200, {
+      schema: 'foundation.postgres.database-admin/v1alpha1', actor: actor.username,
+      cluster: POSTGRES_ADMIN.cluster, selectedDatabase: selected, rowLimit: POSTGRES_ADMIN.rowLimit,
+      databases, schemas, objects, columns, indexes, constraints, functions, extensions, roles, activity,
+      refreshedAt: new Date().toISOString(),
+    });
+  } catch (e) {
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 502, { error: e.msg || e.message || String(e) });
+  }
+}
+function postgresReadOnlySql(sql) {
+  const normalized = String(sql || '').trim().replace(/^\/\*[\s\S]*?\*\//, '').replace(/^--[^\n]*\n/, '').trim();
+  if (!/^(select|with|explain|show|values|table)\b/i.test(normalized)) {
+    throw { code: 400, msg: 'Query Tool is read-only. Use a typed management action for DDL.' };
+  }
+  if (normalized.length > 20000) throw { code: 400, msg: 'SQL exceeds 20,000 characters' };
+  return normalized;
+}
+async function postgresAdminQuery(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  try {
+    const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['database', 'sql']);
+    const database = pgName(body.database, 'database');
+    const sql = postgresReadOnlySql(body.sql);
+    const pool = await postgresPool(database, actor);
+    const client = await pool.connect();
+    const started = Date.now();
+    try {
+      await client.query('BEGIN TRANSACTION READ ONLY');
+      await client.query(`SET LOCAL statement_timeout = ${POSTGRES_ADMIN.statementTimeoutMs}`);
+      const result = await client.query(sql);
+      await client.query('ROLLBACK');
+      const rows = result.rows.slice(0, POSTGRES_ADMIN.rowLimit);
+      console.log(`[audit] user=${actor.username} action=postgres-read-query database=${database} rows=${result.rowCount || rows.length} durationMs=${Date.now()-started} ${new Date().toISOString()}`);
+      return jsonRes(res, 200, {
+        command: result.command, rowCount: result.rowCount ?? rows.length, truncated: result.rows.length > rows.length,
+        fields: result.fields.map((field) => ({ name: field.name, dataTypeID: field.dataTypeID })), rows,
+        durationMs: Date.now() - started,
+      });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally { client.release(); }
+  } catch (e) {
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 400, { error: e.msg || e.message || String(e) });
+  }
+}
+function postgresActionPlan(body) {
+  const action = String(body.action || '');
+  const database = pgName(body.database, 'database');
+  const schema = body.schema ? pgName(body.schema, 'schema') : 'public';
+  const name = body.name ? pgName(body.name, 'name') : '';
+  if (action === 'create-schema') return { database, target: `schema/${schema}`, sql: `CREATE SCHEMA ${pgIdentifier(schema, 'schema')}` };
+  if (action === 'drop-schema') return { database, target: `schema/${schema}`, sql: `DROP SCHEMA ${pgIdentifier(schema, 'schema')} RESTRICT` };
+  if (action === 'create-table') {
+    if (!name) throw { code: 400, msg: 'table name is required' };
+    if (!Array.isArray(body.columns) || body.columns.length < 1 || body.columns.length > 32) throw { code: 400, msg: 'table requires 1..32 columns' };
+    const columns = body.columns.map((column, index) => {
+      const columnName = pgIdentifier(column?.name, `columns[${index}].name`);
+      const type = String(column?.type || '').toLowerCase();
+      if (!PG_COLUMN_TYPES.has(type)) throw { code: 400, msg: `unsupported column type: ${type}` };
+      const defaultValue = String(column?.default || '').trim();
+      if (!PG_DEFAULTS.has(defaultValue)) throw { code: 400, msg: `unsupported column default: ${defaultValue}` };
+      return `${columnName} ${type}${column?.nullable === false ? ' NOT NULL' : ''}${defaultValue ? ` DEFAULT ${defaultValue}` : ''}`;
+    });
+    return { database, target: `table/${schema}.${name}`, sql: `CREATE TABLE ${pgIdentifier(schema)}.${pgIdentifier(name)} (${columns.join(', ')})` };
+  }
+  if (action === 'drop-table') {
+    if (!name) throw { code: 400, msg: 'table name is required' };
+    return { database, target: `table/${schema}.${name}`, sql: `DROP TABLE ${pgIdentifier(schema)}.${pgIdentifier(name)} RESTRICT` };
+  }
+  if (action === 'create-index') {
+    if (!name || !body.table) throw { code: 400, msg: 'index name and table are required' };
+    if (!Array.isArray(body.indexColumns) || !body.indexColumns.length || body.indexColumns.length > 16) throw { code: 400, msg: 'index requires 1..16 columns' };
+    const cols = body.indexColumns.map((column, index) => pgIdentifier(column, `indexColumns[${index}]`)).join(', ');
+    return { database, target: `index/${schema}.${name}`, sql: `CREATE${body.unique ? ' UNIQUE' : ''} INDEX ${pgIdentifier(name)} ON ${pgIdentifier(schema)}.${pgIdentifier(body.table, 'table')} (${cols})` };
+  }
+  if (action === 'drop-index') {
+    if (!name) throw { code: 400, msg: 'index name is required' };
+    return { database, target: `index/${schema}.${name}`, sql: `DROP INDEX ${pgIdentifier(schema)}.${pgIdentifier(name)} RESTRICT` };
+  }
+  throw { code: 400, msg: `unsupported PostgreSQL management action: ${action}` };
+}
+async function postgresAdminAction(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  let actor;
+  try {
+    actor = await foundationOwnerActor(req);
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['action', 'database', 'schema', 'name', 'table', 'columns', 'indexColumns', 'unique', 'reason']);
+    const reason = requireOwnerReason(body.reason);
+    const plan = postgresActionPlan(body);
+    await publishFoundationAudit(actor, 'postgres-object-management', `${plan.database}/${plan.target}`, 'attempt', `${reason}; action=${body.action}`);
+    const pool = await postgresPool(plan.database, actor);
+    await pool.query(plan.sql);
+    await publishFoundationAudit(actor, 'postgres-object-management', `${plan.database}/${plan.target}`, 'accepted', `${reason}; action=${body.action}`);
+    return jsonRes(res, 200, { accepted: true, action: body.action, database: plan.database, target: plan.target, sql: plan.sql });
+  } catch (e) {
+    if (actor) await publishFoundationAudit(actor, 'postgres-object-management', 'postgres', 'failed', e.msg || e.message || String(e)).catch(() => {});
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 400, { error: e.msg || e.message || String(e) });
+  }
+}
 
 function requireClosedOwnerBody(body, allowed) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw { code: 400, msg: 'JSON object required' };
@@ -1577,6 +1804,9 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/foundation/psmdb/summary') return psmdbSummary(req, res);
     if (p === '/api/foundation/psmdb/collection') return psmdbCollection(req, res);
     if (p === '/api/foundation/psmdb/user') return psmdbUser(req, res);
+    if (p === '/api/foundation/postgres/admin/catalog') return postgresAdminCatalog(req, res, new URL(req.url || '/', 'http://localhost'));
+    if (p === '/api/foundation/postgres/admin/query') return postgresAdminQuery(req, res);
+    if (p === '/api/foundation/postgres/admin/action') return postgresAdminAction(req, res);
     if (p === '/api/foundation/his-status') return hisStatusProxy(req, res);
     if (p === '/api/foundation/establishment/status') return foundationEstablishmentStatus(req, res);
     if (p === '/api/foundation/bootstrap/plan') return foundationBootstrapPlan(req, res);
@@ -1665,8 +1895,9 @@ if (require.main === module) {
     foundationBootstrapPlanView, sambaBootstrapSecretEvidence, sambaReadinessProjection,
     validateHisStatusContract,
     parseResp, encodeRespCommand, parseInfo, sanitizeAclLine, requireValkeyDb, requireValkeyKey,
+    postgresReadOnlySql, postgresActionPlan, pgName,
     foundationBootstrapState,
     HIS_STATUS_SCHEMA, FOUNDATION_CORE_CRDS,
-    FOUNDATION_ENGINE_MODEL, FOUNDATION_CLAIM_MODELS,
+    FOUNDATION_ENGINE_MODEL, FOUNDATION_CLAIM_MODELS, POSTGRES_ADMIN,
   };
 }
