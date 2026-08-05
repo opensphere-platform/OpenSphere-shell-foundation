@@ -277,3 +277,16 @@ test('typed IdentityDirectory owner input cannot carry parameters or credential 
   assert.match(create, /spec: \{ provider: 'samba-ad' \}/);
   assert.doesNotMatch(create, /body\.(?:parameters|consumerRef|realm|secret|credential)/);
 });
+
+test('Valkey credential path is exact-name and ServiceAccount scoped', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const rbac = fs.readFileSync(path.join(__dirname, '..', 'deploy', 'valkey-console-exact-secret-rbac.yaml'), 'utf8');
+  const start = source.indexOf('async function valkeyCredential');
+  const end = source.indexOf('// 제네릭 K8s API 프록시', start);
+  const handler = source.slice(start, end);
+  assert.match(handler, /name !== VALKEY_DEFAULT_SECRET/);
+  assert.match(handler, /application\/apply-patch\+yaml/);
+  assert.match(handler, /k8sJson\('PATCH', secretPath, secret, undefined/);
+  assert.match(rbac, /name: foundation-console-valkey-secret-manager[\s\S]*resourceNames: \["foundation-data-valkey-auth"\][\s\S]*verbs: \["get", "patch"\]/);
+  assert.match(rbac, /kind: ServiceAccount[\s\S]*name: opensphere-foundation[\s\S]*namespace: opensphere-console/);
+});

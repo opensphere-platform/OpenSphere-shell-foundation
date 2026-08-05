@@ -121,11 +121,11 @@ const readBody = (req) => new Promise((resolve, reject) => {
   const ch = []; req.on('data', (c) => ch.push(c)); req.on('end', () => resolve(Buffer.concat(ch))); req.on('error', reject);
 });
 const jsonRes = (res, code, obj) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
-const k8sJson = async (method, path, body, actor) => {
+const k8sJson = async (method, path, body, actor, contentType) => {
   const headers = new Headers({
     Authorization: `Bearer ${tok()}`,
     Accept: 'application/json',
-    ...(body ? { 'Content-Type': method === 'PATCH' ? 'application/merge-patch+json' : 'application/json' } : {}),
+    ...(body ? { 'Content-Type': contentType || (method === 'PATCH' ? 'application/merge-patch+json' : 'application/json') } : {}),
   });
   if (actor) {
     headers.set('Impersonate-User', actor.username);
@@ -1016,7 +1016,11 @@ async function valkeyContext(actor) {
   if (model.json?.spec?.parameters?.engines?.valkey !== 'enabled') throw { code: 409, msg: 'Valkey engine is not enabled' };
   const cfg = model.json?.spec?.parameters?.dataEngines?.valkey || {};
   const secretName = requireK8sName(cfg.authSecret || VALKEY_DEFAULT_SECRET);
-  const secret = await k8sJson('GET', `/api/v1/namespaces/${FND_NS}/secrets/${secretName}`, undefined, actor);
+  // This endpoint already authenticates the Console actor. Secret values are
+  // consumed only inside the Foundation backend and never returned to the
+  // browser. Use the workload identity so Kubernetes can enforce an exact
+  // Secret resourceNames allowlist without granting human users Secret read.
+  const secret = await k8sJson('GET', `/api/v1/namespaces/${FND_NS}/secrets/${secretName}`);
   if (!secret.ok) throw { code: secret.status, msg: `Valkey credential unavailable: ${k8sFailure(secret)}` };
   const encoded = secret.json?.data?.password;
   if (!encoded) throw { code: 409, msg: `Secret/${secretName} has no password key` };
@@ -1155,12 +1159,14 @@ async function valkeyCredential(req, res) {
     const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
     requireClosedOwnerBody(body, ['name', 'reason']);
     const name = requireK8sName(body.name || VALKEY_DEFAULT_SECRET), reason = requireOwnerReason(body.reason);
+    if (name !== VALKEY_DEFAULT_SECRET) throw { code: 400, msg: `credential name must be ${VALKEY_DEFAULT_SECRET}` };
     const password = crypto.randomBytes(24).toString('base64url');
-    const secretPath = `/api/v1/namespaces/${FND_NS}/secrets`;
+    const secretPath = `/api/v1/namespaces/${FND_NS}/secrets/${name}?fieldManager=foundation-console&force=true`;
     const secret = { apiVersion: 'v1', kind: 'Secret', metadata: { name, namespace: FND_NS, labels: { 'foundation.opensphere.io/engine': 'valkey', 'opensphere.io/managed-by': 'foundation' } }, type: 'Opaque', stringData: { password } };
     await publishFoundationAudit(actor, 'valkey-credential-create', `Secret/${FND_NS}/${name}`, 'attempt', reason);
-    let result = await k8sJson('POST', secretPath, secret, actor);
-    if (result.status === 409) result = await k8sJson('PATCH', `${secretPath}/${name}`, { metadata: { labels: secret.metadata.labels }, stringData: secret.stringData }, actor);
+    // Server-side apply addresses the fixed Secret by name, so the ServiceAccount
+    // requires only get/patch on that exact resource (no namespace-wide create).
+    const result = await k8sJson('PATCH', secretPath, secret, undefined, 'application/apply-patch+yaml');
     if (!result.ok) throw { code: result.status, msg: k8sFailure(result) };
     await publishFoundationAudit(actor, 'valkey-credential-create', `Secret/${FND_NS}/${name}`, 'accepted', reason);
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
