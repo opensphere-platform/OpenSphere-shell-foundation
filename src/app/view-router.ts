@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 
 // Foundation 딥링크 — 플랫폼 표준(shell-template 원본)과 동일: **경로 세그먼트 + pushState/popstate**.
-// 콘솔 pluginHostMatcher가 `/p/foundation` 아래 임의 서브패스를 전부 위임하므로, 서브패스가 바뀌어도
+// 콘솔 host matcher가 `/p/foundation` 또는 PFSS 정본 `/pfss` 아래 서브패스를 위임하므로, 경로가 바뀌어도
 // id(foundation)가 그대로면 재마운트되지 않는다. 주소 형태:
 //   · 모듈:      /p/foundation/<module>            (예: /p/foundation/postgres)
 //   · 모듈+탭:   /p/foundation/<module>/<tab>       (예: /p/foundation/postgres/config)
@@ -19,11 +19,12 @@ export class ViewRouter {
     try { window.addEventListener('popstate', () => this.read()); } catch { /* noop */ }
   }
 
-  /** URL 경로 → module/tab 복원(북마크·새로고침·뒤로가기). 'foundation' 세그먼트 뒤를 취한다. */
+  /** URL 경로 → module/tab 복원(북마크·새로고침·뒤로가기). */
   private read(): void {
     try {
       const parts = location.pathname.split('/').filter(Boolean);
-      const i = parts.indexOf('foundation');
+      const pfss = parts[0] === 'pfss';
+      const i = pfss ? 0 : parts.indexOf('foundation');
       const m = i >= 0 ? (parts[i + 1] ?? '') : '';
       const t = i >= 0 ? (parts[i + 2] ?? '') : '';
       const d = i >= 0 ? (parts[i + 3] ?? '') : '';
@@ -64,7 +65,7 @@ export class ViewRouter {
         'otel', 'tempo', 'loki', 'grafana-operator', 'ptm', 'delivery',
       ].includes(m);
       const t = this.tab();
-      let next = '/p/foundation';
+      let next = m === 'opensearch' ? '/pfss' : '/p/foundation';
       if (m && m !== 'overview') next += hasTabs && t && t !== 'overview' ? `/${m}/${t}` : `/${m}`;
       if (m === 'delivery' && t && t !== 'overview' && this.detail() !== 'overview') next += `/${this.detail()}`;
       const target = next + location.search + location.hash;

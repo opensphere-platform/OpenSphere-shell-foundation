@@ -13,7 +13,7 @@
 | Route | Package | Element | Install source |
 | --- | --- | --- | --- |
 | `/p/foundation/samba` | `samba-ad` | `osp-samba-ad` | `OpenSphere-plugin-samba-ad` |
-| `/p/foundation/opensearch` | `opensearch` | `osp-opensearch` | `OpenSphere-plugin-opensearch` |
+| `/pfss/opensearch` | `opensearch` | `osp-opensearch` | `OpenSphere-plugin-opensearch` |
 
 ## OpenSearch 0-Stage Flow
 
@@ -22,7 +22,7 @@
 3. Foundation control-plane sets `FoundationModel/data.spec.engines.opensearch=enabled`.
 4. Control-plane reconciles OpenSearch StatefulSet and Service in `opensphere-foundation`.
 5. Admin opens the OpenSearch plugin from the installed engine page.
-6. Foundation mounts the verified `osp-opensearch` element at `/p/foundation/opensearch`.
+6. Foundation mounts the verified `osp-opensearch` element at `/pfss/opensearch`.
 
 ## Verification
 

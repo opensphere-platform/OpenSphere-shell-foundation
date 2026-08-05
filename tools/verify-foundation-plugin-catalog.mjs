@@ -13,7 +13,7 @@ const expectedRoutes = new Map([
   ['postgres', '/p/foundation/postgres'],
   ['percona-psmdb', '/p/foundation/psmdb'],
   ['valkey', '/p/foundation/valkey'],
-  ['opensearch', '/p/foundation/opensearch'],
+  ['opensearch', '/pfss/opensearch'],
   ['rustfs', '/p/foundation/rustfs'],
   ['keycloak', '/p/foundation/keycloak'],
   ['apache-syncope', '/p/foundation/syncope'],

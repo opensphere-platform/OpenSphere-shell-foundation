@@ -12,7 +12,7 @@ const FOUNDATION_MANUALS = [
   ['postgresql-operations-ko', 'OpenSphere PostgreSQL 19 플러그인 설치 및 운영 안내서', 'postgresql-operations.ko.md', '/p/foundation/postgres', ['postgresql', 'cloudnativepg', 'data']],
   ['percona-psmdb-operations-ko', 'OpenSphere Percona PSMDB 플러그인 설치 및 운영 안내서', 'percona-psmdb-operations.ko.md', '/p/foundation/psmdb', ['mongodb', 'percona', 'data']],
   ['valkey-operations-ko', 'OpenSphere Valkey 플러그인 설치 및 운영 안내서', 'valkey-operations.ko.md', '/p/foundation/valkey', ['valkey', 'cache', 'data']],
-  ['opensearch-operations-ko', 'OpenSphere OpenSearch 플러그인 설치 및 운영 안내서', 'opensearch-operations.ko.md', '/p/foundation/opensearch', ['opensearch', 'search', 'vector', 'data']],
+  ['opensearch-operations-ko', 'OpenSphere OpenSearch 플러그인 설치 및 운영 안내서', 'opensearch-operations.ko.md', '/pfss/opensearch', ['opensearch', 'search', 'vector', 'data']],
   ['rustfs-operations-ko', 'OpenSphere RustFS 플러그인 설치 및 운영 안내서', 'rustfs-operations.ko.md', '/p/foundation/rustfs', ['rustfs', 's3', 'object-storage', 'data']],
   ['keycloak-operations-ko', 'OpenSphere Keycloak 플러그인 설치 및 운영 안내서', 'keycloak-operations.ko.md', '/p/foundation/keycloak', ['keycloak', 'oidc', 'identity']],
   ['samba-addc-operations-ko', 'OpenSphere Samba AD DC 플러그인 설치 및 운영 안내서', 'samba-addc-operations.ko.md', '/p/foundation/addc', ['samba', 'ad-dc', 'ldap', 'identity']],

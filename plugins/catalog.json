@@ -50,7 +50,7 @@
       "displayName": "OpenSearch",
       "sector": "data",
       "capability": "data.search.opensearch",
-      "route": "/p/foundation/opensearch",
+      "route": "/pfss/opensearch",
       "element": "osp-foundation-opensearch",
       "logo": "https://logos.opl.io.kr/i/opensearch",
       "description": "검색·벡터 인덱스와 Help Center 통합검색 저장 계층을 설치·운영한다.",
