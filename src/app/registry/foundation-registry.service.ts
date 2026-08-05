@@ -90,8 +90,8 @@ export interface OpaInstallParameters {
   cpuLimit: string;
   memoryLimit: string;
   monitoring: boolean;
-  policyMode: 'bootstrap-fail-closed';
-  ingressMode: 'cluster-internal';
+  policyMode: 'bootstrap-fail-closed' | 'signed-bundle-fail-closed';
+  ingressMode: 'cluster-internal' | 'cluster-internal-mtls';
 }
 
 // Foundation(host)의 plugin 거버넌스 — 등록(registry)·상태(health 어댑트)·수명주기(enable/disable)·모니터링 소유.

@@ -25,6 +25,7 @@ const (
 	keycloakName   = "foundation-identity-keycloak"
 	sambaName      = "foundation-identity-samba"
 	opaName        = "foundation-identity-opa"
+	opaControlName = "foundation-identity-opa-control"
 	workforceRealm = "opensphere-workforce"
 	sambaRealm     = "OPENSPHERE.LOCAL" // 번들 env DOMAIN과 단일 선언(치환 아님 — 변경 시 둘 다)
 )
@@ -35,7 +36,7 @@ func issuerURL(ns string) string {
 	return "http://" + keycloakSvcDNS(ns) + ":8080/realms/" + workforceRealm
 }
 func ldapURL(ns string) string { return "ldap://" + sambaSvcDNS(ns) + ":389" }
-func opaURL(ns string) string  { return "http://" + opaName + "." + ns + ".svc:8181" }
+func opaURL(ns string) string  { return "https://" + opaName + "." + ns + ".svc:8181" }
 
 func configuredSambaRealm(fm *unstructured.Unstructured) string {
 	v, found, _ := unstructured.NestedString(fm.Object, "spec", "parameters", "samba", "domain")
@@ -96,7 +97,7 @@ func opaExplicitlyEnabled(fm *unstructured.Unstructured) bool {
 }
 
 func opaParams(fm *unstructured.Unstructured) opaEngineOpts {
-	o := opaEngineOpts{version: "1.18.2-static", profile: "development", replicas: 1, cpuRequest: "50m", memoryRequest: "64Mi", cpuLimit: "500m", memoryLimit: "256Mi", monitoring: true}
+	o := opaEngineOpts{version: "1.18.2-static", profile: "production", replicas: 2, cpuRequest: "100m", memoryRequest: "128Mi", cpuLimit: "1", memoryLimit: "512Mi", monitoring: true}
 	p, _, _ := unstructured.NestedMap(fm.Object, "spec", "parameters", "identityEngines", "opa")
 	if p == nil {
 		return o
@@ -106,13 +107,16 @@ func opaParams(fm *unstructured.Unstructured) opaEngineOpts {
 		o.version = "1.18.2-static"
 	}
 	o.profile = pStr(p, "profile", o.profile)
+	if o.profile != "production" {
+		o.profile = "production"
+	}
 	o.cpuRequest = pStr(p, "cpuRequest", o.cpuRequest)
 	o.memoryRequest = pStr(p, "memoryRequest", o.memoryRequest)
 	o.cpuLimit = pStr(p, "cpuLimit", o.cpuLimit)
 	o.memoryLimit = pStr(p, "memoryLimit", o.memoryLimit)
 	o.replicas = pInt(p, "replicas", o.replicas)
-	if o.replicas < 1 {
-		o.replicas = 1
+	if o.replicas < 2 {
+		o.replicas = 2
 	}
 	if o.replicas > 5 {
 		o.replicas = 5
@@ -122,7 +126,8 @@ func opaParams(fm *unstructured.Unstructured) opaEngineOpts {
 }
 
 func buildOPABundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructured.Unstructured, error) {
-	objs, err := buildBundle(identityOPABundleYAML, cfg.managedNS, cfg.opaImage, "identity", fm.GetName())
+	doc := strings.ReplaceAll(identityOPABundleYAML, "__OPA_CONTROL_IMAGE__", cfg.opaControlImage)
+	objs, err := buildBundle(doc, cfg.managedNS, cfg.opaImage, "identity", fm.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +162,7 @@ func buildOPABundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructured
 			}
 			annotations["foundation.opensphere.io/profile"] = o.profile
 			annotations["foundation.opensphere.io/monitoring"] = boolStr(o.monitoring)
-			annotations["foundation.opensphere.io/policy-mode"] = "bootstrap-fail-closed"
+			annotations["foundation.opensphere.io/policy-mode"] = "signed-bundle-fail-closed"
 			obj.SetAnnotations(annotations)
 		}
 		out = append(out, obj)
@@ -330,7 +335,7 @@ func identityReady(ctx context.Context, r *modelReconciler, fm *unstructured.Uns
 		ok = ok && r.deploymentReady(ctx, sambaName)
 	}
 	if opaExplicitlyEnabled(fm) {
-		ok = ok && r.deploymentReady(ctx, opaName)
+		ok = ok && r.deploymentReady(ctx, opaName) && r.deploymentReady(ctx, opaControlName)
 	}
 	return ok
 }
@@ -362,7 +367,8 @@ func observeIdentity(ctx context.Context, r *modelReconciler, fm *unstructured.U
 	ko := keycloakParams(fm)
 	kv := map[string]interface{}{"id": "keycloak_version", "unit": "", "value": ko.version, "healthy": true, "source": "spec.parameters.identityEngines.keycloak.version"}
 	kr := map[string]interface{}{"id": "keycloak_replicas", "unit": "count", "value": fmt.Sprintf("%d", ko.replicas), "healthy": true, "source": "spec.parameters.identityEngines.keycloak.replicas"}
-	decisionTelemetry := map[string]interface{}{"id": "opa_decision_outcomes", "unit": "count", "value": "n/a", "healthy": false, "source": "decision_logs", "note": "allow/deny는 HTTP 200 결과값이므로 native Prometheus metric으로 구분 불가; 영속 decision-log sink 필요"}
+	decisionSinkReady := opaExplicitlyEnabled(fm) && r.deploymentReady(ctx, opaControlName)
+	decisionTelemetry := map[string]interface{}{"id": "opa_decision_outcomes", "unit": "count", "value": "durable", "healthy": decisionSinkReady, "source": "CloudNativePG opensphere_opa_decision_log", "note": "원문 input 제거 후 allow/deny 결과만 30일 보존"}
 	return []interface{}{kc, kv, kr, sm, opa, decisionTelemetry, login, scim}, nil
 }
 
@@ -374,7 +380,14 @@ func extraIdentity(cfg *config, o *unstructured.Unstructured) {
 	setNested(o, ldapURL(cfg.managedNS), "status", "ldapURL")
 	setNested(o, configuredSambaRealm(o), "status", "directoryRealm")
 	setNested(o, opaURL(cfg.managedNS), "status", "opaURL")
-	setNested(o, "bootstrap-fail-closed", "status", "opaPolicyMode")
+	op := opaParams(o)
+	setNested(o, "signed-bundle-fail-closed", "status", "opaPolicyMode")
+	setNested(o, op.profile, "status", "opaProfile")
+	setNested(o, opaProductionBundleRevision, "status", "opaBundleRevision")
+	setNested(o, "opensphere-opa-edge-bundle-v1", "status", "opaBundleSigningKeyID")
+	setNested(o, "CloudNativePG/opensphere_opa_decision_log (30d)", "status", "opaDecisionLogSink")
+	setNested(o, "mTLS", "status", "opaTLSMode")
+	setNested(o, op.profile == "production" && op.replicas >= 2, "status", "opaProductionReady")
 	setNested(o, keycloakParams(o).version, "status", "keycloakVersion")
 	setNested(o, keycloakParams(o).profile, "status", "keycloakProfile")
 }

@@ -269,7 +269,11 @@ func bundleKinds() []schema.GroupVersionKind {
 		{Group: "", Version: "v1", Kind: "ConfigMap"},
 		{Group: "", Version: "v1", Kind: "ServiceAccount"},
 		{Group: "networking.k8s.io", Version: "v1", Kind: "NetworkPolicy"},
+		{Group: "policy", Version: "v1", Kind: "PodDisruptionBudget"},
 		{Group: "monitoring.coreos.com", Version: "v1", Kind: "ServiceMonitor"},
+		{Group: "monitoring.coreos.com", Version: "v1", Kind: "PrometheusRule"},
+		{Group: "cert-manager.io", Version: "v1", Kind: "Issuer"},
+		{Group: "cert-manager.io", Version: "v1", Kind: "Certificate"},
 		cnpgClusterGVK, // data hybrid-wrap: CloudNativePG Cluster CR(라벨 회수)
 		cnpgPoolerGVK,  // data: PgBouncer Pooler CR(라벨 회수)
 		psmdbGVK,       // data: PerconaServerMongoDB CR(라벨 회수)

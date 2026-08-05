@@ -9,9 +9,11 @@ export interface OpaMetricSeries {
   errorPercent: number[];
   heapMiB: number[];
   goroutines: number[];
+	allowRate: number[];
+	denyRate: number[];
 }
 
-const EMPTY: OpaMetricSeries = { labels: [], evaluations: [], p95Milliseconds: [], errorPercent: [], heapMiB: [], goroutines: [] };
+const EMPTY: OpaMetricSeries = { labels: [], evaluations: [], p95Milliseconds: [], errorPercent: [], heapMiB: [], goroutines: [], allowRate: [], denyRate: [] };
 
 @Injectable({ providedIn: 'root' })
 export class OpaService extends WorkloadHealth {
@@ -61,6 +63,8 @@ export class OpaMetricsService {
   readonly latestError = computed(() => this.last(this.series().errorPercent));
   readonly latestHeap = computed(() => this.last(this.series().heapMiB));
   readonly latestGoroutines = computed(() => this.last(this.series().goroutines));
+	readonly latestAllow = computed(() => this.last(this.series().allowRate));
+	readonly latestDeny = computed(() => this.last(this.series().denyRate));
   private timer?: ReturnType<typeof setInterval>;
   private refs = 0;
 
@@ -94,14 +98,19 @@ export class OpaMetricsService {
       const response = await hostFetch(this.prom('api/v1/targets?state=active'), { cache: 'no-store' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const body = await response.json();
-      const targets = (body.data?.activeTargets ?? []).filter((item: any) => {
+      const all = body.data?.activeTargets ?? [];
+		const targets = all.filter((item: any) => {
         const labels = item.labels ?? item.discoveredLabels ?? {};
         return labels.namespace === FND_NS && (labels.service === 'foundation-identity-opa' || String(labels.job ?? '').includes('foundation-identity-opa'));
       });
-      if (!targets.length) { this.target.set('missing'); this.targetDetail.set('ServiceMonitor target 없음'); return; }
-      const down = targets.filter((item: any) => item.health !== 'up');
+		const control = all.filter((item: any) => {
+			const labels = item.labels ?? item.discoveredLabels ?? {};
+			return labels.namespace === FND_NS && labels.service === 'foundation-identity-opa-control';
+		});
+		if (!targets.length || !control.length) { this.target.set('missing'); this.targetDetail.set('OPA 또는 decision-log ServiceMonitor target 없음'); return; }
+		const down = [...targets, ...control].filter((item: any) => item.health !== 'up');
       this.target.set(down.length ? 'down' : 'up');
-      this.targetDetail.set(down.length ? `${down.length}/${targets.length} target down` : `${targets.length}/${targets.length} target up`);
+		this.targetDetail.set(down.length ? `${down.length}/${targets.length + control.length} target down` : `OPA ${targets.length}/${targets.length} · audit ${control.length}/${control.length} target up`);
     } catch (error) {
       this.target.set('missing');
       this.targetDetail.set(`Targets 조회 실패: ${String((error as Error)?.message ?? error)}`);
@@ -112,15 +121,18 @@ export class OpaMetricsService {
     const end = Math.floor(Date.now() / 1000);
     const start = end - 3600;
     const match = 'namespace="opensphere-foundation",service="foundation-identity-opa"';
+		const controlMatch = 'namespace="opensphere-foundation",service="foundation-identity-opa-control"';
     const decisions = `${match},handler="v1/data"`;
     this.state.set('loading');
     try {
-      const [evaluations, p95, errors, heap, goroutines] = await Promise.all([
+      const [evaluations, p95, errors, heap, goroutines, allowRate, denyRate] = await Promise.all([
         this.range(`sum(rate(http_request_duration_seconds_count{${decisions}}[5m]))`, start, end),
         this.range(`1000 * histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{${decisions}}[5m])))`, start, end),
         this.range(`100 * sum(rate(http_request_duration_seconds_count{${decisions},code=~"4..|5.."}[5m])) / clamp_min(sum(rate(http_request_duration_seconds_count{${decisions}}[5m])), 0.000000001)`, start, end),
         this.range(`max(go_memstats_alloc_bytes{${match}}) / 1048576`, start, end),
         this.range(`max(go_goroutines{${match}})`, start, end),
+			this.range(`sum(rate(opensphere_opa_decisions_total{${controlMatch},result="allow"}[5m]))`, start, end),
+			this.range(`sum(rate(opensphere_opa_decisions_total{${controlMatch},result="deny"}[5m]))`, start, end),
       ]);
       const base = heap.length ? heap : goroutines.length ? goroutines : evaluations.length ? evaluations : p95;
       if (!base.length) {
@@ -133,9 +145,10 @@ export class OpaMetricsService {
         labels: base.map(([time]) => new Date(time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
         evaluations: this.align(base, evaluations), p95Milliseconds: this.align(base, p95), errorPercent: this.align(base, errors),
         heapMiB: this.align(base, heap), goroutines: this.align(base, goroutines),
+			allowRate: this.align(base, allowRate), denyRate: this.align(base, denyRate),
       });
       this.state.set('ok');
-      this.hint.set('OPA native Prometheus · 최근 1시간 · 60초 간격 · 화면 15초 갱신');
+		this.hint.set('OPA + durable audit Prometheus · 최근 1시간 · 60초 간격 · 화면 15초 갱신');
     } catch (error) {
       this.series.set(EMPTY);
       this.state.set('error');

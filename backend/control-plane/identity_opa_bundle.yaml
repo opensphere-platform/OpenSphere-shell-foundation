@@ -1,6 +1,6 @@
-# OPA policy decision point — FoundationModel/identity.spec.parameters.engines.opa=enabled.
-# The bootstrap policy is deliberately fail-closed. Runtime policy mutation APIs are denied;
-# production policy delivery must replace this bootstrap with a verified signed bundle.
+# OPA production policy decision point. A signed, revisioned bundle is served by
+# a two-replica mTLS control service and decision outcomes are durably projected
+# into CloudNativePG without retaining policy input.
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -11,9 +11,117 @@ metadata:
 automountServiceAccountToken: false
 ---
 apiVersion: v1
-kind: ConfigMap
+kind: ServiceAccount
+metadata:
+  name: foundation-identity-opa-control
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+automountServiceAccountToken: false
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
 metadata:
   name: foundation-identity-opa-bootstrap
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: foundation-identity-opa-ca
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+spec:
+  isCA: true
+  commonName: OpenSphere OPA Production CA
+  secretName: foundation-identity-opa-ca
+  duration: 8760h
+  renewBefore: 720h
+  privateKey: { algorithm: ECDSA, size: 256, rotationPolicy: Always }
+  issuerRef: { name: foundation-identity-opa-bootstrap, kind: Issuer }
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: foundation-identity-opa-ca
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+spec:
+  ca:
+    secretName: foundation-identity-opa-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: foundation-identity-opa-server
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+spec:
+  secretName: foundation-identity-opa-server-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey: { algorithm: ECDSA, size: 256, rotationPolicy: Always }
+  usages: [server auth]
+  dnsNames:
+    - foundation-identity-opa
+    - foundation-identity-opa.__NAMESPACE__.svc
+    - foundation-identity-opa.__NAMESPACE__.svc.cluster.local
+  issuerRef: { name: foundation-identity-opa-ca, kind: Issuer }
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: foundation-identity-opa-consumer
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+spec:
+  secretName: foundation-identity-opa-consumer-tls
+  commonName: foundation-identity-opa-consumer
+  duration: 720h
+  renewBefore: 168h
+  privateKey: { algorithm: ECDSA, size: 256, rotationPolicy: Always }
+  usages: [client auth]
+  issuerRef: { name: foundation-identity-opa-ca, kind: Issuer }
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: foundation-identity-opa-control-server
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+spec:
+  secretName: foundation-identity-opa-control-server-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey: { algorithm: ECDSA, size: 256, rotationPolicy: Always }
+  usages: [server auth]
+  dnsNames:
+    - foundation-identity-opa-control
+    - foundation-identity-opa-control.__NAMESPACE__.svc
+    - foundation-identity-opa-control.__NAMESPACE__.svc.cluster.local
+  issuerRef: { name: foundation-identity-opa-ca, kind: Issuer }
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: foundation-identity-opa-control-client
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+spec:
+  secretName: foundation-identity-opa-control-client-tls
+  commonName: foundation-identity-opa-agent
+  duration: 720h
+  renewBefore: 168h
+  privateKey: { algorithm: ECDSA, size: 256, rotationPolicy: Always }
+  usages: [client auth]
+  issuerRef: { name: foundation-identity-opa-ca, kind: Issuer }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foundation-identity-opa-production
   namespace: __NAMESPACE__
   labels: { foundation.opensphere.io/engine: opa }
 data:
@@ -21,44 +129,127 @@ data:
     labels:
       system: opensphere
       capability: identity.policy.opa
+      profile: production
+    services:
+      control:
+        url: https://foundation-identity-opa-control.__NAMESPACE__.svc:8443
+        response_header_timeout_seconds: 5
+        tls:
+          ca_cert: /etc/opa/control-client/ca.crt
+        credentials:
+          client_tls:
+            cert: /etc/opa/control-client/tls.crt
+            private_key: /etc/opa/control-client/tls.key
+    bundles:
+      authz:
+        service: control
+        resource: bundle.tar.gz
+        persist: true
+        size_limit_bytes: 1048576
+        polling:
+          min_delay_seconds: 10
+          max_delay_seconds: 20
+        signing:
+          keyid: opensphere-opa-edge-bundle-v1
+          scope: opensphere-production
+    keys:
+      opensphere-opa-edge-bundle-v1:
+        algorithm: ES256
+        scope: opensphere-production
+        key: |
+          -----BEGIN PUBLIC KEY-----
+          MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEJs4gbz2YdFZJBKsPPN0FK6OENXie
+          OureMZ+GVopSj3b1ugFUqsFPGjXwwNNM0SWNVzxplVe0zsfNPYJbw+uI4Q==
+          -----END PUBLIC KEY-----
+    decision_logs:
+      service: control
+      resource: /logs
+      reporting:
+        buffer_type: event
+        buffer_size_limit_events: 10000
+        upload_size_limit_bytes: 1048576
+        min_delay_seconds: 1
+        max_delay_seconds: 3
+        trigger: immediate
     status:
+      service: control
       prometheus: true
-  system-authz.rego: |
-    package system.authz
-
-    default allow := false
-
-    # Consumers can only evaluate the OpenSphere policy namespace. Policy/data
-    # mutation, ad-hoc queries, compile and configuration APIs stay denied.
-    allow if {
-      input.method == "POST"
-      count(input.path) >= 3
-      input.path[0] == "v1"
-      input.path[1] == "data"
-      input.path[2] == "opensphere"
-    }
-
-    # Kubelet and Prometheus reach only the NetworkPolicy-restricted diagnostic
-    # listener. These are the only anonymous read endpoints.
-    allow if {
-      input.method == "GET"
-      input.path in [["health"], ["metrics"]]
-    }
-  bootstrap.rego: |
-    package opensphere.authz
-
-    # No request is allowed until an approved policy bundle replaces this
-    # development bootstrap. Undefined input therefore cannot become allow.
-    default allow := false
+    persistence_directory: /var/lib/opa
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: foundation-identity-opa-control
+  namespace: __NAMESPACE__
+  labels: { app: foundation-identity-opa-control, foundation.opensphere.io/engine: opa }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: foundation-identity-opa-control }
+  template:
+    metadata:
+      labels: { app: foundation-identity-opa-control, foundation.opensphere.io/engine: opa }
+    spec:
+      serviceAccountName: foundation-identity-opa-control
+      automountServiceAccountToken: false
+      imagePullSecrets: [{ name: opensphere-ghcr-pull }]
+      securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532 }
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: { matchLabels: { app: foundation-identity-opa-control } }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector: { matchLabels: { app: foundation-identity-opa-control } }
+      containers:
+        - name: control
+          image: __OPA_CONTROL_IMAGE__
+          args:
+            - --mode=opa-control
+            - --listen-address=:8443
+            - --metrics-address=:8080
+            - --database-url=$(DATABASE_URL)
+            - --tls-cert-file=/etc/opa-control/tls/tls.crt
+            - --tls-key-file=/etc/opa-control/tls/tls.key
+            - --tls-ca-file=/etc/opa-control/tls/ca.crt
+            - --decision-retention-days=30
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: foundation-data-pg-app, key: uri } }
+          ports:
+            - { name: control, containerPort: 8443 }
+            - { name: metrics, containerPort: 8080 }
+          readinessProbe:
+            httpGet: { path: /readyz, port: metrics }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          volumeMounts:
+            - { name: tls, mountPath: /etc/opa-control/tls, readOnly: true }
+      volumes:
+        - name: tls
+          secret: { secretName: foundation-identity-opa-control-server-tls }
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: foundation-identity-opa
   namespace: __NAMESPACE__
-  labels: { foundation.opensphere.io/engine: opa }
+  labels: { app: foundation-identity-opa, foundation.opensphere.io/engine: opa }
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels: { app: foundation-identity-opa }
   template:
@@ -67,24 +258,39 @@ spec:
     spec:
       serviceAccountName: foundation-identity-opa
       automountServiceAccountToken: false
-      imagePullSecrets:
-        - name: opensphere-ghcr-pull
+      imagePullSecrets: [{ name: opensphere-ghcr-pull }]
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000 }
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: { matchLabels: { app: foundation-identity-opa } }
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector: { matchLabels: { app: foundation-identity-opa } }
       containers:
         - name: opa
           image: __IMAGE__
           args:
             - run
             - --server
-            - --addr=0.0.0.0:8181
+            - --addr=https://0.0.0.0:8181
             - --diagnostic-addr=0.0.0.0:8282
+            - --authentication=tls
             - --authorization=basic
+            - --tls-cert-file=/etc/opa/server-tls/tls.crt
+            - --tls-private-key-file=/etc/opa/server-tls/tls.key
+            - --tls-ca-cert-file=/etc/opa/server-tls/ca.crt
+            - --tls-cert-refresh-period=1m
             - --config-file=/etc/opa/config.yaml
             - --log-format=json
             - --log-level=info
-            - /etc/opa/policies
           ports:
-            - { name: http, containerPort: 8181 }
+            - { name: https, containerPort: 8181 }
             - { name: diagnostic, containerPort: 8282 }
           readinessProbe:
             httpGet: { path: "/health?plugins", port: diagnostic }
@@ -95,16 +301,23 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 10
           resources:
-            requests: { cpu: 50m, memory: 64Mi }
-            limits: { cpu: 500m, memory: 256Mi }
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: "1", memory: 512Mi }
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
           volumeMounts:
             - { name: config, mountPath: /etc/opa/config.yaml, subPath: config.yaml, readOnly: true }
-            - { name: config, mountPath: /etc/opa/policies/system-authz.rego, subPath: system-authz.rego, readOnly: true }
-            - { name: config, mountPath: /etc/opa/policies/bootstrap.rego, subPath: bootstrap.rego, readOnly: true }
+            - { name: server-tls, mountPath: /etc/opa/server-tls, readOnly: true }
+            - { name: control-client, mountPath: /etc/opa/control-client, readOnly: true }
+            - { name: persistence, mountPath: /var/lib/opa }
       volumes:
         - name: config
-          configMap: { name: foundation-identity-opa-bootstrap }
+          configMap: { name: foundation-identity-opa-production }
+        - name: server-tls
+          secret: { secretName: foundation-identity-opa-server-tls }
+        - name: control-client
+          secret: { secretName: foundation-identity-opa-control-client-tls }
+        - name: persistence
+          emptyDir: { sizeLimit: 64Mi }
 ---
 apiVersion: v1
 kind: Service
@@ -115,8 +328,40 @@ metadata:
 spec:
   selector: { app: foundation-identity-opa }
   ports:
-    - { name: http, port: 8181, targetPort: http }
+    - { name: https, port: 8181, targetPort: https }
     - { name: diagnostic, port: 8282, targetPort: diagnostic }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: foundation-identity-opa-control
+  namespace: __NAMESPACE__
+  labels: { app: foundation-identity-opa-control, foundation.opensphere.io/engine: opa }
+spec:
+  selector: { app: foundation-identity-opa-control }
+  ports:
+    - { name: control, port: 8443, targetPort: control }
+    - { name: metrics, port: 8080, targetPort: metrics }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: foundation-identity-opa
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: foundation-identity-opa } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: foundation-identity-opa-control
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: foundation-identity-opa-control } }
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -125,15 +370,53 @@ metadata:
   namespace: __NAMESPACE__
   labels: { foundation.opensphere.io/engine: opa }
 spec:
-  selector:
-    matchLabels: { app: foundation-identity-opa }
-  namespaceSelector:
-    matchNames: [__NAMESPACE__]
+  selector: { matchLabels: { app: foundation-identity-opa } }
+  namespaceSelector: { matchNames: [__NAMESPACE__] }
   endpoints:
-    - port: diagnostic
-      path: /metrics
-      interval: 15s
-      scrapeTimeout: 10s
+    - { port: diagnostic, path: /metrics, interval: 15s, scrapeTimeout: 10s }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: foundation-identity-opa-control
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+spec:
+  selector: { matchLabels: { app: foundation-identity-opa-control } }
+  namespaceSelector: { matchNames: [__NAMESPACE__] }
+  endpoints:
+    - { port: metrics, path: /metrics, interval: 15s, scrapeTimeout: 10s }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: foundation-identity-opa
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+spec:
+  groups:
+    - name: foundation-identity-opa
+      rules:
+        - alert: OpenSphereOPAUnavailable
+          expr: sum(up{namespace="__NAMESPACE__",service="foundation-identity-opa"}) < 1
+          for: 2m
+          labels: { severity: critical }
+          annotations: { summary: "OpenSphere OPA has no healthy Prometheus target" }
+        - alert: OpenSphereOPADecisionSinkUnavailable
+          expr: sum(up{namespace="__NAMESPACE__",service="foundation-identity-opa-control"}) < 1
+          for: 2m
+          labels: { severity: critical }
+          annotations: { summary: "OpenSphere OPA durable decision-log sink is unavailable" }
+        - alert: OpenSphereOPADecisionPersistenceErrors
+          expr: sum(increase(opensphere_opa_decision_log_persist_errors_total[5m])) > 0
+          for: 1m
+          labels: { severity: critical }
+          annotations: { summary: "OPA decision logs are failing durable PostgreSQL persistence" }
+        - alert: OpenSphereOPAUnmaskedDecisionRejected
+          expr: sum(increase(opensphere_opa_decision_log_rejected_total{reason="unmasked_input"}[5m])) > 0
+          for: 1m
+          labels: { severity: critical }
+          annotations: { summary: "OPA emitted a decision event containing raw input" }
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -142,21 +425,34 @@ metadata:
   namespace: __NAMESPACE__
   labels: { foundation.opensphere.io/engine: opa }
 spec:
-  podSelector:
-    matchLabels: { app: foundation-identity-opa }
+  podSelector: { matchLabels: { app: foundation-identity-opa } }
   policyTypes: [Ingress]
   ingress:
-    # Evaluation clients must be explicitly placed in the Foundation namespace.
     - from:
-        - podSelector: {}
-      ports:
-        - { protocol: TCP, port: 8181 }
-    # Prometheus receives only health and metrics on the diagnostic listener.
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: __NAMESPACE__ } }
+          podSelector: { matchLabels: { foundation.opensphere.io/opa-client: "true" } }
+      ports: [{ protocol: TCP, port: 8181 }]
     - from:
         - namespaceSelector:
             matchExpressions:
-              - key: kubernetes.io/metadata.name
-                operator: In
-                values: [monitoring, opensphere-monitoring]
-      ports:
-        - { protocol: TCP, port: 8282 }
+              - { key: kubernetes.io/metadata.name, operator: In, values: [monitoring, opensphere-monitoring] }
+      ports: [{ protocol: TCP, port: 8282 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foundation-identity-opa-control
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+spec:
+  podSelector: { matchLabels: { app: foundation-identity-opa-control } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: foundation-identity-opa } }
+      ports: [{ protocol: TCP, port: 8443 }]
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - { key: kubernetes.io/metadata.name, operator: In, values: [monitoring, opensphere-monitoring] }
+      ports: [{ protocol: TCP, port: 8080 }]

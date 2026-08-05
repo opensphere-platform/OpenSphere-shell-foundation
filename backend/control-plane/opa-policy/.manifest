@@ -1,0 +1,4 @@
+{
+  "roots": ["opensphere", "system"],
+  "rego_version": 1
+}

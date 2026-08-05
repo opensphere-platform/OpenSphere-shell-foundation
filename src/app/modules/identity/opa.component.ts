@@ -13,9 +13,9 @@ import Renew16 from '@carbon/icons/es/renew/16';
 
 const MANUAL_ID = 'opa-operations-ko';
 const DEFAULT_FORM: OpaInstallParameters = {
-  version: '1.18.2-static', profile: 'development', replicas: 1,
-  cpuRequest: '50m', memoryRequest: '64Mi', cpuLimit: '500m', memoryLimit: '256Mi',
-  monitoring: true, policyMode: 'bootstrap-fail-closed', ingressMode: 'cluster-internal',
+  version: '1.18.2-static', profile: 'production', replicas: 2,
+  cpuRequest: '100m', memoryRequest: '128Mi', cpuLimit: '1', memoryLimit: '512Mi',
+  monitoring: true, policyMode: 'signed-bundle-fail-closed', ingressMode: 'cluster-internal-mtls',
 };
 
 @Component({
@@ -38,9 +38,9 @@ const DEFAULT_FORM: OpaInstallParameters = {
       <div class="pgp-dashboard">
         <article class="opa-panel"><h2>Package readiness</h2><p>실제 Deployment와 정책 보호 상태를 분리합니다.</p><dl class="opa-kv"><dt>FoundationModel/identity</dt><dd>{{svc.modelPhase()}}</dd><dt>OPA Deployment</dt><dd [class.ok]="svc.ready()">{{svc.phase()}}</dd><dt>Replicas</dt><dd>{{svc.readyN()}} / {{svc.totalN()}}</dd><dt>Policy mode</dt><dd class="warn">{{svc.policyMode()}}</dd></dl></article>
         <article class="opa-panel"><h2>Decision point</h2><p>소비자에게 노출되는 제한된 평가 endpoint입니다.</p><dl class="opa-kv"><dt>Endpoint</dt><dd class="os-mono">{{svc.endpoint}}</dd><dt>Allowed API</dt><dd class="os-mono">POST /v1/data/opensphere/**</dd><dt>Mutation API</dt><dd class="ok">Denied</dd><dt>Default decision</dt><dd class="ok">Deny</dd></dl></article>
-        <article class="opa-panel"><h2>Production gates</h2><p>데이터 모듈과 다른 정책 엔진의 필수 판정입니다.</p><dl class="opa-kv"><dt>Signed bundle</dt><dd class="bad">Required</dd><dt>Durable decision log</dt><dd class="bad">Required</dd><dt>Fail-open</dt><dd class="ok">Prohibited</dd><dt>Raw input metric labels</dt><dd class="ok">Prohibited</dd></dl></article>
+        <article class="opa-panel"><h2>Production gates</h2><p>데이터 모듈과 다른 정책 엔진의 필수 판정입니다.</p><dl class="opa-kv"><dt>Signed bundle</dt><dd class="ok">ES256 verified</dd><dt>Durable decision log</dt><dd class="ok">CloudNativePG · 30d</dd><dt>Evaluation transport</dt><dd class="ok">mTLS</dd><dt>Raw decision input</dt><dd class="ok">Erased</dd></dl></article>
       </div>
-      <clr-alert clrAlertType="warning" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">현재 설치는 평가 경로와 Monitoring을 검증하는 development profile입니다. 서명 bundle 저장소와 영속 decision-log sink가 연결되기 전에는 Production Ready로 판정하지 않습니다.</span></clr-alert-item></clr-alert>
+		<clr-alert [clrAlertType]="productionReady()?'success':'warning'" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">{{productionReady()?'서명 bundle, mTLS 평가 경로, 이중화 decision-log sink와 30일 영속 보존이 모두 준비되었습니다.':'OPA production gate를 조정하고 있습니다.'}}</span></clr-alert-item></clr-alert>
     </ng-container>
 
     <section class="opa-work" *ngIf="tab()==='operator'">
@@ -52,7 +52,7 @@ const DEFAULT_FORM: OpaInstallParameters = {
       <div class="opa-head"><div><span class="vl-eyebrow">Install plan</span><h2>OPA policy decision point</h2></div><span class="label label-info">explicit opt-in</span></div>
       <form class="opa-form" (ngSubmit)="apply()">
         <label>Version<input name="version" [ngModel]="form().version" disabled /></label>
-        <label>Replicas<input name="replicas" type="number" min="1" max="5" [ngModel]="form().replicas" (ngModelChange)="patch({replicas:+$event})" /></label>
+		<label>Replicas<input name="replicas" type="number" min="2" max="5" [ngModel]="form().replicas" (ngModelChange)="patch({replicas:+$event})" /></label>
         <label>CPU request<input name="cpuRequest" [ngModel]="form().cpuRequest" (ngModelChange)="patch({cpuRequest:$event})" /></label>
         <label>Memory request<input name="memoryRequest" [ngModel]="form().memoryRequest" (ngModelChange)="patch({memoryRequest:$event})" /></label>
         <label><input name="monitoring" type="checkbox" [ngModel]="form().monitoring" (ngModelChange)="patch({monitoring:$event})" /> Prometheus Monitoring</label>
@@ -72,7 +72,7 @@ const DEFAULT_FORM: OpaInstallParameters = {
         <article><span>HTTP errors</span><strong>{{number(metrics.latestError(),2)}}%</strong><small>4xx + 5xx</small></article>
         <article><span>Heap</span><strong>{{number(metrics.latestHeap(),1)}} MiB</strong><small>allocated</small></article>
         <article><span>Goroutines</span><strong>{{number(metrics.latestGoroutines(),0)}}</strong><small>runtime</small></article>
-        <article><span>Allow / Deny</span><strong>N/A</strong><small>decision log required</small></article>
+		<article><span>Allow / Deny</span><strong>{{number(metrics.latestAllow(),3)}} / {{number(metrics.latestDeny(),3)}}</strong><small>durable 5m rate /s</small></article>
       </div>
       <div class="opa-charts" *ngIf="metrics.state()==='ok'">
         <article><h3>Evaluation throughput</h3><p>5분 이동평균, 초당 평가 요청</p><os-carbon-line-chart [labels]="metrics.series().labels" [series]="evaluationSeries()" valueAxisTitle="Evaluations / s" ariaLabel="OPA 평가 처리량" /></article>
@@ -80,16 +80,16 @@ const DEFAULT_FORM: OpaInstallParameters = {
         <article><h3>HTTP error ratio</h3><p>평가 API 4xx·5xx 비율</p><os-carbon-line-chart [labels]="metrics.series().labels" [series]="errorSeries()" valueAxisTitle="Percent" ariaLabel="OPA HTTP 오류율" /></article>
         <article><h3>Runtime resources</h3><p>Go heap과 goroutine 수</p><os-carbon-line-chart [labels]="metrics.series().labels" [series]="runtimeSeries()" valueAxisTitle="MiB / count" ariaLabel="OPA runtime 자원" /></article>
       </div>
-      <clr-alert clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">allow와 deny는 모두 정상 평가(HTTP 200)이므로 native Prometheus metric으로 구분할 수 없습니다. 사용자·리소스·원문 input을 metric label에 넣지 않고, 별도 영속 decision-log sink에서 제한된 차원으로 집계해야 합니다.</span></clr-alert-item></clr-alert>
+		<clr-alert clrAlertType="success" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">allow/deny 결과는 CloudNativePG에 영속 기록한 뒤 제한된 outcome 차원으로만 집계합니다. 원문 input과 non-deterministic cache는 OPA에서 제거하며 sink도 원문 input이 포함된 batch를 거부합니다.</span></clr-alert-item></clr-alert>
       <p class="os-dim">{{metrics.hint()}} · 마지막 확인 {{metrics.lastSync() || '—'}}</p>
     </section>
 
     <section class="opa-work" *ngIf="tab()==='topology'">
       <h2>Topology</h2><dl class="opa-kv"><dt>Deployment</dt><dd>{{svc.readyN()}} / {{svc.totalN()}} ready</dd><dt>Node</dt><dd>{{svc.node()}}</dd><dt>Image</dt><dd class="os-mono">{{svc.image() || '—'}}</dd><dt>Restarts</dt><dd>{{svc.restarts()}}</dd></dl>
     </section>
-    <section class="opa-work" *ngIf="tab()==='config'"><h2>Security & configuration</h2><div class="opa-gates"><article><b>API authorization</b><p>POST /v1/data/opensphere/**만 허용하고 policy/data mutation API는 거부합니다.</p></article><article><b>Metrics privacy</b><p>handler·method·status처럼 제한된 라벨만 사용합니다. subject, resource, decision_id, JWT, input은 라벨 금지입니다.</p></article><article><b>Policy supply chain</b><p>production은 서명 검증 bundle과 revision rollback 증거가 필요합니다.</p></article><article><b>Failure mode</b><p>정책 부재·undefined·bundle 검증 실패를 allow로 전환하지 않습니다.</p></article></div></section>
+	<section class="opa-work" *ngIf="tab()==='config'"><h2>Security & configuration</h2><div class="opa-gates"><article><b>API authorization</b><p>mTLS client만 POST /v1/data/opensphere/**를 호출하며 mutation API는 거부합니다.</p></article><article><b>Decision privacy</b><p>원문 input은 OPA mask와 sink whitelist 양쪽에서 차단합니다.</p></article><article><b>Policy supply chain</b><p>ES256 서명, scope와 revision을 검증하고 검증 실패 시 기존 bundle을 유지합니다.</p></article><article><b>Failure mode</b><p>정책 부재·undefined·bundle 검증 실패를 allow로 전환하지 않습니다.</p></article></div></section>
     <section class="opa-work" *ngIf="tab()==='domain'"><h2>Policies & Decisions</h2><p>bootstrap 정책은 <span class="os-mono">data.opensphere.authz.allow=false</span>입니다. Console에서 Rego 원문을 직접 편집하지 않으며 승인된 Git/bundle pipeline을 정본으로 사용합니다.</p></section>
-    <section class="opa-work" *ngIf="tab()==='backups'"><h2>Bundle recovery</h2><p>OPA 자체는 데이터 저장소가 아닙니다. 백업 대상은 서명된 bundle artifact, revision manifest, 검증 키와 decision-log 보존 정책입니다.</p></section>
+	<section class="opa-work" *ngIf="tab()==='backups'"><h2>Bundle recovery</h2><p>서명 bundle은 exact-digest Control Plane artifact와 revision으로 복구하며 decision log는 CloudNativePG 백업 정책을 따릅니다. 현재 보존기간은 30일입니다.</p></section>
     <section class="opa-work" *ngIf="tab()==='events'"><h2>Events</h2><table class="table"><thead><tr><th>Type</th><th>Reason</th><th>Message</th><th>Time</th></tr></thead><tbody><tr *ngFor="let e of svc.events()"><td>{{e.type}}</td><td>{{e.reason}}</td><td>{{e.message}}</td><td>{{e.lastTimestamp || e.eventTime}}</td></tr><tr *ngIf="!svc.events().length"><td colspan="4">관련 이벤트 없음</td></tr></tbody></table></section>
     <section class="opa-work" *ngIf="tab()==='claims'"><h2>Claims</h2><p>정책 소비자는 임의 endpoint 공유가 아니라 PolicyDecisionClaim과 제한된 decision path Binding을 통해 연결해야 합니다.</p></section>
     <section class="opa-work" *ngIf="tab()==='upgrade'"><h2>Upgrade & rollback</h2><p>엔진 image digest와 policy bundle revision을 독립적으로 pin하고 rollback합니다. 새 bundle은 서명 검증, Rego test, shadow evaluation을 통과해야 합니다.</p></section>
@@ -110,13 +110,13 @@ export class OpaComponent implements OnInit, OnDestroy {
   readonly manualUrl = `/api/manual/${MANUAL_ID}`;
   readonly tab = computed(() => this.vr.tab());
   readonly exists = computed(() => this.svc.state() === 'ok');
-  readonly productionReady = computed(() => false);
+	readonly productionReady = computed(() => this.svc.fm()?.status?.opaProductionReady === true && this.svc.ready());
   readonly headerModel = computed<PluginPageHeaderModel>(() => ({
     name: 'Open Policy Agent', logo: 'https://logos.opl.io.kr/i/opa', monogram: 'OPA', capability: 'identity.policy.opa',
     description: 'Rego 정책 결정점, 안전한 정책 공급망과 결정 관측 경계를 관리합니다.',
-    lifecycle: this.svc.ready() ? 'Development Ready' : this.exists() ? 'Progressing' : 'Not installed',
-    lifecycleClass: this.svc.ready() ? 'label-warning' : '', version: this.svc.image().split(':').pop() || '1.18.2-static',
-    profile: 'fail-closed', namespace: 'opensphere-foundation',
+		lifecycle: this.productionReady() ? 'Production Ready' : this.svc.ready() ? 'Production gates pending' : this.exists() ? 'Progressing' : 'Not installed',
+		lifecycleClass: this.productionReady() ? 'label-success' : 'label-warning', version: this.svc.fm()?.spec?.parameters?.identityEngines?.opa?.version || '1.18.2-static',
+		profile: 'production · fail-closed', namespace: 'opensphere-foundation',
   }));
   private readonly tabs: PluginPageTab[] = (() => { const tabs = pfsPluginTabs('Policies & Decisions'); tabs.splice(1, 0, { id: 'monitoring', label: 'Monitoring' }); return tabs; })();
 

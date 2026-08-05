@@ -4,7 +4,7 @@ WORKDIR /src
 # 재현가능·공급망 무결성: 커밋된 go.mod/go.sum 으로 검증 다운로드, 빌드시 tidy 안 함(-mod=readonly).
 COPY go.mod go.sum ./
 RUN go mod download
-COPY *.go *.yaml ./
+COPY *.go *.yaml *.json *.tar.gz ./
 RUN CGO_ENABLED=0 GOFLAGS=-mod=readonly go build -trimpath -o /out/manager .
 FROM gcr.io/distroless/static:nonroot
 COPY --from=build /out/manager /manager

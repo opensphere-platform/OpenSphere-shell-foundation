@@ -10,6 +10,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -44,6 +45,7 @@ type config struct {
 	rustfsImage         string
 	opensearchImage     string
 	opaImage            string
+	opaControlImage     string
 	veleroNamespace     string // 이전 backup 계약 호환용. 현재 data bundle에서는 미사용.
 	defaultStorageClass string // HostRequirements 기본값(§1.2) — Basic StorageClass 이름의 단일 선언점
 }
@@ -56,6 +58,16 @@ func gvkObj(g schema.GroupVersionKind) *unstructured.Unstructured {
 
 func main() {
 	cfg := &config{}
+	var mode, opaControlListen, opaControlMetrics, opaControlDatabaseURL, opaControlTLSCert, opaControlTLSKey, opaControlTLSCA string
+	var opaDecisionRetentionDays int
+	flag.StringVar(&mode, "mode", "manager", "process mode: manager or opa-control")
+	flag.StringVar(&opaControlListen, "listen-address", ":8443", "OPA control service mTLS listen address")
+	flag.StringVar(&opaControlMetrics, "metrics-address", ":8080", "OPA control health and metrics listen address")
+	flag.StringVar(&opaControlDatabaseURL, "database-url", "", "OPA decision log PostgreSQL URL")
+	flag.StringVar(&opaControlTLSCert, "tls-cert-file", "", "OPA control service TLS certificate")
+	flag.StringVar(&opaControlTLSKey, "tls-key-file", "", "OPA control service TLS private key")
+	flag.StringVar(&opaControlTLSCA, "tls-ca-file", "", "OPA control service client CA")
+	flag.IntVar(&opaDecisionRetentionDays, "decision-retention-days", 30, "OPA durable decision-log retention in days")
 	flag.StringVar(&cfg.managedNS, "managed-namespace", "opensphere-foundation", "관리 번들(operand)을 배치할 네임스페이스")
 	// [[ghcr-image-mirror-policy]]: 원본 레지스트리 직접참조 폐지, ghcr.io/opensphere-platform/mirror/* 경유로 조달.
 	flag.StringVar(&cfg.collectorImage, "collector-image", "ghcr.io/opensphere-platform/mirror/opentelemetry-collector-contrib:0.111.0", "observability collector operand 이미지(GHCR 미러, origin=otel/opentelemetry-collector-contrib:0.111.0)")
@@ -74,7 +86,20 @@ func main() {
 	flag.StringVar(&cfg.defaultStorageClass, "default-storage-class", "standard", "PVC가 참조할 Basic StorageClass 기본값(FoundationModel.spec.parameters.hostRequirements.storageClass로 모델별 override 가능)")
 	flag.StringVar(&cfg.opensearchImage, "opensearch-image", "ghcr.io/opensphere-platform/mirror/opensearch:3.7.0", "data OpenSearch operand image(GHCR mirror, origin=opensearchproject/opensearch:3.7.0)")
 	flag.StringVar(&cfg.opaImage, "opa-image", "ghcr.io/opensphere-platform/mirror/opa:1.18.2-static", "identity OPA operand image(GHCR mirror, origin=openpolicyagent/opa:1.18.2-static)")
+	flag.StringVar(&cfg.opaControlImage, "opa-control-image", "ghcr.io/opensphere-platform/opensphere-foundation-control-plane:edge", "OPA signed bundle and durable decision-log control service image")
 	flag.Parse()
+	if mode == "opa-control" {
+		ctrl.SetLogger(zap.New())
+		if err := runOPAControlServer(ctrl.SetupSignalHandler(), opaControlOptions{listenAddress: opaControlListen, metricsAddress: opaControlMetrics, databaseURL: opaControlDatabaseURL, tlsCertFile: opaControlTLSCert, tlsKeyFile: opaControlTLSKey, tlsCAFile: opaControlTLSCA, retentionDays: opaDecisionRetentionDays}); err != nil {
+			ctrl.Log.Error(err, "OPA production control service failed")
+			os.Exit(1)
+		}
+		return
+	}
+	if mode != "manager" {
+		ctrl.Log.Error(fmt.Errorf("unsupported mode %q", mode), "invalid process mode")
+		os.Exit(2)
+	}
 
 	ctrl.SetLogger(zap.New())
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{HealthProbeBindAddress: ":8081"})

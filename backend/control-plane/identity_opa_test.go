@@ -32,34 +32,51 @@ func TestOPAIsExplicitOptIn(t *testing.T) {
 	}
 }
 
-func TestOPABundleIsFailClosedAndMonitored(t *testing.T) {
+func TestOPABundleIsProductionFailClosedAndMonitored(t *testing.T) {
 	fm := opaFoundationModel("enabled")
-	cfg := &config{managedNS: "opensphere-foundation", opaImage: "ghcr.io/opensphere-platform/mirror/opa@sha256:3ece20d3a58eb4051db71c0b84fc962bca2a6f9aa74ee8ea3d027d693fdc2d1a"}
+	cfg := &config{managedNS: "opensphere-foundation", opaImage: "ghcr.io/opensphere-platform/mirror/opa@sha256:3ece20d3a58eb4051db71c0b84fc962bca2a6f9aa74ee8ea3d027d693fdc2d1a", opaControlImage: "ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:test"}
 	objs, err := buildOPABundle(cfg, fm)
 	if err != nil {
 		t.Fatal(err)
 	}
-	foundDeployment, foundMonitor, foundPolicy := false, false, false
+	foundOPA, foundControl, foundMonitor, foundPolicy, foundPDB, foundCertificate, foundRule := false, false, false, false, false, false, false
 	for _, obj := range objs {
 		if obj.GetLabels()[lblEngine] != "opa" {
 			t.Fatalf("%s/%s missing OPA engine label", obj.GetKind(), obj.GetName())
 		}
 		switch obj.GetKind() {
 		case "Deployment":
-			foundDeployment = true
+			if obj.GetName() == opaName {
+				foundOPA = true
+				replicas, _, _ := unstructured.NestedInt64(obj.Object, "spec", "replicas")
+				if replicas != 2 {
+					t.Fatalf("production OPA must have two replicas, got %d", replicas)
+				}
+			}
+			if obj.GetName() == opaControlName {
+				foundControl = true
+			}
 		case "ServiceMonitor":
 			foundMonitor = true
-			endpoints, _, _ := unstructured.NestedSlice(obj.Object, "spec", "endpoints")
-			endpoint := endpoints[0].(map[string]interface{})
-			if endpoint["port"] != "diagnostic" || endpoint["path"] != "/metrics" || endpoint["interval"] != "15s" {
-				t.Fatalf("unexpected OPA ServiceMonitor endpoint: %#v", endpoint)
+			if obj.GetName() == opaName {
+				endpoints, _, _ := unstructured.NestedSlice(obj.Object, "spec", "endpoints")
+				endpoint := endpoints[0].(map[string]interface{})
+				if endpoint["port"] != "diagnostic" || endpoint["path"] != "/metrics" || endpoint["interval"] != "15s" {
+					t.Fatalf("unexpected OPA ServiceMonitor endpoint: %#v", endpoint)
+				}
 			}
 		case "ConfigMap":
 			data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
-			foundPolicy = strings.Contains(data["bootstrap.rego"], "default allow := false") && strings.Contains(data["system-authz.rego"], "input.method == \"POST\"") && strings.Contains(data["system-authz.rego"], "input.path in [[\"health\"], [\"metrics\"]]")
+			foundPolicy = strings.Contains(data["config.yaml"], "signing:") && strings.Contains(data["config.yaml"], "opensphere-opa-edge-bundle-v1") && strings.Contains(data["config.yaml"], "decision_logs:")
+		case "PodDisruptionBudget":
+			foundPDB = true
+		case "Certificate":
+			foundCertificate = true
+		case "PrometheusRule":
+			foundRule = true
 		}
 	}
-	if !foundDeployment || !foundMonitor || !foundPolicy {
-		t.Fatalf("OPA bundle incomplete: deployment=%v monitor=%v failClosedPolicy=%v", foundDeployment, foundMonitor, foundPolicy)
+	if !foundOPA || !foundControl || !foundMonitor || !foundPolicy || !foundPDB || !foundCertificate || !foundRule {
+		t.Fatalf("OPA production bundle incomplete: opa=%v control=%v monitor=%v signedPolicy=%v pdb=%v cert=%v rule=%v", foundOPA, foundControl, foundMonitor, foundPolicy, foundPDB, foundCertificate, foundRule)
 	}
 }
