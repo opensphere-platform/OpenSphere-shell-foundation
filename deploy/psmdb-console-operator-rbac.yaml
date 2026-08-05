@@ -1,0 +1,37 @@
+# Percona Operator Release management for the authenticated Console administrator.
+#
+# The Foundation Kubernetes gateway impersonates only the fixed
+# opensphere-console-admins group after Supabase session/MFA evaluation. Helm
+# provider Release is cluster-scoped, so the administrator needs an explicit
+# binding before the PSMDB page can create or converge its operator declaration.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: foundation-psmdb-operator-admin
+  labels:
+    opensphere.io/managed-by: foundation
+    opensphere.io/purpose: psmdb-operator-lifecycle
+rules:
+  - apiGroups: ["helm.crossplane.io"]
+    resources: ["releases"]
+    verbs: ["get", "create"]
+  - apiGroups: ["helm.crossplane.io"]
+    resources: ["releases"]
+    resourceNames: ["psmdb-operator"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: foundation-psmdb-operator-admins
+  labels:
+    opensphere.io/managed-by: foundation
+    opensphere.io/purpose: psmdb-operator-lifecycle
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: foundation-psmdb-operator-admin
+subjects:
+  - kind: Group
+    name: opensphere-console-admins
+    apiGroup: rbac.authorization.k8s.io

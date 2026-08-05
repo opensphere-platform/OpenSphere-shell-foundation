@@ -320,6 +320,15 @@ test('PSMDB management uses exact Secrets and bounded database contracts', () =>
   assert.match(rbac, /resources: \["perconaservermongodbs"\][\s\S]*resourceNames: \["foundation-data-mongodb"\][\s\S]*verbs: \["get", "patch"\]/);
 });
 
+test('PSMDB operator lifecycle is granted only to the projected Console admin group', () => {
+  const rbac = fs.readFileSync(path.join(__dirname, '..', 'deploy', 'psmdb-console-operator-rbac.yaml'), 'utf8');
+  assert.match(rbac, /name: foundation-psmdb-operator-admin/);
+  assert.match(rbac, /resources: \["releases"\][\s\S]*verbs: \["get", "create"\]/);
+  assert.match(rbac, /resourceNames: \["psmdb-operator"\][\s\S]*verbs: \["get", "patch", "update"\]/);
+  assert.match(rbac, /kind: Group\s+name: opensphere-console-admins/);
+  assert.doesNotMatch(rbac, /verbs: \[[^\]]*"delete"/);
+});
+
 test('OpenSearch preparation follows the current Console plugin authority contract', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'foundation', 'opensearch-engine.component.ts'), 'utf8');
   assert.match(source, /const PLUGIN_NAMESPACE = 'opensphere-console'/);

@@ -15,9 +15,11 @@ import (
 )
 
 const (
-	psmdbName  = "foundation-data-mongodb"
-	valkeyName = "foundation-data-valkey"
-	rustfsName = "opensphere-rustfs"
+	psmdbName        = "foundation-data-mongodb"
+	valkeyName       = "foundation-data-valkey"
+	rustfsName       = "opensphere-rustfs"
+	psmdbBackupImage = "ghcr.io/opensphere-platform/mirror/percona-backup-mongodb:2.15.0@sha256:2c69ec2dbd5be02df31577869df97c72781bf6fe6456471e8087b0e03136f672"
+	psmdbPMMImage    = "ghcr.io/opensphere-platform/mirror/pmm-client:3.8.1@sha256:a92cfb7f912bd85d8245575c3ee5c423664ad2baedb674d159a87b113dbd4de2"
 )
 
 var psmdbGVK = schema.GroupVersionKind{Group: "psmdb.percona.com", Version: "v1", Kind: "PerconaServerMongoDB"}
@@ -330,8 +332,12 @@ func buildPSMDBBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructur
 				"name": "rs0", "size": o.replicas, "resources": engineResources(o),
 				"volumeSpec": map[string]interface{}{"persistentVolumeClaim": map[string]interface{}{"storageClassName": o.storageClass, "resources": map[string]interface{}{"requests": map[string]interface{}{"storage": o.storageSize}}}},
 			}},
-			"users": []interface{}{}, "sharding": map[string]interface{}{"enabled": false}, "pmm": map[string]interface{}{"enabled": false},
-			"backup": map[string]interface{}{"enabled": false},
+			"users": []interface{}{}, "sharding": map[string]interface{}{"enabled": false},
+			// Operator 1.23.0 requires the supported component images even when
+			// their optional features are disabled. Keep them exact-pinned so a
+			// later enable operation cannot silently resolve a mutable upstream tag.
+			"pmm":    map[string]interface{}{"enabled": false, "image": psmdbPMMImage},
+			"backup": map[string]interface{}{"enabled": false, "image": psmdbBackupImage},
 		},
 	}}
 	stampLabels(u, "data", owner)

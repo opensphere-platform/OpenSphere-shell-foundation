@@ -56,6 +56,12 @@ func TestPSMDBBundleUsesOperator123ProductionContract(t *testing.T) {
 	if finalizers := cr.GetFinalizers(); len(finalizers) != 1 || finalizers[0] != "percona.com/delete-psmdb-pods-in-order" {
 		t.Fatalf("safe finalizers=%v", finalizers)
 	}
+	if got, _, _ := unstructured.NestedString(cr.Object, "spec", "backup", "image"); got != psmdbBackupImage {
+		t.Fatalf("backup.image=%q", got)
+	}
+	if got, _, _ := unstructured.NestedString(cr.Object, "spec", "pmm", "image"); got != psmdbPMMImage {
+		t.Fatalf("pmm.image=%q", got)
+	}
 }
 
 func TestOpenSearchServiceMonitorTargetsPluginMetrics(t *testing.T) {
