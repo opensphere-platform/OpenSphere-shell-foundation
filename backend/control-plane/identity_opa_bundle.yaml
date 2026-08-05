@@ -293,11 +293,11 @@ spec:
             - { name: https, containerPort: 8181 }
             - { name: diagnostic, containerPort: 8282 }
           readinessProbe:
-            httpGet: { path: "/health?plugins", port: diagnostic }
+            httpGet: { path: "/health?plugins", port: diagnostic, scheme: HTTPS }
             initialDelaySeconds: 3
             periodSeconds: 5
           livenessProbe:
-            httpGet: { path: /health, port: diagnostic }
+            httpGet: { path: /health, port: diagnostic, scheme: HTTPS }
             initialDelaySeconds: 10
             periodSeconds: 10
           resources:
