@@ -6,6 +6,7 @@ import { OsService } from '../modules/opensearch/os.service';
 import { RsService } from '../modules/rustfs/rs.service';
 import { KcService, SambaService, WorkloadHealth } from '../modules/identity/identity.services';
 import { OpaService } from '../modules/identity/opa.service';
+import { SyncopeService } from '../modules/identity/syncope.service';
 import { PILL, Phase } from '../modules/postgres/cnpg.types';
 import { apiBase, hostFetch, writeHeaders } from '../api-base';
 
@@ -94,6 +95,19 @@ export interface OpaInstallParameters {
   ingressMode: 'cluster-internal' | 'cluster-internal-mtls';
 }
 
+export interface SyncopeInstallParameters {
+  version: '4.0.7';
+  profile: 'production';
+  replicas: number;
+  cpuRequest: string;
+  memoryRequest: string;
+  cpuLimit: string;
+  memoryLimit: string;
+  monitoring: boolean;
+  databaseMode: 'cloudnativepg-shared';
+  tls: true;
+}
+
 // Foundation(host)의 plugin 거버넌스 — 등록(registry)·상태(health 어댑트)·수명주기(enable/disable)·모니터링 소유.
 // ⚠️ health는 fetch하지 않는다. healthRef가 가리키는 기존 폴러(CnpgService/OsService)의 computed를 소비만 한다.
 // 폴러 라이프사이클을 이 서비스(=shell)가 소유 → overview/admin/콘솔 어디서나 health가 라이브(콘솔이 stop하지 않음).
@@ -113,6 +127,7 @@ export class FoundationRegistryService {
   private kc = inject(KcService);
   private samba = inject(SambaService);
   private opa = inject(OpaService);
+  private syncope = inject(SyncopeService);
 
   readonly all: HostedPlugin[] = FOUNDATION_PLUGINS;
 
@@ -276,7 +291,7 @@ export class FoundationRegistryService {
   }
 
   /** Identity plugin 설치·운영 선언. 엔진별 설정은 identityEngines 아래 격리한다. */
-  async configureIdentityEngine(id: 'keycloak' | 'opa', parameters: IdentityEngineInstallParameters | OpaInstallParameters): Promise<boolean> {
+  async configureIdentityEngine(id: 'keycloak' | 'opa' | 'syncope', parameters: IdentityEngineInstallParameters | OpaInstallParameters | SyncopeInstallParameters): Promise<boolean> {
     this.lastError.set('');
     const specPatch = {
       desiredState: 'Installed',
@@ -319,6 +334,7 @@ export class FoundationRegistryService {
       case 'keycloak': return this.wlHealth(this.kc, [{ val: 'PG', lab: 'Database' }, { val: ':8080', lab: 'HTTP' }]);
       case 'samba': return this.wlHealth(this.samba, [{ val: this.samba.realm(), lab: 'Realm' }, { val: ':389', lab: 'LDAP' }]);
       case 'opa': return this.wlHealth(this.opa, [{ val: 'fail-closed', lab: 'Policy mode' }, { val: ':8181', lab: 'Decision API' }]);
+      case 'syncope': return this.wlHealth(this.syncope, [{ val: '4.0.7', lab: 'Engine' }, { val: 'TLS :8443', lab: 'Core API' }]);
       default: return this.declaredDataHealth(p);
     }
   }
@@ -411,12 +427,12 @@ export class FoundationRegistryService {
   // 폴러 라이프사이클 = shell 소유. foundation subShell 마운트/언마운트에 묶임(app.component).
   // S4: FoundationModel CR hydrate 폴러(15s)도 여기에 귀속 — health 폴러와 동일 수명.
   start(): void {
-    this.cnpg.start(); this.os.start(); this.rs.start(); this.kc.start(); this.samba.start(); this.opa.start();
+    this.cnpg.start(); this.os.start(); this.rs.start(); this.kc.start(); this.samba.start(); this.opa.start(); this.syncope.start();
     void this.refreshModels();
     if (!this.fmTimer) { this.fmTimer = setInterval(() => void this.refreshModels(), 15000); }
   }
   stop(): void {
-    this.cnpg.stop(); this.os.stop(); this.rs.stop(); this.kc.stop(); this.samba.stop(); this.opa.stop();
+    this.cnpg.stop(); this.os.stop(); this.rs.stop(); this.kc.stop(); this.samba.stop(); this.opa.stop(); this.syncope.stop();
     if (this.fmTimer) { clearInterval(this.fmTimer); this.fmTimer = undefined; }
   }
 }

@@ -1,0 +1,355 @@
+# Apache Syncope 4.0.7 production IGA operand.
+# Secrets are created by the authenticated Foundation Console exact-name endpoint;
+# the control plane only reconciles non-secret desired state.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: foundation-identity-syncope
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: syncope }
+automountServiceAccountToken: false
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: foundation-identity-syncope
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: syncope }
+spec:
+  name: syncope
+  cluster: { name: foundation-data-pg }
+  login: true
+  connectionLimit: 40
+  passwordSecret: { name: foundation-identity-syncope-db-auth }
+  databaseRoleReclaimPolicy: retain
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: foundation-identity-syncope
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: syncope }
+spec:
+  name: syncope
+  owner: syncope
+  cluster: { name: foundation-data-pg }
+  ensure: present
+  databaseReclaimPolicy: retain
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: foundation-identity-syncope-bootstrap
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: syncope }
+spec: { selfSigned: {} }
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: foundation-identity-syncope-ca
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: syncope }
+spec:
+  isCA: true
+  commonName: OpenSphere Syncope Production CA
+  secretName: foundation-identity-syncope-ca
+  duration: 8760h
+  renewBefore: 720h
+  privateKey: { algorithm: ECDSA, size: 256, rotationPolicy: Always }
+  issuerRef: { name: foundation-identity-syncope-bootstrap, kind: Issuer }
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: foundation-identity-syncope-ca
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: syncope }
+spec:
+  ca: { secretName: foundation-identity-syncope-ca }
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: foundation-identity-syncope-server
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: syncope }
+spec:
+  secretName: foundation-identity-syncope-server-tls
+  duration: 2160h
+  renewBefore: 360h
+  privateKey: { algorithm: ECDSA, size: 256, rotationPolicy: Always }
+  usages: [server auth]
+  dnsNames:
+    - foundation-identity-syncope
+    - foundation-identity-syncope.__NAMESPACE__.svc
+    - foundation-identity-syncope.__NAMESPACE__.svc.cluster.local
+    - foundation-identity-syncope-headless
+    - foundation-identity-syncope-headless.__NAMESPACE__.svc
+    - foundation-identity-syncope-headless.__NAMESPACE__.svc.cluster.local
+    - "*.foundation-identity-syncope-headless.__NAMESPACE__.svc.cluster.local"
+  keystores:
+    pkcs12:
+      create: true
+      passwordSecretRef: { name: foundation-identity-syncope-runtime, key: keystore-password }
+  issuerRef: { name: foundation-identity-syncope-ca, kind: Issuer }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foundation-identity-syncope-production
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: syncope }
+data:
+  core-opensphere.properties: |
+    security.adminUser=opensphere-admin
+    security.adminPassword=${SYNCOPE_ADMIN_PASSWORD_HASH}
+    security.adminPasswordAlgorithm=SHA256
+    security.anonymousUser=${ANONYMOUS_USER}
+    security.anonymousKey=${ANONYMOUS_KEY}
+    security.jwsAlgorithm=HS512
+    security.jwsKey=${SYNCOPE_JWS_KEY}
+    security.aesSecretKey=${SYNCOPE_AES_SECRET_KEY}
+    management.endpoints.web.exposure.include=health,info
+    management.endpoint.health.probes.enabled=true
+    server.shutdown=graceful
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: foundation-identity-syncope-headless
+  namespace: __NAMESPACE__
+  labels: { app: foundation-identity-syncope, foundation.opensphere.io/engine: syncope }
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector: { app: foundation-identity-syncope }
+  ports:
+    - { name: https, port: 8443, targetPort: https }
+    - { name: remote-commit, port: 5636, targetPort: remote-commit }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: foundation-identity-syncope
+  namespace: __NAMESPACE__
+  labels: { app: foundation-identity-syncope, foundation.opensphere.io/engine: syncope }
+spec:
+  selector: { app: foundation-identity-syncope }
+  ports:
+    - { name: https, port: 8443, targetPort: https }
+    - { name: metrics, port: 9090, targetPort: metrics }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: foundation-identity-syncope
+  namespace: __NAMESPACE__
+  labels: { app: foundation-identity-syncope, foundation.opensphere.io/engine: syncope }
+spec:
+  serviceName: foundation-identity-syncope-headless
+  replicas: 2
+  podManagementPolicy: Parallel
+  updateStrategy: { type: RollingUpdate }
+  selector: { matchLabels: { app: foundation-identity-syncope } }
+  template:
+    metadata:
+      labels:
+        app: foundation-identity-syncope
+        foundation.opensphere.io/engine: syncope
+        foundation.opensphere.io/syncope-client: "true"
+    spec:
+      serviceAccountName: foundation-identity-syncope
+      automountServiceAccountToken: false
+      securityContext: { seccompProfile: { type: RuntimeDefault } }
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: syncope
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: https, containerPort: 8080 }
+            - { name: remote-commit, containerPort: 5636 }
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - { name: SPRING_PROFILES_ACTIVE, value: "docker,postgresql,opensphere" }
+            - { name: DB_URL, value: "jdbc:postgresql://foundation-data-pg-rw:5432/syncope?sslmode=require&stringtype=unspecified" }
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-db-auth, key: username } }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-db-auth, key: password } }
+            - { name: DB_POOL_MAX, value: "20" }
+            - { name: DB_POOL_MIN, value: "2" }
+            - { name: KEYMASTER_ADDRESS, value: "https://$(POD_NAME).foundation-identity-syncope-headless.__NAMESPACE__.svc.cluster.local:8080/syncope/rest/keymaster" }
+            - { name: SERVICE_DISCOVERY_ADDRESS, value: "https://$(POD_NAME).foundation-identity-syncope-headless.__NAMESPACE__.svc.cluster.local:8080/syncope/rest/" }
+            - name: KEYMASTER_USERNAME
+              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-runtime, key: anonymous-user } }
+            - name: KEYMASTER_PASSWORD
+              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-runtime, key: anonymous-key } }
+            - name: ANONYMOUS_USER
+              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-runtime, key: anonymous-user } }
+            - name: ANONYMOUS_KEY
+              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-runtime, key: anonymous-key } }
+            - name: SYNCOPE_ADMIN_PASSWORD_HASH
+              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-runtime, key: admin-password-sha256 } }
+            - name: SYNCOPE_JWS_KEY
+              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-runtime, key: jws-key } }
+            - name: SYNCOPE_AES_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-runtime, key: aes-secret } }
+            - name: SERVER_SSL_KEY_STORE_PASSWORD
+              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-runtime, key: keystore-password } }
+            - { name: SERVER_SSL_ENABLED, value: "true" }
+            - { name: SERVER_SSL_KEY_STORE, value: "file:/etc/syncope/tls/keystore.p12" }
+            - { name: SERVER_SSL_KEY_STORE_TYPE, value: "PKCS12" }
+            - { name: SERVER_PORT, value: "8080" }
+            - name: OPENJPA_REMOTE_COMMIT
+              value: "tcp(Port=5636,Addresses=foundation-identity-syncope-0.foundation-identity-syncope-headless.__NAMESPACE__.svc.cluster.local;foundation-identity-syncope-1.foundation-identity-syncope-headless.__NAMESPACE__.svc.cluster.local,TransmitPersistedObjectIds=true)"
+          command: ["/bin/sh", "-ec"]
+          args:
+            - >-
+              export JAVA_OPTS="-Dfile.encoding=UTF-8 -Dsyncope.conf.dir=/opt/syncope/conf
+              -Dsyncope.connid.location=file:/opt/syncope/bundles -Djavax.net.ssl.trustStore=/etc/syncope/tls/truststore.p12
+              -Djavax.net.ssl.trustStorePassword=${SERVER_SSL_KEY_STORE_PASSWORD} -server -Xms768m -Xmx1280m
+              -XX:+DisableExplicitGC -Djava.security.egd=file:/dev/./urandom";
+              exec /opt/syncope/bin/startup.sh
+          resources:
+            requests: { cpu: 250m, memory: 768Mi }
+            limits: { cpu: "1", memory: 2Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - { name: production-config, mountPath: /opt/syncope/conf/core-opensphere.properties, subPath: core-opensphere.properties, readOnly: true }
+            - { name: server-tls, mountPath: /etc/syncope/tls, readOnly: true }
+            - { name: logs, mountPath: /opt/syncope/log }
+            - { name: tmp, mountPath: /tmp }
+          startupProbe:
+            httpGet: { path: /syncope/actuator/health, port: https, scheme: HTTPS }
+            periodSeconds: 10
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: { path: /syncope/actuator/health/readiness, port: https, scheme: HTTPS }
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /syncope/actuator/health/liveness, port: https, scheme: HTTPS }
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+        - name: monitor
+          image: __SYNCOPE_MONITOR_IMAGE__
+          imagePullPolicy: IfNotPresent
+          args:
+            - --mode=syncope-monitor
+            - --syncope-monitor-listen-address=:9090
+            - --syncope-url=https://$(POD_NAME).foundation-identity-syncope-headless.__NAMESPACE__.svc.cluster.local:8080/syncope/actuator/health
+            - --syncope-ca-file=/etc/syncope/tls/ca.crt
+            - --syncope-database-url=$(DATABASE_URL)
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-db-auth, key: uri } }
+          ports: [{ name: metrics, containerPort: 9090 }]
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          volumeMounts:
+            - { name: server-tls, mountPath: /etc/syncope/tls, readOnly: true }
+      volumes:
+        - name: production-config
+          configMap: { name: foundation-identity-syncope-production }
+        - name: server-tls
+          secret: { secretName: foundation-identity-syncope-server-tls }
+        - { name: logs, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: foundation-identity-syncope
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: syncope }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: foundation-identity-syncope } }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: foundation-identity-syncope
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: syncope, release: kube-prometheus-stack }
+spec:
+  selector: { matchLabels: { app: foundation-identity-syncope } }
+  namespaceSelector: { matchNames: [__NAMESPACE__] }
+  endpoints:
+    - { port: metrics, interval: 15s, scrapeTimeout: 5s, path: /metrics }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: foundation-identity-syncope
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: syncope, release: kube-prometheus-stack }
+spec:
+  groups:
+    - name: opensphere.syncope
+      rules:
+        - alert: SyncopeCoreDown
+          expr: min_over_time(opensphere_syncope_up{namespace="__NAMESPACE__"}[2m]) < 1
+          for: 2m
+          labels: { severity: critical }
+          annotations: { summary: "Apache Syncope Core instance is unavailable" }
+        - alert: SyncopeNoHealthyReplica
+          expr: sum(opensphere_syncope_up{namespace="__NAMESPACE__"}) < 1
+          for: 1m
+          labels: { severity: critical }
+          annotations: { summary: "No healthy Apache Syncope Core replica" }
+        - alert: SyncopeAuditStalled
+          expr: opensphere_syncope_audit_events_total > 0 and time() - opensphere_syncope_last_audit_event_timestamp_seconds > 3600
+          for: 15m
+          labels: { severity: warning }
+          annotations: { summary: "Apache Syncope audit stream has not advanced for one hour" }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foundation-identity-syncope
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: syncope }
+spec:
+  podSelector: { matchLabels: { app: foundation-identity-syncope } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { foundation.opensphere.io/syncope-client: "true" } }
+      ports:
+        - { protocol: TCP, port: 8080 }
+        - { protocol: TCP, port: 5636 }
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } }
+      ports: [{ protocol: TCP, port: 9090 }]
+  egress:
+    - to:
+        - podSelector: { matchLabels: { app: foundation-identity-syncope } }
+      ports:
+        - { protocol: TCP, port: 8080 }
+        - { protocol: TCP, port: 5636 }
+    - to:
+        - podSelector: { matchLabels: { cnpg.io/cluster: foundation-data-pg } }
+      ports: [{ protocol: TCP, port: 5432 }]
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }

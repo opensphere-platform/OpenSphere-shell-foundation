@@ -37,6 +37,7 @@ spec:
     engines:
       keycloak: disabled
       samba: disabled
+      syncope: disabled
 ---
 # ── data 모듈 (엔진은 개별 plugin 화면에서 계획·활성화) ──
 apiVersion: foundation.opensphere.io/v1alpha1
@@ -63,15 +64,15 @@ metadata:
 spec:
   model: identity
   description:
-    summary: "사원(workforce) 신원 모듈 — Keycloak(OIDC IAM/SSO) + Samba-AD(디렉터리 DC, LDAP 389). Keycloak이 Samba LDAP를 federation해 사원 로그인을 제공. Syncope(IGA 단일권위 + SCIM 2.0 endpoint/connector)는 D-7."
+    summary: "사원(workforce) 신원 모듈 — Apache Syncope(IGA/SCIM 단일권위) + Keycloak(OIDC IAM/SSO) + Samba-AD(디렉터리 DC, LDAP 389) + OPA(정책 결정)."
   catalog:
     authority: registry
     install: optional
     fixed: false
   operator:
-    capability: ["identity.iam.workspace", "identity.directory.ad"]
+    capability: ["identity.iga.syncope", "identity.iam.workspace", "identity.directory.ad", "identity.policy.opa"]
     chartRef: { name: "control-plane identity_bundle (SSA — chart 아님, 정직 표기)" }
-    image: "ghcr.io/opensphere-platform/mirror/keycloak:26.0 + ghcr.io/opensphere-platform/mirror/samba-domain:20260701025204"
+    image: "ghcr.io/opensphere-platform/mirror/syncope:4.0.7 + ghcr.io/opensphere-platform/mirror/keycloak:26.0 + signed Samba/OPA operands"
   relations:
     consumed: []
     consumers:

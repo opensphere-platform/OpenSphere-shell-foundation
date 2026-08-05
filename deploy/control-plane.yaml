@@ -46,6 +46,9 @@ spec:
             - --opensearch-image=ghcr.io/opensphere-platform/mirror/opensearch@sha256:44ba7ea58a319adf61c33ab16873f9ef5dbb30b291a832d375172f0b2d24e3c9
             - --opa-image=ghcr.io/opensphere-platform/mirror/opa@sha256:3ece20d3a58eb4051db71c0b84fc962bca2a6f9aa74ee8ea3d027d693fdc2d1a
             - --opa-control-image=ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:319dac599cb92910aade08c28fa180a96b7bf96865a5c45e753f243719e4af3a
+            # image-source: GHCR mirror, origin=apache/syncope:4.0.7 linux/amd64
+            - --syncope-image=ghcr.io/opensphere-platform/mirror/syncope@sha256:970ecea41b897656063eed5b1a8b6637ec84fa8543340831a9f1bbf767f2a2f9
+            - --syncope-monitor-image=ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:319dac599cb92910aade08c28fa180a96b7bf96865a5c45e753f243719e4af3a
             - --default-storage-class=standard
           env:
             - name: FOUNDATION_DIRECT_APPLY

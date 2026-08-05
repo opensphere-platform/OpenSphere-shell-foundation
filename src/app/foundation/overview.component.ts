@@ -396,7 +396,7 @@ export class FoundationOverviewComponent {
     };
     return [
       { id: 'data', label: 'Data', icon: DOMAIN_ICON['data'], desc: '관계형 DB · 검색 · 오브젝트 스토리지', live: true, ...roll('data.') },
-      { id: 'identity', label: 'Identity', icon: DOMAIN_ICON['identity'], desc: '사원·고객 신원 · SSO · 디렉터리', live: true, plannedNote: '+ Syncope(IGA) 예정', ...roll('identity.') },
+      { id: 'identity', label: 'Identity', icon: DOMAIN_ICON['identity'], desc: 'IGA · SSO · 디렉터리 · 정책', live: true, ...roll('identity.') },
       { id: 'ai', label: 'AI', icon: DOMAIN_ICON['ai'], desc: '모델 서빙 · 추론 · 벡터 메모리', live: false, ...planned('ai') },
       { id: 'comm', label: 'Comm', icon: DOMAIN_ICON['comm'], desc: '메시징 · 알림 · 협업', live: false, ...planned('comm') },
       { id: 'observability', label: 'Observability', icon: DOMAIN_ICON['observability'], desc: '메트릭 · 로그 · 트레이스', live: false, ...planned('observability') },

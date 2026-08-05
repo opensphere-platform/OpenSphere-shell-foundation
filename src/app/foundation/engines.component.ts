@@ -5,12 +5,12 @@ import { EnginesService } from './engines.service';
 import { ViewRouter } from '../view-router';
 import { OtelComponent } from './otel/otel.component';
 import { OpaComponent } from '../modules/identity/opa.component';
+import { SyncopeComponent } from '../modules/identity/syncope.component';
 import { RoadmapModuleComponent } from './roadmap-module.component';
 import { PluginPageHeaderComponent, PluginPageHeaderModel } from '../shared/plugin-page-shell.component';
 
-const REAL_DETAIL_TABS = new Set(['otel', 'opa']);
+const REAL_DETAIL_TABS = new Set(['otel', 'opa', 'syncope']);
 const PLACEHOLDER_TABS = new Set([
-  'syncope',
   'litellm', 'langfuse',
   'stalwart', 'novu', 'mattermost',
   'tempo', 'loki', 'grafana-operator',
@@ -52,10 +52,11 @@ const LOGO_BASE = 'https://logos.opl.io.kr/i';
 @Component({
   selector: 'app-foundation-engines',
   standalone: true,
-  imports: [CommonModule, ClarityModule, OtelComponent, OpaComponent, RoadmapModuleComponent, PluginPageHeaderComponent],
+  imports: [CommonModule, ClarityModule, OtelComponent, OpaComponent, SyncopeComponent, RoadmapModuleComponent, PluginPageHeaderComponent],
   template: `
     <app-otel *ngIf="currentId() === 'otel'"></app-otel>
     <app-opa *ngIf="currentId() === 'opa'"></app-opa>
+    <app-syncope *ngIf="currentId() === 'syncope'"></app-syncope>
     <app-roadmap-module *ngIf="placeholderCard() as pc" [module]="pc"></app-roadmap-module>
 
     <ng-container *ngIf="vr.module() === 'modules' && vr.tab() === 'overview'">
@@ -182,10 +183,10 @@ export class FoundationEnginesComponent {
       wiring: 'Keycloak plugin 화면에서 realm, workload, federation 상태를 관리한다.',
     },
     {
-      id: 'syncope', name: 'Apache Syncope', provider: 'syncope.apache.org', version: '', logo: 'apache-2', mono: 'SY', detail: true,
-      category: 'identity', impl: 'phase1', liveKey: '',
+      id: 'syncope', name: 'Apache Syncope', provider: 'syncope.apache.org', version: '4.0.7', logo: 'apache-2', mono: 'SY', detail: true,
+      category: 'identity', impl: 'real', liveKey: '',
       role: 'IGA 단일 권위. 별도 SCIM gateway 권위를 두지 않고 Syncope 중심의 SCIM 2.0 endpoint/connector로 수렴한다.',
-      wiring: 'D-12 결정: Syncope 내장 SCIM 2.0 확장을 우선 검토하고, 필요 시 얇은 connector만 둔다.',
+      wiring: 'FoundationModel/identity가 HA Core, CNPG DB/Role, TLS, ServiceMonitor와 감사 관측을 선언형으로 관리한다.',
     },
     {
       id: 'samba', name: 'Samba AD', provider: 'samba.org', version: 'AD DC', logo: 'samba-server', mono: 'AD', detail: true, module: 'addc',

@@ -116,6 +116,11 @@ func (r *modelReconciler) install(ctx context.Context, fm *unstructured.Unstruct
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("rustfs credential ensure: %w", err)
 	}
+	if fm.GetName() == "identity" && syncopeExplicitlyEnabled(fm) {
+		if err := r.ensureSyncopePrerequisites(ctx, fm.GetName(), ns); err != nil {
+			return reconcile.Result{}, fmt.Errorf("syncope prerequisite ensure: %w", err)
+		}
+	}
 	objs, err := b.build(r.cfg, fm)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -275,6 +280,8 @@ func bundleKinds() []schema.GroupVersionKind {
 		{Group: "monitoring.coreos.com", Version: "v1", Kind: "PrometheusRule"},
 		{Group: "cert-manager.io", Version: "v1", Kind: "Issuer"},
 		{Group: "cert-manager.io", Version: "v1", Kind: "Certificate"},
+		{Group: "postgresql.cnpg.io", Version: "v1", Kind: "Database"},
+		{Group: "postgresql.cnpg.io", Version: "v1", Kind: "DatabaseRole"},
 		cnpgClusterGVK, // data hybrid-wrap: CloudNativePG Cluster CR(라벨 회수)
 		cnpgPoolerGVK,  // data: PgBouncer Pooler CR(라벨 회수)
 		psmdbGVK,       // data: PerconaServerMongoDB CR(라벨 회수)

@@ -21,6 +21,9 @@ var identityBundleYAML string
 //go:embed identity_opa_bundle.yaml
 var identityOPABundleYAML string
 
+//go:embed identity_syncope_bundle.yaml
+var identitySyncopeBundleYAML string
+
 const (
 	keycloakName   = "foundation-identity-keycloak"
 	sambaName      = "foundation-identity-samba"
@@ -291,6 +294,15 @@ func buildIdentityBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstruc
 		}
 		out = append(out, oobjs...)
 	}
+	// Syncope is also explicit opt-in: enabling the IGA source of truth changes
+	// provisioning authority and therefore must never happen during an upgrade.
+	if syncopeExplicitlyEnabled(fm) {
+		sobjs, serr := buildSyncopeBundle(cfg, fm)
+		if serr != nil {
+			return nil, fmt.Errorf("syncope operand build 실패: %w", serr)
+		}
+		out = append(out, sobjs...)
+	}
 	return out, nil
 }
 
@@ -337,6 +349,9 @@ func identityReady(ctx context.Context, r *modelReconciler, fm *unstructured.Uns
 	if opaExplicitlyEnabled(fm) {
 		ok = ok && r.deploymentReady(ctx, opaName) && r.deploymentReady(ctx, opaControlName)
 	}
+	if syncopeExplicitlyEnabled(fm) {
+		ok = ok && r.syncopeReady(ctx, fm) && r.syncopeDatabaseReady(ctx)
+	}
 	return ok
 }
 
@@ -363,13 +378,20 @@ func observeIdentity(ctx context.Context, r *modelReconciler, fm *unstructured.U
 		opa["note"] = "engines.opa=enabled 명시 전 비활성(opt-in)"
 	}
 	login := map[string]interface{}{"id": "oidc_login_success_ratio", "unit": "ratio", "value": "n/a", "healthy": false, "source": "observability(D-7)", "note": "실 로그인 데이터 없음(D-7 연동)"}
-	scim := map[string]interface{}{"id": "scim_sync_lag_s", "unit": "s", "value": "n/a", "healthy": false, "source": "Syncope SCIM(D-7)", "note": "Syncope SCIM endpoint/connector 미구현(D-7)"}
+	syncope := syncopeObserved(ctx, r, fm)
+	syncopeDBReady := r.syncopeDatabaseReady(ctx)
+	syncopeDBValue := "0"
+	if syncopeDBReady {
+		syncopeDBValue = "1"
+	}
+	syncopeDB := map[string]interface{}{"id": "syncope_database_ready", "unit": "bool", "value": syncopeDBValue, "healthy": syncopeDBReady, "source": "CloudNativePG Cluster Ready condition"}
+	scim := map[string]interface{}{"id": "scim_sync_lag_s", "unit": "s", "value": "n/a", "healthy": false, "source": "Syncope audit/task telemetry", "note": "SCIM connector task가 구성되기 전에는 동기화 지연을 산출하지 않음"}
 	ko := keycloakParams(fm)
 	kv := map[string]interface{}{"id": "keycloak_version", "unit": "", "value": ko.version, "healthy": true, "source": "spec.parameters.identityEngines.keycloak.version"}
 	kr := map[string]interface{}{"id": "keycloak_replicas", "unit": "count", "value": fmt.Sprintf("%d", ko.replicas), "healthy": true, "source": "spec.parameters.identityEngines.keycloak.replicas"}
 	decisionSinkReady := opaExplicitlyEnabled(fm) && r.deploymentReady(ctx, opaControlName)
 	decisionTelemetry := map[string]interface{}{"id": "opa_decision_outcomes", "unit": "count", "value": "durable", "healthy": decisionSinkReady, "source": "CloudNativePG opensphere_opa_decision_log", "note": "원문 input 제거 후 allow/deny 결과만 30일 보존"}
-	return []interface{}{kc, kv, kr, sm, opa, decisionTelemetry, login, scim}, nil
+	return []interface{}{kc, kv, kr, sm, syncope, syncopeDB, opa, decisionTelemetry, login, scim}, nil
 }
 
 // extraIdentity — OIDC issuer + LDAP 디렉터리 좌표를 status에 노출(소비자·UI가 읽는 연결 정본).
@@ -390,6 +412,15 @@ func extraIdentity(cfg *config, o *unstructured.Unstructured) {
 	setNested(o, op.profile == "production" && op.replicas >= 2, "status", "opaProductionReady")
 	setNested(o, keycloakParams(o).version, "status", "keycloakVersion")
 	setNested(o, keycloakParams(o).profile, "status", "keycloakProfile")
+	sp := syncopeParams(o)
+	setNested(o, syncopeURL(cfg.managedNS), "status", "syncopeURL")
+	setNested(o, sp.version, "status", "syncopeVersion")
+	setNested(o, sp.profile, "status", "syncopeProfile")
+	setNested(o, "CloudNativePG/foundation-data-pg/syncope", "status", "syncopeDatabase")
+	setNested(o, "TLS", "status", "syncopeTLSMode")
+	setNested(o, "15s scrape / 60s chart step", "status", "syncopeMonitoringInterval")
+	setNested(o, syncopeExplicitlyEnabled(o) && sp.profile == "production" && sp.replicas >= 2 && sp.monitoring, "status", "syncopeProductionReady")
+	setNested(o, syncopeStatusNote(o), "status", "syncopeNote")
 }
 
 // bundleSpec — 모델별 operand 번들 정의. modelReconciler가 레지스트리로 일반화 처리(observability 동작 불변).
@@ -432,7 +463,7 @@ var bundles = map[string]bundleSpec{
 		observe:  observeIdentity,
 		extra:    extraIdentity,
 		ready:    identityReady, // 2026-07-06: Keycloak+Samba 복수 엔진 — 활성 엔진 전부 ready 기준
-		engines:  []string{"keycloak", "samba", "opa"},
+		engines:  []string{"keycloak", "samba", "syncope", "opa"},
 		endpoint: func(c *config) string { return issuerURL(c.managedNS) },
 		probe:    func(c *config) string { return keycloakSvcDNS(c.managedNS) + ":8080" },
 	},

@@ -64,7 +64,7 @@ rules:
     resources: [poddisruptionbudgets]
     verbs: [get, list, watch, create, patch, delete, deletecollection]
   - apiGroups: ["postgresql.cnpg.io"]
-    resources: [clusters, poolers, databases]
+    resources: [clusters, poolers, databases, databaseroles]
     verbs: [get, list, watch, create, patch, delete, deletecollection]
   - apiGroups: ["psmdb.percona.com"]
     resources: [perconaservermongodbs]
@@ -85,7 +85,11 @@ rules:
   # exact Secret 존재와 필수 key만 검증하며 생성·회전·삭제하지 않는다.
   - apiGroups: [""]
     resources: [secrets]
-    resourceNames: [foundation-data-valkey-auth, rustfs-credentials]
+    resourceNames:
+      - foundation-data-valkey-auth
+      - rustfs-credentials
+      - foundation-identity-syncope-db-auth
+      - foundation-identity-syncope-runtime
     verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

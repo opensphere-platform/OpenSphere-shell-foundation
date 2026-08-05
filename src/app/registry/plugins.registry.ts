@@ -75,8 +75,8 @@ export const FOUNDATION_PLUGINS: HostedPlugin[] = [
   {
     id: 'syncope', name: 'Apache Syncope', icon: 'users', kind: 'plugin', hostRef: 'foundation',
     capability: 'identity.iga.syncope', capabilityLabel: 'IGA / SCIM',
-    desc: 'Workforce IGA 단일 권위와 SCIM 2.0 프로비저닝 capability.', consumePoint: 'foundation-identity-syncope.opensphere-foundation.svc:8080',
-    healthRef: 'declared', model: 'identity', view: { module: 'syncope' }, surface: PG_SURFACE,
+    desc: 'Workforce IGA 단일 권위와 SCIM 2.0 프로비저닝 capability.', consumePoint: 'foundation-identity-syncope.opensphere-foundation.svc:8443',
+    healthRef: 'syncope', model: 'identity', view: { module: 'syncope' }, surface: PG_SURFACE,
     activation: { packageId: 'apache-syncope', element: 'osp-foundation-apache-syncope', installModule: 'syncope' },
   },
   {
