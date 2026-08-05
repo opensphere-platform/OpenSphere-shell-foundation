@@ -36,6 +36,10 @@ export class PgAdminService {
   readonly queryState = signal<'idle' | 'running' | 'done' | 'error'>('idle');
   readonly queryResult = signal<PgQueryResult | null>(null);
   readonly queryError = signal('');
+  readonly dataState = signal<'idle' | 'loading' | 'done' | 'error'>('idle');
+  readonly dataResult = signal<PgQueryResult | null>(null);
+  readonly dataError = signal('');
+  readonly dataObject = signal('');
   readonly actionState = signal<'idle' | 'running' | 'done' | 'error'>('idle');
   readonly actionResult = signal('');
 
@@ -95,6 +99,25 @@ export class PgAdminService {
       this.queryResult.set(body as PgQueryResult); this.queryState.set('done');
     } catch (error: any) {
       this.queryError.set(error?.message || String(error)); this.queryState.set('error');
+    }
+  }
+  async loadData(object: PgAdminObject, limit = 100): Promise<void> {
+    const boundedLimit = Math.max(1, Math.min(500, Math.trunc(limit) || 100));
+    const quote = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const sql = `SELECT * FROM ${quote(object.schema)}.${quote(object.name)} LIMIT ${boundedLimit}`;
+    const objectKey = `${this.selectedDatabase()}:${object.schema}.${object.name}`;
+    this.dataState.set('loading'); this.dataError.set(''); this.dataResult.set(null); this.dataObject.set(objectKey);
+    try {
+      const response = await hostFetch(this.endpoint('query'), {
+        method: 'POST', headers: writeHeaders(), body: JSON.stringify({ database: this.selectedDatabase(), sql }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || `PostgreSQL data view HTTP ${response.status}`);
+      if (this.dataObject() !== objectKey) return;
+      this.dataResult.set(body as PgQueryResult); this.dataState.set('done');
+    } catch (error: any) {
+      if (this.dataObject() !== objectKey) return;
+      this.dataError.set(error?.message || String(error)); this.dataState.set('error');
     }
   }
   async execute(action: PgTypedAction): Promise<boolean> {

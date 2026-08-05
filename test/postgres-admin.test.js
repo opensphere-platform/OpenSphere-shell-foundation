@@ -70,12 +70,19 @@ test('PostgreSQL Secret short service hosts are qualified for the target namespa
   assert.equal(postgresServiceHost('localhost'), 'localhost');
 });
 
-test('PostgreSQL administration surface follows the pgAdmin explorer and tabbed-workspace model', () => {
+test('PostgreSQL administration surface separates Data View from Query Tool and exposes a collapsible explorer', () => {
   const source = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/admin/pg-admin.tab.ts'), 'utf8');
-  for (const contract of ['Object Explorer', 'Dashboard', 'Properties', 'SQL', 'Statistics', 'Dependencies', 'Dependents', 'Query Tool', 'Data Output', 'Query History']) {
+  const service = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/admin/pg-admin.service.ts'), 'utf8');
+  for (const contract of ['Object Explorer', 'Dashboard', 'Properties', 'SQL', 'Statistics', 'Dependencies', 'Dependents', 'Data View', 'Query Tool', 'Data Output', 'Query History']) {
     assert.match(source, new RegExp(contract));
   }
   assert.match(source, /Servers[\s\S]*Databases[\s\S]*Schemas/);
+  assert.match(source, /aria-expanded/);
+  assert.match(source, /groupKey\(db\.name,schema\.name,group\.label\)/);
+  assert.match(source, /activeTab\(\)==='data'[\s\S]*activeTab\(\)==='query'/);
+  assert.match(service, /dataResult = signal<PgQueryResult \| null>/);
+  assert.match(service, /queryResult = signal<PgQueryResult \| null>/);
+  assert.match(service, /async loadData\(object: PgAdminObject, limit = 100\)/);
   assert.doesNotMatch(source, /pga-lower/);
 });
 
