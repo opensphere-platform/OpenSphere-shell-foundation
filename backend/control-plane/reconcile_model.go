@@ -160,6 +160,7 @@ func (r *modelReconciler) install(ctx context.Context, fm *unstructured.Unstruct
 	observed, sample := b.observe(ctx, r, fm, ready)
 	err = updateStatusRetry(ctx, r.direct, fmGVK, types.NamespacedName{Name: fm.GetName()}, func(o *unstructured.Unstructured) {
 		setNested(o, "reconcile("+b.slice+")", "status", "controlPlane")
+		setNested(o, o.GetGeneration(), "status", "appliedGeneration")
 		setNested(o, "", "status", "note")
 		_ = unstructured.SetNestedSlice(o.Object, observed, "status", "observed")
 		if sample != nil {

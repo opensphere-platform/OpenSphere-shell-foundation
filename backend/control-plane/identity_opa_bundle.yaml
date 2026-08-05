@@ -373,7 +373,16 @@ spec:
   selector: { matchLabels: { app: foundation-identity-opa } }
   namespaceSelector: { matchNames: [__NAMESPACE__] }
   endpoints:
-    - { port: diagnostic, path: /metrics, interval: 15s, scrapeTimeout: 10s }
+    - port: diagnostic
+      path: /metrics
+      scheme: https
+      interval: 15s
+      scrapeTimeout: 10s
+      tlsConfig:
+        serverName: foundation-identity-opa.__NAMESPACE__.svc
+        ca: { secret: { name: foundation-identity-opa-consumer-tls, key: ca.crt } }
+        cert: { secret: { name: foundation-identity-opa-consumer-tls, key: tls.crt } }
+        keySecret: { name: foundation-identity-opa-consumer-tls, key: tls.key }
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
