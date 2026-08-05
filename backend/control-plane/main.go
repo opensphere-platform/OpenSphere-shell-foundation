@@ -4,7 +4,8 @@
 //	A) modelReconciler  : FoundationModel watch → observability 번들 SSA 배포/라벨회수 + status.observed(정직 메트릭).
 //	B) claimReconciler  : FoundationClaim watch → FoundationBinding 발급 + 연결담보 finalizer + release.
 //
-// ADR-005R1(INV-1) 정합: 인프라는 SSA/DeleteAllOf로만 바꾼다(명령형 0). secret 권한 없음(§5).
+// ADR-005R1(INV-1) 정합: 인프라는 SSA/DeleteAllOf로만 바꾼다(명령형 0).
+// Secret은 Valkey 기본 자격의 최초 1회 bootstrap 등 명시된 exact-name lifecycle만 소유한다.
 package main
 
 import (
