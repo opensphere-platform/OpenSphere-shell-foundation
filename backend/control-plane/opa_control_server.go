@@ -27,7 +27,7 @@ import (
 //go:embed opa_production_bundle.tar.gz
 var opaProductionBundle []byte
 
-const opaProductionBundleRevision = "opensphere-prod-54418c8a00105447"
+const opaProductionBundleRevision = "opensphere-prod-92b5f4b80eb353db"
 
 type opaControlOptions struct {
 	listenAddress  string

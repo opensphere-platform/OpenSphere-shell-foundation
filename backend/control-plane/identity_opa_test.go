@@ -61,8 +61,11 @@ func TestOPABundleIsProductionFailClosedAndMonitored(t *testing.T) {
 			if obj.GetName() == opaName {
 				endpoints, _, _ := unstructured.NestedSlice(obj.Object, "spec", "endpoints")
 				endpoint := endpoints[0].(map[string]interface{})
-				if endpoint["port"] != "diagnostic" || endpoint["path"] != "/metrics" || endpoint["interval"] != "15s" {
+				if endpoint["port"] != "diagnostic" || endpoint["path"] != "/metrics" || endpoint["interval"] != "15s" || endpoint["scheme"] != "https" {
 					t.Fatalf("unexpected OPA ServiceMonitor endpoint: %#v", endpoint)
+				}
+				if _, ok := endpoint["tlsConfig"].(map[string]interface{}); !ok {
+					t.Fatalf("OPA ServiceMonitor must use mTLS: %#v", endpoint)
 				}
 			}
 		case "ConfigMap":
