@@ -265,7 +265,7 @@ async function postgresAdminCatalog(req, res, url) {
           WHEN 'c' THEN 'check' WHEN 'x' THEN 'exclusion' ELSE con.contype::text END AS kind,
         pg_get_constraintdef(con.oid, true) AS definition
         FROM pg_constraint con JOIN pg_class c ON c.oid=con.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace
-        WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema'
+        WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema' AND con.contype <> 'n'
         ORDER BY n.nspname, c.relname, con.conname`),
       pgRows(pool, `SELECT n.nspname AS schema, p.proname AS name,
         pg_get_function_identity_arguments(p.oid) AS arguments,

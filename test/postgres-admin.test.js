@@ -78,3 +78,8 @@ test('PostgreSQL administration surface follows the pgAdmin explorer and tabbed-
   assert.match(source, /Servers[\s\S]*Databases[\s\S]*Schemas/);
   assert.doesNotMatch(source, /pga-lower/);
 });
+
+test('PostgreSQL 19 not-null constraint rows are not duplicated in generated table DDL', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+  assert.match(source, /con\.contype <> 'n'/);
+});
