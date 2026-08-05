@@ -21,8 +21,10 @@ import { OsShardsTab } from '../opensearch/tabs/os-shards.tab';
 import { OsTemplatesTab } from '../opensearch/tabs/os-templates.tab';
 import { OsTasksTab } from '../opensearch/tabs/os-tasks.tab';
 import { OsClaimsTab } from '../opensearch/tabs/os-claims.tab';
+import { OsMonitoringTab } from '../opensearch/tabs/os-monitoring.tab';
+import { OsMetricsService } from '../opensearch/os-metrics.service';
 
-type Tab = PfsPluginTabId;
+type Tab = PfsPluginTabId | 'monitoring';
 type Profile = 'development' | 'production' | 'custom';
 type OsDataView = 'overview' | 'nodes' | 'indices' | 'shards' | 'templates' | 'tasks';
 interface StorageClassRow { name: string; provisioner: string; isDefault: boolean; allowExpansion: boolean; reclaimPolicy: string }
@@ -33,7 +35,7 @@ function defaultForm(spec: DataEngineSpec): EngineForm {
     profile: 'development', version: spec.defaultVersion, namespace: spec.namespace, replicas: spec.defaultReplicas === 3 ? 1 : spec.defaultReplicas,
     storageClass: 'standard', storageSize: spec.defaultStorage, resourceProfile: 'small',
     cpuRequest: '250m', memoryRequest: spec.id === 'opensearch' ? '1Gi' : '512Mi', cpuLimit: '1', memoryLimit: spec.id === 'opensearch' ? '2Gi' : '1Gi',
-    monitoring: false, tls: spec.id === 'psmdb', authSecret: spec.id === 'valkey' ? 'foundation-data-valkey-auth' : spec.id === 'rustfs' ? 'rustfs-credentials' : '',
+    monitoring: spec.id === 'opensearch', tls: spec.id === 'psmdb', authSecret: spec.id === 'valkey' ? 'foundation-data-valkey-auth' : spec.id === 'rustfs' ? 'rustfs-credentials' : '',
     heap: spec.id === 'opensearch' ? '-Xms1g -Xmx1g' : '', persistenceMode: spec.id === 'valkey' ? 'aof-everysec' : '',
     backup: { enabled: false, s3Endpoint: '', destinationPath: '', secretName: '', retentionPolicy: '30d' }, approval: '',
   };
@@ -44,7 +46,7 @@ function defaultForm(spec: DataEngineSpec): EngineForm {
   standalone: true,
   imports: [
     CommonModule, FormsModule, ClarityModule, CarbonIcon, PluginPageHeaderComponent, PluginTabsComponent,
-    OsOverviewTab, OsNodesTab, OsIndicesTab, OsShardsTab, OsTemplatesTab, OsTasksTab, OsClaimsTab,
+    OsOverviewTab, OsNodesTab, OsIndicesTab, OsShardsTab, OsTemplatesTab, OsTasksTab, OsClaimsTab, OsMonitoringTab,
   ],
   styles: [`
     :host{display:block;min-width:0}.de-head{display:flex;justify-content:space-between;gap:24px;padding:20px 0 18px;border-bottom:1px solid #d9d9d9}.de-brand{display:flex;gap:18px;align-items:center}.de-logo{width:72px;height:72px;border:1px solid #ddd;background:#fff;display:flex;align-items:center;justify-content:center}.de-logo img{max-width:56px;max-height:56px}.de-brand h1{margin:2px 0;font-size:1.55rem}.de-brand p{margin:4px 0;color:#525252}.de-meta{display:grid;grid-template-columns:auto auto;gap:6px 20px;margin:0;min-width:280px}.de-meta div{display:contents}.de-meta dt{color:#6f6f6f}.de-meta dd{margin:0;font-weight:600}.de-tabs{display:flex;overflow:auto;border-bottom:1px solid #d0d0d0;background:#fff}.de-tab{border:0;background:transparent;padding:12px 15px;white-space:nowrap;border-bottom:3px solid transparent}.de-tab.active{border-color:#4c6fff;color:#161616;font-weight:600}.de-step-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}.de-step{display:flex;text-align:left;gap:10px;border:1px solid #d0d0d0;background:#fff;padding:14px}.de-step.done{border-color:#24a148}.de-step.current{border-color:#4c6fff;background:#f3f5ff}.de-step-n{width:26px;height:26px;border-radius:50%;background:#e0e0e0;display:flex;align-items:center;justify-content:center;font-weight:700}.de-step.done .de-step-n{background:#24a148;color:#fff}.de-step small{display:block;color:#6f6f6f;margin-top:3px}.de-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.de-panel{background:#fff;border:1px solid #d0d0d0;padding:16px}.de-panel h2,.de-work h2{font-size:1.05rem;margin:0 0 8px}.de-big{font-size:2rem;font-weight:600}.de-work{background:#fff;border:1px solid #d0d0d0;padding:18px;margin-top:18px}.de-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.de-subtabs{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 18px;border-bottom:1px solid #d0d0d0}.de-subtabs button{border:0;background:transparent;padding:9px 12px;border-bottom:3px solid transparent}.de-subtabs button.active{border-color:#4c6fff;font-weight:600;color:#161616}.de-form fieldset{border:1px solid #d0d0d0;padding:15px;margin:0 0 14px}.de-form legend{padding:0 6px;font-weight:600}.de-form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.de-form label>span{display:block;font-weight:600;margin-bottom:5px}.de-form input,.de-form select,.de-form textarea{width:100%;min-height:34px;border:0;border-bottom:1px solid #8d8d8d;background:#f4f4f4;padding:6px}.de-form small{display:block;color:#6f6f6f;margin-top:4px}.de-checks{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.de-checks label{padding:10px;background:#f4f4f4}.de-actions{display:flex;align-items:center;gap:12px;justify-content:flex-end}.de-log{background:#161616;color:#f4f4f4;padding:12px;max-height:180px;overflow:auto;font-family:monospace;margin-top:12px}.de-progress{height:6px;background:#e0e0e0;margin-top:10px}.de-progress>div{height:100%;background:#4c6fff}.de-kv{display:grid;grid-template-columns:minmax(120px,.4fr) 1fr;gap:7px 16px}.de-kv dt{font-weight:600}.de-kv dd{margin:0;overflow-wrap:anywhere}.de-table{width:100%;border-collapse:collapse}.de-table th,.de-table td{text-align:left;padding:8px;border-bottom:1px solid #e0e0e0}.de-policy{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.de-policy>div{border:1px solid #d0d0d0;padding:12px}.de-docs{display:flex;gap:14px;margin-top:18px}.de-once{background:#fff8e1;border:1px solid #f1c21b;padding:12px;overflow-wrap:anywhere}.ok{color:#198038}.bad{color:#da1e28}.warn{color:#8e6a00}@media(max-width:1000px){.de-grid,.de-form-grid,.de-policy{grid-template-columns:repeat(2,minmax(0,1fr))}.de-head{display:block}.de-meta{margin-top:14px}}@media(max-width:650px){.de-step-row,.de-grid,.de-form-grid,.de-policy,.de-checks{grid-template-columns:1fr}}
@@ -68,6 +70,10 @@ function defaultForm(spec: DataEngineSpec): EngineForm {
         <article class="pgp-panel"><h2>Operations policy</h2><p>선언된 보호·관측·인증 정책입니다.</p><dl class="de-kv"><dt>TLS</dt><dd>{{form().tls?'Enabled':'Disabled'}}</dd><dt>Monitoring</dt><dd>{{monitoringLabel()}}</dd><dt>Backup</dt><dd>{{form().backup.enabled?'Configured':'Not configured'}}</dd><dt>Auth Secret</dt><dd class="os-mono">{{form().authSecret||'Operator managed / none'}}</dd></dl></article>
       </div>
       <div class="de-docs"><a [href]="manualUrl()">OpenSphere {{spec.name}} 설치·운영 안내서 (한글)</a><a [href]="spec.docs" target="_blank" rel="noreferrer">공식 문서</a><button class="btn btn-sm btn-link" (click)="openTab('cluster')">OpenSphere 설치 계약</button></div>
+    </section>
+
+    <section class="de-work" *ngIf="tab()==='monitoring' && engine==='opensearch'">
+      <os-monitoring />
     </section>
 
     <section class="de-work" *ngIf="tab()==='operator'">
@@ -100,7 +106,7 @@ function defaultForm(spec: DataEngineSpec): EngineForm {
           <label><span>Memory request / limit</span><input name="memory" [ngModel]="form().memoryRequest" (ngModelChange)="patch({memoryRequest:$event})"/><small>limit {{form().memoryLimit}}</small></label>
         </div></fieldset>
         <fieldset [disabled]="applying()"><legend>Security, observability & durability</legend>
-          <div class="de-checks"><label><input type="checkbox" name="monitoring" [ngModel]="form().monitoring" disabled/> Metrics connector pending</label><label><input type="checkbox" name="tls" [ngModel]="form().tls" disabled/> {{engine==='psmdb'?'Operator-managed TLS':'TLS connector pending'}}</label><label><input type="checkbox" name="backup" [ngModel]="form().backup.enabled" disabled/> Backup connector pending</label></div>
+          <div class="de-checks"><label><input type="checkbox" name="monitoring" [ngModel]="form().monitoring" (ngModelChange)="patch({monitoring:$event})" [disabled]="engine!=='opensearch'"/> {{engine==='opensearch'?'Prometheus exporter + ServiceMonitor':'Metrics connector pending'}}</label><label><input type="checkbox" name="tls" [ngModel]="form().tls" disabled/> {{engine==='psmdb'?'Operator-managed TLS':'TLS connector pending'}}</label><label><input type="checkbox" name="backup" [ngModel]="form().backup.enabled" disabled/> Backup connector pending</label></div>
           <div class="de-form-grid" *ngIf="engine==='valkey'||engine==='rustfs'"><label><span>Credentials Secret</span><input name="authSecret" [ngModel]="form().authSecret" (ngModelChange)="patch({authSecret:$event})"/></label><label><span>보안 자격 생성</span><button type="button" class="btn btn-sm" (click)="generateCredential()"><os-cicon [icon]="iPassword" [size]="16"/> Secret 생성</button></label></div>
           <div class="de-form-grid" *ngIf="engine==='opensearch'"><label><span>JVM heap</span><input name="heap" [ngModel]="form().heap" (ngModelChange)="patch({heap:$event})"/><small>-Xms/-Xmx 동일 권장</small></label></div>
         </fieldset>
@@ -174,6 +180,7 @@ export class DataEnginePluginComponent implements OnInit, OnChanges, OnDestroy {
   readonly reg = inject(FoundationRegistryService);
   readonly vr = inject(ViewRouter);
   readonly os = inject(OsService);
+  readonly osMetrics = inject(OsMetricsService);
   readonly tab = signal<Tab>('overview');
   readonly osView = signal<OsDataView>('overview');
   readonly form = signal<EngineForm>(defaultForm(DATA_ENGINE_SPECS.psmdb));
@@ -188,7 +195,9 @@ export class DataEnginePluginComponent implements OnInit, OnChanges, OnDestroy {
   readonly iBack = ArrowLeft16; readonly iDownload = Download16; readonly iRenew = Renew16; readonly iPassword = Password16;
   private watchTimer: ReturnType<typeof setInterval> | undefined;
   get tabs(): {id:Tab;label:string;runtime?:boolean}[] {
-    return pfsPluginTabs(this.domainLabel()).map(tab => ({ ...tab, id: tab.id as Tab, runtime: ['topology','events'].includes(tab.id) }));
+    const tabs = pfsPluginTabs(this.domainLabel()).map(tab => ({ ...tab, id: tab.id as Tab, runtime: ['topology','events'].includes(tab.id) }));
+    if (this.engine === 'opensearch') tabs.splice(1, 0, { id: 'monitoring', label: 'Monitoring', runtime: true });
+    return tabs;
   }
   get spec(): DataEngineSpec { return DATA_ENGINE_SPECS[this.engine]; }
   readonly validationError = computed(() => {
@@ -202,13 +211,13 @@ export class DataEnginePluginComponent implements OnInit, OnChanges, OnDestroy {
   });
   readonly canApply = computed(()=>this.dependencyReady()&&!this.applying()&&!this.validationError());
 
-  ngOnInit():void{this.runtime.start();if(this.engine==='opensearch')this.os.start();void this.initialize();}
-  ngOnChanges(ch:SimpleChanges):void{const change=ch['engine'];if(change&&!change.firstChange){if(change.previousValue==='opensearch')this.os.stop();this.form.set(defaultForm(this.spec));this.tab.set('overview');this.osView.set('overview');if(this.engine==='opensearch')this.os.start();void this.initialize();}}
-  ngOnDestroy():void{this.runtime.stop();this.os.stop();if(this.watchTimer)clearInterval(this.watchTimer);}
+  ngOnInit():void{this.runtime.start();if(this.engine==='opensearch'){this.os.start();this.osMetrics.start();}void this.initialize();}
+  ngOnChanges(ch:SimpleChanges):void{const change=ch['engine'];if(change&&!change.firstChange){if(change.previousValue==='opensearch'){this.os.stop();this.osMetrics.stop();}this.form.set(defaultForm(this.spec));this.tab.set('overview');this.osView.set('overview');if(this.engine==='opensearch'){this.os.start();this.osMetrics.start();}void this.initialize();}}
+  ngOnDestroy():void{this.runtime.stop();this.os.stop();this.osMetrics.stop();if(this.watchTimer)clearInterval(this.watchTimer);}
   private async initialize():Promise<void>{this.form.set(defaultForm(this.spec));await Promise.allSettled([this.reg.refreshModels(),this.runtime.refresh(this.engine),this.loadPrereqs(),this.loadStorageClasses()]);this.hydrate();}
   rt(){return this.runtime.runtime(this.engine);} exists(){return this.rt().state==='ok'&&!!this.rt().resource;} ready(){return this.runtime.ready(this.engine);} readyN(){return this.runtime.readyN(this.engine);} totalN(){return this.runtime.totalN(this.engine);} runtimePhase(){return this.runtime.phase(this.engine);} installedVersion(){const i=this.runtime.image(this.engine);return this.spec.versions.find(v=>i.includes(v.value))?.value||'';} availability(){return this.totalN()?Math.round(this.readyN()/this.totalN()*100):0;}
   lifecycle():string{if(!this.dependencyReady())return 'Dependency required';if(!this.exists())return 'Service required';return this.ready()?'Ready':'Progressing';}
-  monitoringLabel():string{if(this.engine==='opensearch')return this.ready()?'Direct API Ready · metrics connector pending':'Direct API pending';return this.form().monitoring?'Enabled':'Disabled';}
+  monitoringLabel():string{if(this.engine==='opensearch'){if(!this.form().monitoring)return'Disabled';if(this.osMetrics.target()==='up')return'Prometheus Ready';return this.ready()?'Prometheus enabled · target pending':'Prometheus pending';}return this.form().monitoring?'Enabled':'Disabled';}
   headerModel():PluginPageHeaderModel{return{name:this.spec.name,logo:this.spec.logo,capability:this.spec.capability,description:this.spec.description,lifecycle:this.lifecycle(),lifecycleClass:this.ready()?'label-success':'label-warning',version:this.installedVersion()||this.form().version,profile:this.form().profile,namespace:this.spec.namespace};}
   domainLabel():string{return({psmdb:'Databases & Users',valkey:'Keys & ACL',opensearch:'Indices & Roles',rustfs:'Buckets & Policies'} as Record<DataEngineId,string>)[this.engine];}
   tabsForUi():PluginPageTab[]{return this.tabs.map(t=>({id:t.id,label:t.label,disabled:!!t.runtime&&!this.exists(),badge:t.id==='events'?this.warningCount():''}));}
@@ -218,7 +227,7 @@ export class DataEnginePluginComponent implements OnInit, OnChanges, OnDestroy {
   warningCount():number{return this.rt().events.filter(e=>e.type==='Warning').length;}
   podReady(p:any):boolean{return(p.status?.conditions??[]).some((c:any)=>c.type==='Ready'&&c.status==='True');} restarts(p:any):number{return(p.status?.containerStatuses??[]).reduce((a:number,c:any)=>a+Number(c.restartCount??0),0);}
   back(){this.vr.setModule('modules');} openControlPlane(){this.vr.setModule('control-plane');} openTab(id:string){this.tab.set(id as Tab);this.vr.setTab(id);} openOsView(id:string){const views:OsDataView[]=['overview','nodes','indices','shards','templates','tasks'];if(views.includes(id as OsDataView))this.osView.set(id as OsDataView);} manualUrl():string{return `/manual?doc=${encodeURIComponent(`plugin:foundation/${this.spec.manualId}`)}`;} patch(p:Partial<EngineForm>){this.form.update(f=>({...f,...p}));} patchBackup(p:Partial<EngineForm['backup']>){this.form.update(f=>({...f,backup:{...f.backup,...p}}));}
-  setProfile(profile:Profile):void{const s=this.spec;if(profile==='production'){this.form.update(f=>({...f,profile,replicas:s.id==='rustfs'?4:3,storageSize:s.id==='rustfs'?'200Gi':'50Gi',resourceProfile:'medium',cpuRequest:'500m',memoryRequest:s.id==='opensearch'?'2Gi':'1Gi',cpuLimit:'2',memoryLimit:s.id==='opensearch'?'4Gi':'2Gi',monitoring:false,tls:s.id==='psmdb'}));return;}if(profile==='development'){this.form.set({...defaultForm(s),profile});return;}this.patch({profile});}
+  setProfile(profile:Profile):void{const s=this.spec;if(profile==='production'){this.form.update(f=>({...f,profile,replicas:s.id==='rustfs'?4:3,storageSize:s.id==='rustfs'?'200Gi':'50Gi',resourceProfile:'medium',cpuRequest:'500m',memoryRequest:s.id==='opensearch'?'2Gi':'1Gi',cpuLimit:'2',memoryLimit:s.id==='opensearch'?'4Gi':'2Gi',monitoring:s.id==='opensearch',tls:s.id==='psmdb'}));return;}if(profile==='development'){this.form.set({...defaultForm(s),profile});return;}this.patch({profile});}
   setResourceProfile(p:string):void{const v:Record<string,Partial<EngineForm>>={small:{resourceProfile:'small',cpuRequest:'250m',memoryRequest:this.engine==='opensearch'?'1Gi':'512Mi',cpuLimit:'1',memoryLimit:this.engine==='opensearch'?'2Gi':'1Gi'},medium:{resourceProfile:'medium',cpuRequest:'500m',memoryRequest:this.engine==='opensearch'?'2Gi':'1Gi',cpuLimit:'2',memoryLimit:this.engine==='opensearch'?'4Gi':'2Gi'},large:{resourceProfile:'large',cpuRequest:'1',memoryRequest:this.engine==='opensearch'?'4Gi':'2Gi',cpuLimit:'4',memoryLimit:this.engine==='opensearch'?'8Gi':'4Gi'}};this.patch({...v[p],profile:'custom'});}
   storageHint():string{const sc=this.storageClasses().find(x=>x.name===this.form().storageClass);return sc?`${sc.provisioner} · ${sc.allowExpansion?'온라인 확장 지원':'확장 미지원'} · reclaim ${sc.reclaimPolicy}`:'StorageClass 확인 중';}
   upgradeRequiresApproval():boolean{return this.exists()&&!!this.installedVersion()&&this.installedVersion()!==this.form().version;}

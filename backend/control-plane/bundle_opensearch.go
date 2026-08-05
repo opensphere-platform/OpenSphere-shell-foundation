@@ -154,7 +154,34 @@ func buildOpenSearchBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstr
 	markEngine(svc, "opensearch")
 
 	np := engineNetworkPolicy("opensearch", osStatefulSetName, ns, fm.GetName(), 9200)
-	return []*unstructured.Unstructured{sts, svc, np}, nil
+	objects := []*unstructured.Unstructured{sts, svc, np}
+	if o.monitoring {
+		objects = append(objects, opensearchServiceMonitor(ns, fm.GetName()))
+	}
+	return objects, nil
+}
+
+func opensearchServiceMonitor(ns, owner string) *unstructured.Unstructured {
+	u := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "monitoring.coreos.com/v1",
+		"kind":       "ServiceMonitor",
+		"metadata": map[string]interface{}{
+			"name":      osStatefulSetName,
+			"namespace": ns,
+		},
+		"spec": map[string]interface{}{
+			"namespaceSelector": map[string]interface{}{"matchNames": []interface{}{"opensphere-console"}},
+			"selector": map[string]interface{}{
+				"matchLabels": map[string]interface{}{"opensphere.io/dupa-plugin": "opensearch"},
+			},
+			"endpoints": []interface{}{
+				map[string]interface{}{"port": "http", "path": "/metrics", "interval": "15s", "scrapeTimeout": "10s"},
+			},
+		},
+	}}
+	stampLabels(u, "data", owner)
+	markEngine(u, "opensearch")
+	return u
 }
 
 func markEngine(u *unstructured.Unstructured, engine string) {
