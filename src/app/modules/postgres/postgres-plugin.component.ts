@@ -23,7 +23,7 @@ import WarningAlt16 from '@carbon/icons/es/warning--alt/16';
 import { PluginPageHeaderComponent, PluginPageHeaderModel, PluginPageTab, PluginTabsComponent } from '../../shared/plugin-page-shell.component';
 
 type PackageTab = 'overview' | 'operator' | 'cluster' | 'topology' | 'config' | 'databases' | 'admin' | 'backups' | 'events' | 'claims' | 'upgrade' | 'documentation';
-type Profile = 'development' | 'production' | 'custom';
+type Profile = 'development' | 'compact' | 'production' | 'custom';
 
 interface StorageClassRow {
   name: string;
@@ -185,11 +185,12 @@ const DEFAULT_FORM: PgForm = {
         <fieldset [disabled]="applying()">
           <legend>Topology & version</legend>
           <div class="pgp-form-grid">
-            <label><span>운영 프로파일</span><select name="profile" [ngModel]="form().profile" (ngModelChange)="setProfile($event)"><option value="development">Development · 1 instance</option><option value="production">Production HA · 3 instances</option><option value="custom">Custom</option></select></label>
+            <label><span>운영 프로파일</span><select name="profile" [ngModel]="form().profile" (ngModelChange)="setProfile($event)"><option value="development">Development · 1 instance</option><option value="compact">Compact HA · 2 instances</option><option value="production">Production HA · 3 instances</option><option value="custom">Custom</option></select></label>
             <label><span>PostgreSQL 19 image</span><select name="imageTag" [ngModel]="form().imageTag" (ngModelChange)="patchForm({ imageTag: $event })" [disabled]="clusterExists()"><option *ngFor="let v of versions" [value]="v.value">{{ v.label }}</option></select></label>
             <label><span>Instances</span><input name="instances" type="number" min="1" max="9" [ngModel]="form().instances" (ngModelChange)="patchForm({ instances: +$event, profile: 'custom' })" /></label>
             <label><span>Resource profile</span><select name="resourceProfile" [ngModel]="form().resourceProfile" (ngModelChange)="setResourceProfile($event)"><option value="small">Small · 250m / 512Mi</option><option value="medium">Medium · 500m / 1Gi</option><option value="large">Large · 1 / 2Gi</option></select></label>
           </div>
+          <clr-alert *ngIf="form().profile==='compact'" clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">Compact HA는 Primary 1개와 Standby 1개를 사용합니다. 한 인스턴스에 장애가 발생하면 복구될 때까지 단일 인스턴스로 운영됩니다.</span></clr-alert-item></clr-alert>
         </fieldset>
 
         <fieldset [disabled]="applying()">
@@ -326,6 +327,10 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
   setProfile(profile: Profile): void {
     if (profile === 'production') {
       this.form.update((f) => ({ ...f, profile, instances: 3, storageSize: '50Gi', resourceProfile: 'medium', cpuRequest: '500m', memoryRequest: '1Gi', cpuLimit: '2', memoryLimit: '2Gi', poolerEnabled: true, poolerInstances: 2, monitoring: true }));
+      return;
+    }
+    if (profile === 'compact') {
+      this.form.update((f) => ({ ...f, profile, instances: 2, storageSize: '10Gi', resourceProfile: 'small', cpuRequest: '250m', memoryRequest: '512Mi', cpuLimit: '1', memoryLimit: '1Gi', poolerEnabled: false, poolerInstances: 1, monitoring: true }));
       return;
     }
     if (profile === 'development') {

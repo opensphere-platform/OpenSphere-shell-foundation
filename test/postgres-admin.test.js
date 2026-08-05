@@ -86,6 +86,14 @@ test('PostgreSQL administration surface separates Data View from Query Tool and 
   assert.doesNotMatch(source, /pga-lower/);
 });
 
+test('PostgreSQL Cluster plan offers an explicit compact two-instance profile', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/postgres-plugin.component.ts'), 'utf8');
+  assert.match(source, /Compact HA · 2 instances/);
+  assert.match(source, /profile === 'compact'/);
+  assert.match(source, /profile, instances: 2/);
+  assert.match(source, /Primary 1개와 Standby 1개/);
+});
+
 test('PostgreSQL 19 not-null constraint rows are not duplicated in generated table DDL', () => {
   const source = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
   assert.match(source, /con\.contype <> 'n'/);
