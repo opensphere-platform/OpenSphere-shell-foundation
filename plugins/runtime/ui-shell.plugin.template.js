@@ -85,7 +85,7 @@ class FoundationPluginElement extends HTMLElement {
       </section>
       <div data-content>${this.renderTab(active)}</div>`;
     this.querySelector('[data-back]')?.addEventListener('click', () => {
-      history.pushState(history.state, '', '/p/foundation/modules');
+      history.pushState(history.state, '', '/pfss/modules');
       window.dispatchEvent(new PopStateEvent('popstate'));
     });
     this.querySelectorAll('[data-tab]').forEach((button) => button.addEventListener('click', () => this.navigate(button.dataset.tab)));

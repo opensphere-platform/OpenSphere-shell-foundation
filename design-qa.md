@@ -2,7 +2,7 @@
 
 검증일: 2026-07-20
 
-정본 화면: `/p/foundation/postgres`
+정본 화면: `/pfss/postgres`
 
 ## 검증 대상
 
@@ -24,13 +24,13 @@
 ## 화면·경로 감사
 
 1. ADDC는 PostgreSQL과 동일한 전체 폭 host, 헤더, 11개 탭, 3단계 수명주기 및 3열 Overview를 사용한다.
-2. Syncope와 OPA의 정본 경로는 각각 `/p/foundation/syncope`, `/p/foundation/opa`다.
+2. Syncope와 OPA의 정본 경로는 각각 `/pfss/syncope`, `/pfss/opa`다.
 3. 같은 카탈로그 계층의 LiteLLM, Langfuse, Stalwart, Novu, Mattermost, OTel, Tempo, Loki, Grafana Operator, PTM도 직접 경로를 사용한다.
-4. `/p/foundation/modules`는 PFS 모듈 카탈로그 개요로만 남는다.
-5. 폐기된 `/p/foundation/modules/<plugin>` 패턴은 router, registry, manual contribution 및 배포 bundle에서 제거됐다.
+4. `/pfss/modules`는 PFS 모듈 카탈로그 개요로만 남는다.
+5. 폐기된 `/pfss/modules/<plugin>` 패턴은 router, registry, manual contribution 및 배포 bundle에서 제거됐다.
 6. 로컬 build, manual 21건, surface 계약, 20개 독립 plugin catalog 검증이 모두 통과했다.
 7. 실행 클러스터의 Foundation은 `Activated/Ready`, workload·page·api·manual은 모두 `Ready`다.
-8. 독립 Apache Syncope `edge` 이미지의 `plugin.json`과 실행 bundle 모두 `/p/foundation/syncope`를 사용하며 `/modules/`를 포함하지 않는다.
+8. 독립 Apache Syncope `edge` 이미지의 `plugin.json`과 실행 bundle 모두 `/pfss/syncope`를 사용하며 `/modules/`를 포함하지 않는다.
 
 ## 시각 증거
 
@@ -46,7 +46,7 @@ final result: passed
 - 검증일: 2026-08-05
 - Reference source: official pgAdmin 4 View Data and Query Tool screenshots
 - Implementation: `src/app/modules/postgres/admin/pg-admin.tab.ts`, `src/app/modules/postgres/admin/pg-admin.service.ts`
-- Runtime: `https://localhost:1114/p/foundation/postgres/admin`
+- Runtime: `https://localhost:1114/pfss/postgres/admin`
 - Final comparison evidence: `../.codex-tmp/pgadmin-data-query-redesign/09-final-reference-comparison.png`
 
 ## Visible comparison

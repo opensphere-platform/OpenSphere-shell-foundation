@@ -169,7 +169,7 @@ function defaultForm(spec: DataEngineSpec): EngineForm {
     <section class="de-work" *ngIf="tab()==='documentation'">
       <div class="de-section-head"><div><span class="vl-eyebrow">Console Manual Registry</span><h2>Documentation</h2></div><span class="label label-success">자동 등록</span></div>
       <p>이 plugin이 소유한 한글 설치·운영 안내서는 Foundation package 활성화 시 Console Manual Registry와 통합 검색에 자동 등록됩니다.</p>
-      <dl class="de-kv"><dt>문서 ID</dt><dd class="os-mono">plugin:foundation/{{spec.manualId}}</dd><dt>화면 경로</dt><dd class="os-mono">/p/foundation/{{engine}}</dd><dt>정본 수준</dt><dd>Tier 2 · 제품/운영 안내서</dd></dl>
+      <dl class="de-kv"><dt>문서 ID</dt><dd class="os-mono">plugin:foundation/{{spec.manualId}}</dd><dt>화면 경로</dt><dd class="os-mono">/pfss/{{engine}}</dd><dt>정본 수준</dt><dd>Tier 2 · 제품/운영 안내서</dd></dl>
       <div class="de-docs"><a class="btn btn-sm btn-primary" [href]="manualUrl()">한글 안내서 열기</a><a class="btn btn-sm" [href]="spec.docs" target="_blank" rel="noreferrer">제품 공식 문서</a></div>
     </section>
   `,

@@ -1,11 +1,11 @@
 import { Injectable, signal } from '@angular/core';
 
 // Foundation 딥링크 — 플랫폼 표준(shell-template 원본)과 동일: **경로 세그먼트 + pushState/popstate**.
-// 콘솔 host matcher가 `/p/foundation` 또는 PFSS 정본 `/pfss` 아래 서브패스를 위임하므로, 경로가 바뀌어도
+// 콘솔 host matcher가 PFSS 정본 `/pfss/*`를 Foundation에 위임하므로, 경로가 바뀌어도
 // id(foundation)가 그대로면 재마운트되지 않는다. 주소 형태:
-//   · 모듈:      /p/foundation/<module>            (예: /p/foundation/postgres)
-//   · 모듈+탭:   /p/foundation/<module>/<tab>       (예: /p/foundation/postgres/config)
-//   · overview:  /p/foundation                      (fragment 없음)
+//   · 모듈:      /pfss/<module>            (예: /pfss/addc)
+//   · 모듈+탭:   /pfss/<module>/<tab>       (예: /pfss/addc/operator)
+//   · overview:  /pfss/foundation          (fragment 없음)
 // (구 `?fview=<module>.<tab>` 쿼리 방식 폐기 — D-14. select()/syncUrl() 한 곳만 URL을 건드린다.)
 @Injectable({ providedIn: 'root' })
 export class ViewRouter {
@@ -24,10 +24,11 @@ export class ViewRouter {
     try {
       const parts = location.pathname.split('/').filter(Boolean);
       const pfss = parts[0] === 'pfss';
-      const i = pfss ? 0 : parts.indexOf('foundation');
-      const m = i >= 0 ? (parts[i + 1] ?? '') : '';
-      const t = i >= 0 ? (parts[i + 2] ?? '') : '';
-      const d = i >= 0 ? (parts[i + 3] ?? '') : '';
+      const legacyIndex = parts.indexOf('foundation');
+      const route = pfss
+        ? (parts[1] === 'foundation' ? [] : parts.slice(1))
+        : (legacyIndex >= 0 ? parts.slice(legacyIndex + 1) : []);
+      const [m = '', t = '', d = ''] = route;
       this.module.set(m || 'overview');
       this.tab.set(t || 'overview');
       this.detail.set(d || 'overview');
@@ -65,8 +66,8 @@ export class ViewRouter {
         'otel', 'tempo', 'loki', 'grafana-operator', 'ptm', 'delivery',
       ].includes(m);
       const t = this.tab();
-      let next = m === 'opensearch' ? '/pfss' : '/p/foundation';
-      if (m && m !== 'overview') next += hasTabs && t && t !== 'overview' ? `/${m}/${t}` : `/${m}`;
+      let next = m && m !== 'overview' ? `/pfss/${m}` : '/pfss/foundation';
+      if (m && m !== 'overview' && hasTabs && t && t !== 'overview') next += `/${t}`;
       if (m === 'delivery' && t && t !== 'overview' && this.detail() !== 'overview') next += `/${this.detail()}`;
       const target = next + location.search + location.hash;
       if (location.pathname !== next) history.pushState(history.state, '', target);

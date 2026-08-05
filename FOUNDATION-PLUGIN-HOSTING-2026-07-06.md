@@ -2,7 +2,7 @@
 
 ## Decision
 
-`/p/foundation/*` plugin routes are no longer represented by local dummy pages. Foundation now acts as a host shell:
+`/pfss/*` plugin routes are no longer represented by local dummy pages. Foundation now acts as a host shell:
 
 - Foundation engine pages prepare or install the backing capability.
 - Independent plugins are installed as `UIPluginPackage` + `UIPluginRegistration`.
@@ -12,7 +12,7 @@
 
 | Route | Package | Element | Install source |
 | --- | --- | --- | --- |
-| `/p/foundation/samba` | `samba-ad` | `osp-samba-ad` | `OpenSphere-plugin-samba-ad` |
+| `/pfss/samba` | `samba-ad` | `osp-samba-ad` | `OpenSphere-plugin-samba-ad` |
 | `/pfss/opensearch` | `opensearch` | `osp-opensearch` | `OpenSphere-plugin-opensearch` |
 
 ## OpenSearch 0-Stage Flow

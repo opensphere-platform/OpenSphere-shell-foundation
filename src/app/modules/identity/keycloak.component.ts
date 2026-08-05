@@ -96,7 +96,7 @@ const DEFAULT_FORM: KeycloakForm = {
     <section class="pgp-workspace" *ngIf="tab()==='documentation'">
       <div class="pgp-section-head"><div><span class="vl-eyebrow">Console Manual Registry</span><h2>Documentation</h2></div><span class="label label-success">자동 등록</span></div>
       <p>Foundation package 활성화 시 Keycloak 한글 설치·운영 안내서를 Console Manual Registry와 통합 검색에 등록합니다.</p>
-      <dl class="os-kv"><dt>문서 ID</dt><dd class="os-mono">plugin:foundation/{{manualId}}</dd><dt>화면 경로</dt><dd class="os-mono">/p/foundation/keycloak</dd><dt>정본 수준</dt><dd>Tier 2 · 제품/운영 안내서</dd></dl>
+      <dl class="os-kv"><dt>문서 ID</dt><dd class="os-mono">plugin:foundation/{{manualId}}</dd><dt>화면 경로</dt><dd class="os-mono">/pfss/keycloak</dd><dt>정본 수준</dt><dd>Tier 2 · 제품/운영 안내서</dd></dl>
       <a class="btn btn-sm btn-primary" [href]="manualUrl">한글 안내서 열기</a><a class="btn btn-sm" href="https://www.keycloak.org/documentation" target="_blank" rel="noreferrer">Keycloak 공식 문서</a>
     </section>
   `,

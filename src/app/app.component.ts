@@ -51,7 +51,7 @@ const CATALOG_MODULES = new Set([
 
 // Foundation subShell — plugin 호스팅 shell(§2.7). 크롬(2단 내비·breadcrumb·라우팅)은 SDK 정본
 // OpenSphere-shell-template와 동일 패턴: 흰 clr-vertical-nav(.cm-nav, 12rem grid, 왼쪽 blue bar),
-// 상단 회색 breadcrumb 바, 경로 세그먼트 라우팅(/p/foundation/<module> + pushState).
+// 상단 회색 breadcrumb 바, 경로 세그먼트 라우팅(/pfss/<module> + pushState).
 // 구조·컴포넌트 = Clarity(clr-vertical-nav·clr-tree·clr-datagrid). 아이콘 = Carbon(@carbon/icons·os-cicon) —
 // shell-template/shell-ai/shell-base와 동일 관례(Clarity는 아이콘 세트를 자체 제공하지 않고, Clarity Core의
 // cds-icon 웹컴포넌트는 이 ShadowDom Angular-Element 셸에서 부트스트랩 크래시 → Carbon SVG 디스크립터로 대체).
@@ -93,6 +93,15 @@ const CATALOG_MODULES = new Set([
     .cc-crumb-link { color: #4c6fff; text-decoration: none; cursor: pointer; }
     .cc-crumb-link:hover { text-decoration: underline; }
     .cc-crumb.is-cur { color: #525252; } .cc-crumb-sep { color: #8c8c8c; }
+
+    .pfs-module-management { padding: 1.25rem; border: 1px solid #d9d9d9; background: #fff; }
+    .pfs-module-management__heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #d9d9d9; }
+    .pfs-module-management__heading h1 { margin: .2rem 0; font-size: 1.6rem; }
+    .pfs-module-management__heading p { margin: 0; color: #565656; }
+    .pfs-module-management__eyebrow { color: #0f62fe; font-size: .72rem; font-weight: 700; letter-spacing: .08em; }
+    .pfs-module-management__facts { display: grid; grid-template-columns: 9rem minmax(0, 1fr); margin: 1rem 0; border-top: 1px solid #d9d9d9; }
+    .pfs-module-management__facts dt, .pfs-module-management__facts dd { margin: 0; padding: .65rem; border-bottom: 1px solid #d9d9d9; overflow-wrap: anywhere; }
+    .pfs-module-management__facts dt { font-weight: 600; background: #f4f4f4; }
 
     @media (max-width: 760px) {
       .os-shell { grid-template-columns: minmax(0, 1fr); }
@@ -157,6 +166,25 @@ const CATALOG_MODULES = new Set([
         <app-rustfs-plugin *ngIf="vr.module() === 'rustfs' && !activePlugin()"></app-rustfs-plugin>
         <app-data-engine-plugin *ngIf="vr.module() === 'opensearch' && !activePlugin()" engine="opensearch"></app-data-engine-plugin>
         <app-keycloak *ngIf="vr.module() === 'keycloak' && !activePlugin()"></app-keycloak>
+        <section *ngIf="inactivePlugin() as p" class="pfs-module-management" aria-labelledby="pfs-module-management-title">
+          <div class="pfs-module-management__heading">
+            <div>
+              <div class="pfs-module-management__eyebrow">PFSS MODULE MANAGEMENT</div>
+              <h1 id="pfs-module-management-title">{{ p.name }}</h1>
+              <p>실행 UI가 아직 활성화되지 않았습니다. 관리 경로는 유지되며 준비 상태를 확인할 수 있습니다.</p>
+            </div>
+            <a class="btn btn-primary" href="/manage/extensions">Extensions 관리</a>
+          </div>
+          <dl class="pfs-module-management__facts">
+            <dt>정본 경로</dt><dd class="os-mono">/pfss/{{ routeId(p.id) }}</dd>
+            <dt>설치 선언</dt><dd>{{ reg.modelOf(p.id) ?? '확인 중' }}</dd>
+            <dt>Runtime</dt><dd>{{ reg.health(p).label }}</dd>
+            <dt>UI 상태</dt><dd>Activation 대기</dd>
+          </dl>
+          <clr-alert clrAlertType="warning" [clrAlertClosable]="false">
+            <clr-alert-item><span class="alert-text">서명·의존성·플랫폼 준비도 검증이 끝날 때까지 변경 작업은 차단됩니다.</span></clr-alert-item>
+          </clr-alert>
+        </section>
         <clr-alert *ngIf="disabledModule()" clrAlertType="warning" [clrAlertClosable]="false">
           <clr-alert-item><span class="alert-text">이 plugin은 비활성 상태입니다. PFS 모듈 화면에서 설치 상태를 확인하세요.</span></clr-alert-item>
         </clr-alert>
@@ -236,11 +264,16 @@ export class AppComponent implements OnInit, OnDestroy {
     const id = this.pluginId(route === 'delivery' ? this.vr.tab() : route);
     const p = this.reg.all.find((x) => x.id === id && !!x.activation);
     if (!p) { return undefined; }
-    // Samba-AD owns a lifecycle-aware Preflight/Install surface. It must be reachable
-    // from the PFS module catalog before the operand is installed, while left-nav
-    // exposure still remains driven by installed engines only.
-    if (p.id === 'samba') { return p; }
     return p.activation?.element && customElements.get(p.activation.element) ? p : undefined;
+  }
+
+  inactivePlugin(): HostedPlugin | undefined {
+    const route = this.vr.module();
+    const id = this.pluginId(route === 'delivery' ? this.vr.tab() : route);
+    if (id !== 'samba') return undefined;
+    const plugin = this.reg.all.find((item) => item.id === id && !!item.activation);
+    if (!plugin?.activation?.element || customElements.get(plugin.activation.element)) return undefined;
+    return plugin;
   }
 
   disabledModule(): boolean {
@@ -270,7 +303,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   /** Package/engine identity는 samba로 유지하되 사용자 주소 공간은 AD DC 의미의 addc를 사용한다. */
-  private routeId(pluginId: string): string { return pluginId === 'samba' ? 'addc' : pluginId; }
+  routeId(pluginId: string): string { return pluginId === 'samba' ? 'addc' : pluginId; }
   private pluginId(routeId: string): string { return routeId === 'addc' ? 'samba' : routeId; }
 
   /** 그룹 라벨(모듈이 어느 capability 그룹인지) — breadcrumb 3단용. */

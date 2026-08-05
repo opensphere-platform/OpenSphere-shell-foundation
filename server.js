@@ -610,7 +610,7 @@ function foundationBootstrapPlanView(lifecycle, template, requestStatus) {
     schema: 'foundation-bootstrap-plan.opensphere.io/v1alpha1',
     checkedAt: requestStatus?.checkedAt || new Date().toISOString(),
     readyToRequest: supportReady && !established && !requestActive,
-    changeControlUrl: `/manage/change-control?template=${FOUNDATION_BOOTSTRAP_TEMPLATE_ID}&returnTo=${encodeURIComponent('/p/foundation')}`,
+    changeControlUrl: `/manage/change-control?template=${FOUNDATION_BOOTSTRAP_TEMPLATE_ID}&returnTo=${encodeURIComponent('/pfss/foundation')}`,
     gate: {
       supportProfileReady: supportReady,
       pfsEstablished: established,

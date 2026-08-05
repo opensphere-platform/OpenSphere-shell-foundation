@@ -251,7 +251,7 @@ const DEFAULT_FORM: PgForm = {
     <section *ngIf="tab() === 'documentation'" class="pgp-workspace">
       <div class="pgp-section-head"><div><span class="vl-eyebrow">Console Manual Registry</span><h2>Documentation</h2></div><span class="label label-success">자동 등록</span></div>
       <p>PostgreSQL 19 한글 설치·운영 안내서는 Foundation package 활성화 시 Console Manual Registry와 통합 검색에 자동 등록됩니다.</p>
-      <dl class="os-kv"><dt>문서 ID</dt><dd class="os-mono">{{manualSourceId}}</dd><dt>화면 경로</dt><dd class="os-mono">/p/foundation/postgres</dd><dt>정본 수준</dt><dd>Tier 2 · 제품/운영 안내서</dd></dl>
+      <dl class="os-kv"><dt>문서 ID</dt><dd class="os-mono">{{manualSourceId}}</dd><dt>화면 경로</dt><dd class="os-mono">/pfss/postgres</dd><dt>정본 수준</dt><dd>Tier 2 · 제품/운영 안내서</dd></dl>
       <a class="btn btn-sm btn-primary" [href]="manualUrl">한글 안내서 열기</a><a class="btn btn-sm" href="https://www.postgresql.org/docs/19/" target="_blank" rel="noreferrer">PostgreSQL 19 공식 문서</a><a class="btn btn-sm" href="https://cloudnative-pg.io/documentation/current/" target="_blank" rel="noreferrer">CloudNativePG 공식 문서</a>
     </section>
   `,
