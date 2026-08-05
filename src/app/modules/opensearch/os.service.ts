@@ -1,5 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { apiBase, FND_NS } from '../../api-base';
+import { apiBase, FND_NS, hostFetch } from '../../api-base';
 import { PollBackoff } from '../../shared/poll-backoff';
 import { Phase, State, osHealthPhase } from './os.types';
 
@@ -48,7 +48,7 @@ export class OsService {
 
   private url(path: string): string { return `${apiBase()}/api/opensearch${path}`; }
   private async getJson(path: string): Promise<{ ok: boolean; status: number; data: any }> {
-    try { const r = await fetch(this.url(path)); return { ok: r.ok, status: r.status, data: r.ok ? await r.json() : null }; }
+    try { const r = await hostFetch(this.url(path), { cache: 'no-store' }); return { ok: r.ok, status: r.status, data: r.ok ? await r.json() : null }; }
     catch { return { ok: false, status: 0, data: null }; }
   }
   private mapState(r: { ok: boolean; status: number }, len: number): State {
