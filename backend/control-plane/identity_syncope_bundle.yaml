@@ -162,6 +162,8 @@ spec:
     spec:
       serviceAccountName: foundation-identity-syncope
       automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: opensphere-ghcr-pull
       securityContext: { seccompProfile: { type: RuntimeDefault } }
       terminationGracePeriodSeconds: 45
       containers:
