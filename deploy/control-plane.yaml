@@ -28,8 +28,8 @@ spec:
         runAsNonRoot: true
       containers:
         - name: manager
-          # image-source: ghcr-mirror(ok, 자체빌드) — 다이제스트 핀(2026-06-27 빌드와 동일 콘텐츠, 태그만 정정)
-          image: ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:763466dae2955d33ca37f116c69ad5b4e4970ae391df0712123b6c3a7dd3c306
+          # image-source: ghcr-mirror(ok, 자체빌드) — OPA production supply-chain 지원 edge exact digest
+          image: ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:0dfa0b693a69b3e166b247ccfab0966cdd6f52393abab7f3a1425e54bec97d92
           imagePullPolicy: IfNotPresent
           args:
             - --managed-namespace=opensphere-foundation
@@ -45,6 +45,7 @@ spec:
             - --rustfs-image=ghcr.io/opensphere-platform/mirror/rustfs@sha256:60f4f2f41ce95216f8cac676e69f9d90c0bfec458a3bc7fd7fb9b7c2452ac57a
             - --opensearch-image=ghcr.io/opensphere-platform/mirror/opensearch@sha256:44ba7ea58a319adf61c33ab16873f9ef5dbb30b291a832d375172f0b2d24e3c9
             - --opa-image=ghcr.io/opensphere-platform/mirror/opa@sha256:3ece20d3a58eb4051db71c0b84fc962bca2a6f9aa74ee8ea3d027d693fdc2d1a
+            - --opa-control-image=ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:0dfa0b693a69b3e166b247ccfab0966cdd6f52393abab7f3a1425e54bec97d92
             - --default-storage-class=standard
           env:
             - name: FOUNDATION_DIRECT_APPLY
