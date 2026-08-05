@@ -179,13 +179,19 @@ function decodeSecretValue(data, key) {
   const encoded = data?.[key];
   return encoded ? Buffer.from(encoded, 'base64').toString('utf8') : '';
 }
+function postgresServiceHost(value) {
+  const host = String(value || '').trim();
+  if (!host) return POSTGRES_ADMIN.service;
+  if (host === 'localhost' || host.includes('.') || host.includes(':')) return host;
+  return `${host}.${POSTGRES_ADMIN.namespace}.svc`;
+}
 async function postgresCredentials(actor) {
   if (pgCredentialCache && pgCredentialCache.expiresAt > Date.now()) return pgCredentialCache.value;
   const result = await k8sJson('GET', `/api/v1/namespaces/${POSTGRES_ADMIN.namespace}/secrets/${POSTGRES_ADMIN.secret}`, undefined, actor);
   if (!result.ok) throw { code: result.status, msg: `PostgreSQL connection Secret unavailable: ${k8sFailure(result)}` };
   const data = result.json?.data || {};
   const value = {
-    host: decodeSecretValue(data, 'host') || POSTGRES_ADMIN.service,
+    host: postgresServiceHost(decodeSecretValue(data, 'host')),
     port: Number(decodeSecretValue(data, 'port') || POSTGRES_ADMIN.port),
     database: decodeSecretValue(data, 'dbname') || 'app',
     user: decodeSecretValue(data, 'username') || 'app',
@@ -1895,7 +1901,7 @@ if (require.main === module) {
     foundationBootstrapPlanView, sambaBootstrapSecretEvidence, sambaReadinessProjection,
     validateHisStatusContract,
     parseResp, encodeRespCommand, parseInfo, sanitizeAclLine, requireValkeyDb, requireValkeyKey,
-    postgresReadOnlySql, postgresActionPlan, pgName,
+    postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost,
     foundationBootstrapState,
     HIS_STATUS_SCHEMA, FOUNDATION_CORE_CRDS,
     FOUNDATION_ENGINE_MODEL, FOUNDATION_CLAIM_MODELS, POSTGRES_ADMIN,

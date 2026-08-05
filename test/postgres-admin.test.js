@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { postgresReadOnlySql, postgresActionPlan, pgName, POSTGRES_ADMIN } = require('../server.js');
+const { postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost, POSTGRES_ADMIN } = require('../server.js');
 
 function throwsMessage(fn, pattern) {
   assert.throws(fn, (error) => pattern.test(String(error?.msg || error?.message || error)));
@@ -52,4 +52,14 @@ test('PostgreSQL admin contract pins one cluster and bounded query execution', (
   assert.equal(POSTGRES_ADMIN.secret, 'foundation-data-pg-app');
   assert.equal(POSTGRES_ADMIN.rowLimit, 500);
   assert.equal(POSTGRES_ADMIN.statementTimeoutMs, 10000);
+});
+
+test('PostgreSQL Secret short service hosts are qualified for the target namespace', () => {
+  assert.equal(postgresServiceHost('foundation-data-pg-rw'),
+    'foundation-data-pg-rw.opensphere-foundation.svc');
+  assert.equal(postgresServiceHost('foundation-data-pg-rw.opensphere-foundation.svc'),
+    'foundation-data-pg-rw.opensphere-foundation.svc');
+  assert.equal(postgresServiceHost(''), POSTGRES_ADMIN.service);
+  assert.equal(postgresServiceHost('10.96.154.32'), '10.96.154.32');
+  assert.equal(postgresServiceHost('localhost'), 'localhost');
 });
