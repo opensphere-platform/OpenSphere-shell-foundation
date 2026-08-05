@@ -52,7 +52,7 @@ func imageWithTag(base, tag string) string {
 
 func dataEngineParams(fm *unstructured.Unstructured, cfg *config, id string) dataEngineOpts {
 	base := map[string]string{"psmdb": cfg.psmdbImage, "valkey": cfg.valkeyImage, "rustfs": cfg.rustfsImage, "opensearch": cfg.opensearchImage}[id]
-	defVersion := map[string]string{"psmdb": "8.0", "valkey": "9.1.0", "rustfs": "1.0.0-beta.10", "opensearch": "3.7.0"}[id]
+	defVersion := map[string]string{"psmdb": "8.0.26-11", "valkey": "9.1.0", "rustfs": "1.0.0-beta.10", "opensearch": "3.7.0"}[id]
 	defStorage := map[string]string{"psmdb": "20Gi", "valkey": "10Gi", "rustfs": "50Gi", "opensearch": "50Gi"}[id]
 	defReplicas := int64(1)
 	if id == "psmdb" {
@@ -316,11 +316,22 @@ func buildRustFSBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructu
 func buildPSMDBBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructured.Unstructured, error) {
 	o, ns, owner := dataEngineParams(fm, cfg, "psmdb"), dataNS(cfg, fm), fm.GetName()
 	u := &unstructured.Unstructured{Object: map[string]interface{}{
-		"apiVersion": "psmdb.percona.com/v1", "kind": "PerconaServerMongoDB", "metadata": map[string]interface{}{"name": psmdbName, "namespace": ns},
+		"apiVersion": "psmdb.percona.com/v1", "kind": "PerconaServerMongoDB", "metadata": map[string]interface{}{
+			"name": psmdbName, "namespace": ns, "finalizers": []interface{}{"percona.com/delete-psmdb-pods-in-order"},
+		},
 		"spec": map[string]interface{}{
-			"crVersion": "1.22.0", "image": o.image, "imagePullSecrets": []interface{}{map[string]interface{}{"name": "opensphere-ghcr-pull"}}, "updateStrategy": "SmartUpdate", "upgradeOptions": map[string]interface{}{"apply": "Disabled"},
-			"replsets": []interface{}{map[string]interface{}{"name": "rs0", "size": o.replicas, "resources": engineResources(o), "volumeSpec": map[string]interface{}{"persistentVolumeClaim": map[string]interface{}{"storageClassName": o.storageClass, "resources": map[string]interface{}{"requests": map[string]interface{}{"storage": o.storageSize}}}}}},
-			"sharding": map[string]interface{}{"enabled": false}, "pmm": map[string]interface{}{"enabled": false},
+			"crVersion": "1.23.0", "image": o.image, "imagePullSecrets": []interface{}{map[string]interface{}{"name": "opensphere-ghcr-pull"}}, "updateStrategy": "SmartUpdate", "upgradeOptions": map[string]interface{}{"apply": "Disabled"},
+			"secrets": map[string]interface{}{
+				"users": psmdbName + "-secrets", "ssl": psmdbName + "-ssl", "sslInternal": psmdbName + "-ssl-internal", "encryptionKey": psmdbName + "-mongodb-encryption-key",
+			},
+			"tls": map[string]interface{}{"mode": "preferTLS"}, "enableVolumeExpansion": true,
+			"unsafeFlags": map[string]interface{}{"replsetSize": o.replicas < 3},
+			"replsets": []interface{}{map[string]interface{}{
+				"name": "rs0", "size": o.replicas, "resources": engineResources(o),
+				"volumeSpec": map[string]interface{}{"persistentVolumeClaim": map[string]interface{}{"storageClassName": o.storageClass, "resources": map[string]interface{}{"requests": map[string]interface{}{"storage": o.storageSize}}}},
+			}},
+			"users": []interface{}{}, "sharding": map[string]interface{}{"enabled": false}, "pmm": map[string]interface{}{"enabled": false},
+			"backup": map[string]interface{}{"enabled": false},
 		},
 	}}
 	stampLabels(u, "data", owner)

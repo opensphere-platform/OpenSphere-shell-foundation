@@ -54,11 +54,14 @@ export class DataEngineRuntimeService {
     const workloadPath = spec.workloadKind === 'psmdb'
       ? `apis/psmdb.percona.com/v1/namespaces/${spec.namespace}/perconaservermongodbs/${spec.workloadName}`
       : `apis/apps/v1/namespaces/${spec.namespace}/statefulsets/${spec.workloadName}`;
+    const servicePath = id === 'psmdb'
+      ? `api/v1/namespaces/${spec.namespace}/services`
+      : `api/v1/namespaces/${spec.namespace}/services?labelSelector=${selector}`;
     const requests: Promise<Response>[] = [
       hostFetch(this.k(workloadPath), { cache: 'no-store' }),
       hostFetch(this.k(podPath), { cache: 'no-store' }),
       hostFetch(this.k(`api/v1/namespaces/${spec.namespace}/persistentvolumeclaims`), { cache: 'no-store' }),
-      hostFetch(this.k(`api/v1/namespaces/${spec.namespace}/services?labelSelector=${selector}`), { cache: 'no-store' }),
+      hostFetch(this.k(servicePath), { cache: 'no-store' }),
       hostFetch(this.k(`api/v1/namespaces/${spec.namespace}/events?limit=100`), { cache: 'no-store' }),
     ];
     if (spec.operator) {
@@ -71,7 +74,8 @@ export class DataEngineRuntimeService {
       const podRows = pods.ok ? ((await pods.json()).items ?? []).filter((p: any) => id !== 'psmdb' || String(p.metadata?.name ?? '').startsWith(spec.workloadName)) : [];
       const pvcRows = pvcs.ok ? ((await pvcs.json()).items ?? []).filter((x: any) =>
         x.metadata?.labels?.['foundation.opensphere.io/engine'] === id || String(x.metadata?.name ?? '').includes(spec.workloadName)) : [];
-      const serviceRows = services.ok ? ((await services.json()).items ?? []) : [];
+      const serviceRows = services.ok ? ((await services.json()).items ?? []).filter((x: any) =>
+        id !== 'psmdb' || String(x.metadata?.name ?? '').startsWith(spec.workloadName)) : [];
       const eventRows = events.ok ? ((await events.json()).items ?? []).filter((x: any) => {
         const n = String(x.involvedObject?.name ?? '');
         return n.includes(spec.workloadName) || podRows.some((p: any) => p.metadata?.name === n);

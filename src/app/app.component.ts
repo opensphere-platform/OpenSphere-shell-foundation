@@ -3,6 +3,7 @@ import { Component, OnDestroy, OnInit, ViewEncapsulation, computed, inject, sign
 import { ClarityModule } from '@clr/angular';
 import { PostgresPluginComponent } from './modules/postgres/postgres-plugin.component';
 import { DataEnginePluginComponent } from './modules/data-engine/data-engine-plugin.component';
+import { PsmdbPluginComponent } from './modules/psmdb/psmdb-plugin.component';
 import { ValkeyPluginComponent } from './modules/valkey/valkey-plugin.component';
 import { RustFSPluginComponent } from './modules/rustfs/rustfs-plugin.component';
 import { KeycloakComponent } from './modules/identity/keycloak.component';
@@ -58,7 +59,7 @@ const CATALOG_MODULES = new Set([
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, ClarityModule, CarbonIcon, PostgresPluginComponent, DataEnginePluginComponent, ValkeyPluginComponent, RustFSPluginComponent, KeycloakComponent, FoundationOverviewComponent, FoundationEnginesComponent, ControlPlaneComponent, FoundationDeliveryComponent, PluginOutletComponent],
+  imports: [CommonModule, ClarityModule, CarbonIcon, PostgresPluginComponent, DataEnginePluginComponent, PsmdbPluginComponent, ValkeyPluginComponent, RustFSPluginComponent, KeycloakComponent, FoundationOverviewComponent, FoundationEnginesComponent, ControlPlaneComponent, FoundationDeliveryComponent, PluginOutletComponent],
   encapsulation: ViewEncapsulation.ShadowDom,
   styleUrls: ['./app.component.css'],
   styles: [`
@@ -151,7 +152,7 @@ const CATALOG_MODULES = new Set([
         <app-foundation-delivery *ngIf="vr.module() === 'delivery' && !activePlugin()"></app-foundation-delivery>
         <app-plugin-outlet *ngIf="activePlugin() as p" [plugin]="p"></app-plugin-outlet>
         <app-postgres-plugin *ngIf="vr.module() === 'postgres' && !activePlugin()"></app-postgres-plugin>
-        <app-data-engine-plugin *ngIf="vr.module() === 'psmdb' && !activePlugin()" engine="psmdb"></app-data-engine-plugin>
+        <app-psmdb-plugin *ngIf="vr.module() === 'psmdb' && !activePlugin()"></app-psmdb-plugin>
         <app-valkey-plugin *ngIf="vr.module() === 'valkey' && !activePlugin()"></app-valkey-plugin>
         <app-rustfs-plugin *ngIf="vr.module() === 'rustfs' && !activePlugin()"></app-rustfs-plugin>
         <app-data-engine-plugin *ngIf="vr.module() === 'opensearch' && !activePlugin()" engine="opensearch"></app-data-engine-plugin>

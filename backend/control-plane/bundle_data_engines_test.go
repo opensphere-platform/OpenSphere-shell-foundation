@@ -21,6 +21,43 @@ func TestImageWithTagReplacesMutableTag(t *testing.T) {
 	}
 }
 
+func TestPSMDBBundleUsesOperator123ProductionContract(t *testing.T) {
+	fm := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "foundation.opensphere.io/v1alpha1", "kind": "FoundationModel",
+		"metadata": map[string]interface{}{"name": "data"},
+		"spec": map[string]interface{}{"parameters": map[string]interface{}{
+			"namespace": "opensphere-foundation",
+			"dataEngines": map[string]interface{}{"psmdb": map[string]interface{}{
+				"version": "8.0.26-11", "replicas": int64(3), "storageClass": "ceph-rbd", "storageSize": "20Gi",
+			}},
+		}},
+	}}
+	cfg := &config{managedNS: "opensphere-foundation", defaultStorageClass: "ceph-rbd", psmdbImage: "ghcr.io/opensphere-platform/mirror/percona-server-mongodb@sha256:53f89c001997627554e6afc0feb5906209ba109f4f98c62f2ca8456c214af60c"}
+	bundle, err := buildPSMDBBundle(cfg, fm)
+	if err != nil || len(bundle) != 2 {
+		t.Fatalf("buildPSMDBBundle() len=%d err=%v", len(bundle), err)
+	}
+	cr := bundle[0]
+	if got, _, _ := unstructured.NestedString(cr.Object, "spec", "crVersion"); got != "1.23.0" {
+		t.Fatalf("crVersion=%q", got)
+	}
+	if got, _, _ := unstructured.NestedString(cr.Object, "spec", "image"); got != cfg.psmdbImage {
+		t.Fatalf("exact image changed to %q", got)
+	}
+	if got, _, _ := unstructured.NestedString(cr.Object, "spec", "tls", "mode"); got != "preferTLS" {
+		t.Fatalf("tls.mode=%q", got)
+	}
+	if unsafe, _, _ := unstructured.NestedBool(cr.Object, "spec", "unsafeFlags", "replsetSize"); unsafe {
+		t.Fatal("production 3-member ReplicaSet cannot enable unsafe replsetSize")
+	}
+	if got, _, _ := unstructured.NestedString(cr.Object, "spec", "secrets", "users"); got != "foundation-data-mongodb-secrets" {
+		t.Fatalf("secrets.users=%q", got)
+	}
+	if finalizers := cr.GetFinalizers(); len(finalizers) != 1 || finalizers[0] != "percona.com/delete-psmdb-pods-in-order" {
+		t.Fatalf("safe finalizers=%v", finalizers)
+	}
+}
+
 func TestOpenSearchServiceMonitorTargetsPluginMetrics(t *testing.T) {
 	u := opensearchServiceMonitor("opensphere-foundation", "data")
 	if u.GetKind() != "ServiceMonitor" || u.GetNamespace() != "opensphere-foundation" {

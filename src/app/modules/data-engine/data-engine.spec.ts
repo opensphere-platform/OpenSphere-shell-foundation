@@ -49,13 +49,13 @@ export const DATA_ENGINE_SPECS: Record<DataEngineId, DataEngineSpec> = {
     workloadKind: 'psmdb', workloadName: 'foundation-data-mongodb', namespace: 'opensphere-foundation',
     endpoint: 'foundation-data-mongodb-rs0.opensphere-foundation.svc', port: 27017,
     versions: [
-      { value: '8.0', label: 'Percona Server for MongoDB 8.0 · stable', channel: 'stable' },
+      { value: '8.0.26-11', label: 'Percona Server for MongoDB 8.0.26-11 · stable', channel: 'stable' },
       { value: '7.0', label: 'Percona Server for MongoDB 7.0 · maintained', channel: 'stable' },
     ],
-    defaultVersion: '8.0', defaultStorage: '20Gi', defaultReplicas: 3,
+    defaultVersion: '8.0.26-11', defaultStorage: '20Gi', defaultReplicas: 3,
     operator: {
-      name: 'Percona Operator for MongoDB', namespace: 'psmdb-operator', deployment: 'psmdb-operator',
-      crd: 'perconaservermongodbs.psmdb.percona.com', chart: 'psmdb-operator', chartVersion: '1.22.0',
+      name: 'Percona Operator for MongoDB', namespace: 'opensphere-foundation', deployment: 'psmdb-operator',
+      crd: 'perconaservermongodbs.psmdb.percona.com', chart: 'psmdb-operator', chartVersion: '1.23.0',
       repository: 'https://percona.github.io/percona-helm-charts/',
     },
     claims: [{ name: 'DocumentDatabaseClaim', status: 'planned', description: '앱별 database/user/Secret 발급 계약' }],
@@ -64,7 +64,7 @@ export const DATA_ENGINE_SPECS: Record<DataEngineId, DataEngineSpec> = {
       { name: 'Backup', description: 'PBM 기반 S3 백업과 restore 검증' },
       { name: 'Upgrade', description: 'Operator SmartUpdate와 major 변경 승인' },
     ],
-    hostPrerequisites: ['Percona Operator 1.22.0', 'RWO PersistentVolume', '운영 profile은 3 replicas 권장'],
+    hostPrerequisites: ['Percona Operator 1.23.0', 'RWO PersistentVolume', '운영 profile은 3 replicas 권장'],
   },
   valkey: {
     id: 'valkey', name: 'Valkey', capability: 'data.cache.valkey', provider: 'Foundation Control Plane',

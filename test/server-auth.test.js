@@ -303,6 +303,23 @@ test('RustFS credential and bucket paths use exact Secret and allowlisted S3 ope
   assert.doesNotMatch(handlers, /listObjects|putObject|raw command/i);
 });
 
+test('PSMDB management uses exact Secrets and bounded database contracts', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const rbac = fs.readFileSync(path.join(__dirname, '..', 'deploy', 'valkey-console-exact-secret-rbac.yaml'), 'utf8');
+  const start = source.indexOf('// ── Percona Server for MongoDB PFSS management boundary');
+  const end = source.indexOf('// 제네릭 K8s API 프록시', start);
+  const handlers = source.slice(start, end);
+  assert.match(handlers, /PSMDB_CONNECTION_SECRET/);
+  assert.match(handlers, /databaseAdmin_rs0_connectionString/);
+  assert.match(handlers, /requireClosedOwnerBody\(body, \['action', 'database', 'collection', 'reason'\]\)/);
+  assert.match(handlers, /\['create', 'drop'\]\.includes\(action\)/);
+  assert.match(handlers, /\['read', 'readWrite', 'dbAdmin'\]\.includes\(role\)/);
+  assert.match(handlers, /publishFoundationAudit\(actor, `psmdb-/);
+  assert.doesNotMatch(handlers, /eval\(|raw command|connectionString\s*:/i);
+  assert.match(rbac, /foundation-data-mongodb-databaseadmin-conn-str[\s\S]*foundation-data-mongodb-custom-user-secret-conn-str[\s\S]*verbs: \["get"\]/);
+  assert.match(rbac, /resources: \["perconaservermongodbs"\][\s\S]*resourceNames: \["foundation-data-mongodb"\][\s\S]*verbs: \["get", "patch"\]/);
+});
+
 test('OpenSearch preparation follows the current Console plugin authority contract', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'foundation', 'opensearch-engine.component.ts'), 'utf8');
   assert.match(source, /const PLUGIN_NAMESPACE = 'opensphere-console'/);

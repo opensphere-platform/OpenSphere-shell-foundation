@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const net = require('net');
 const crypto = require('crypto');
+const { MongoClient } = require('mongodb');
 const { WebSocketServer, WebSocket } = require('ws');
 const COOKIE = 'osng_token'; // 브라우저 WS는 커스텀 헤더를 못 실음 → 신원 토큰을 HttpOnly 쿠키로 전달
 // ⚠️ 'bearer' 쿠키는 Console Supabase access token이 아님 — 읽지 말 것.
@@ -60,6 +61,9 @@ const VALKEY_PORT = Number(process.env.VALKEY_PORT || 6379);
 const VALKEY_DEFAULT_SECRET = 'foundation-data-valkey-auth';
 const RUSTFS_SERVICE = process.env.RUSTFS_SERVICE || `opensphere-rustfs.${FND_NS}.svc:9000`;
 const RUSTFS_DEFAULT_SECRET = 'rustfs-credentials';
+const PSMDB_NAME = 'foundation-data-mongodb';
+const PSMDB_CONNECTION_SECRET = `${PSMDB_NAME}-databaseadmin-conn-str`;
+const PSMDB_TLS_SECRET = `${PSMDB_NAME}-ssl`;
 const FOUNDATION_API = '/apis/foundation.opensphere.io/v1alpha1';
 const HIS_STATUS_SCHEMA = 'his-status.opensphere.io/v1alpha1';
 const FOUNDATION_CORE_CRDS = Object.freeze([
@@ -1308,6 +1312,130 @@ async function rustfsCredential(req, res) {
   } catch (error) { return jsonRes(res, error.code || 502, { error: error.msg || error.message || String(error) }); }
 }
 
+// ── Percona Server for MongoDB PFSS management boundary ──────────────────
+// Connection URI와 TLS CA는 exact Secret allowlist 안에서만 소비하고 브라우저에
+// 반환하지 않는다. 데이터 작업은 database/collection과 declarative user 계약으로
+// 제한하며 raw MongoDB command 실행기는 제공하지 않는다.
+function requireMongoIdentifier(value, field) {
+  const name = String(value || '').trim();
+  if (!/^[A-Za-z][A-Za-z0-9_-]{0,62}$/.test(name) || ['admin', 'local', 'config'].includes(name) && field === 'database') {
+    throw { code: 400, msg: `${field} must be 1..63 safe characters and cannot be a protected database` };
+  }
+  return name;
+}
+async function psmdbAdminActor(req, aal2 = false) {
+  const actor = await verifyToken(requestToken(req));
+  return aal2 ? requireFoundationOwner(actor) : requireConsoleAdmin(actor);
+}
+async function psmdbContext() {
+  const model = await k8sJson('GET', `${FOUNDATION_API}/foundationmodels/data`);
+  if (!model.ok) throw { code: model.status, msg: k8sFailure(model) };
+  if (model.json?.spec?.parameters?.engines?.psmdb !== 'enabled') throw { code: 409, msg: 'Percona PSMDB engine is not enabled' };
+  const resource = await k8sJson('GET', `/apis/psmdb.percona.com/v1/namespaces/${FND_NS}/perconaservermongodbs/${PSMDB_NAME}`);
+  if (!resource.ok) throw { code: resource.status, msg: `PerconaServerMongoDB unavailable: ${k8sFailure(resource)}` };
+  const secret = await k8sJson('GET', `/api/v1/namespaces/${FND_NS}/secrets/${PSMDB_CONNECTION_SECRET}`);
+  if (!secret.ok) throw { code: secret.status, msg: `PSMDB connection Secret/${PSMDB_CONNECTION_SECRET} unavailable: ${k8sFailure(secret)}` };
+  const data = secret.json?.data || {};
+  const encoded = data.databaseAdmin_rs0_connectionString || Object.entries(data).find(([key]) => /connectionString$/i.test(key))?.[1];
+  if (!encoded) throw { code: 409, msg: `Secret/${PSMDB_CONNECTION_SECRET} has no databaseAdmin rs0 connection string` };
+  const tls = await k8sJson('GET', `/api/v1/namespaces/${FND_NS}/secrets/${PSMDB_TLS_SECRET}`);
+  const caEncoded = tls.ok ? (tls.json?.data?.['ca.crt'] || tls.json?.data?.ca) : '';
+  return {
+    model: model.json, resource: resource.json,
+    uri: Buffer.from(String(encoded), 'base64').toString('utf8'),
+    ca: caEncoded ? Buffer.from(String(caEncoded), 'base64') : undefined,
+  };
+}
+async function withPsmdb(fn) {
+  const ctx = await psmdbContext();
+  const client = new MongoClient(ctx.uri, {
+    serverSelectionTimeoutMS: 8000, connectTimeoutMS: 8000,
+    ...(ctx.ca ? { ca: ctx.ca } : {}),
+  });
+  try {
+    await client.connect();
+    return await fn(client, ctx);
+  } finally {
+    await client.close().catch(() => {});
+  }
+}
+async function psmdbSummary(req, res) {
+  if (req.method !== 'GET') return jsonRes(res, 405, { error: 'read-only endpoint' });
+  try {
+    await psmdbAdminActor(req);
+    const result = await withPsmdb(async (client, ctx) => {
+      const admin = client.db('admin');
+      const [server, repl, list] = await Promise.all([
+        admin.command({ serverStatus: 1 }),
+        admin.command({ replSetGetStatus: 1 }).catch(() => null),
+        admin.admin().listDatabases({ authorizedDatabases: true }),
+      ]);
+      const databases = [];
+      for (const row of (list.databases || []).slice(0, 100)) {
+        const db = client.db(row.name);
+        const [collections, users] = await Promise.all([
+          db.listCollections({}, { nameOnly: true }).toArray().catch(() => []),
+          db.command({ usersInfo: 1, showCredentials: false }).then((value) => value.users || []).catch(() => []),
+        ]);
+        databases.push({
+          name: row.name, sizeOnDisk: Number(row.sizeOnDisk || 0), empty: Boolean(row.empty),
+          collections: collections.slice(0, 500).map((item) => ({ name: item.name, type: item.type || 'collection' })),
+          users: users.slice(0, 200).map((item) => ({ user: item.user, db: item.db, roles: item.roles || [] })),
+        });
+      }
+      const members = (repl?.members || []).map((member) => ({ name: member.name, state: member.stateStr, health: member.health, uptime: member.uptime, optimeDate: member.optimeDate }));
+      const desiredUsers = Array.isArray(ctx.resource?.spec?.users) ? ctx.resource.spec.users.map((user) => ({ name: user.name, db: user.db, roles: user.roles || [] })) : [];
+      return {
+        authority: 'MongoDB Node.js driver 7.5.0 allowlist', observedAt: new Date().toISOString(),
+        version: server.version || 'unknown', process: server.process || 'mongod', uptimeSeconds: Number(server.uptime || 0),
+        connections: { current: Number(server.connections?.current || 0), available: Number(server.connections?.available || 0), active: Number(server.connections?.active || 0) },
+        opcounters: server.opcounters || {}, memory: server.mem || {}, network: server.network || {},
+        replicaSet: repl ? { set: repl.set, state: repl.myState, members } : null,
+        databaseCount: databases.length, databases, desiredUsers,
+        image: ctx.resource?.spec?.image || '', crVersion: ctx.resource?.spec?.crVersion || '',
+      };
+    });
+    return jsonRes(res, 200, result);
+  } catch (error) { return jsonRes(res, error.code || 502, { error: error.msg || error.message || String(error) }); }
+}
+async function psmdbCollection(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  try {
+    const actor = await psmdbAdminActor(req, true);
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['action', 'database', 'collection', 'reason']);
+    const action = String(body.action || ''), database = requireMongoIdentifier(body.database, 'database'), collection = requireMongoIdentifier(body.collection, 'collection'), reason = requireOwnerReason(body.reason);
+    if (!['create', 'drop'].includes(action)) throw { code: 400, msg: 'collection action must be create or drop' };
+    const target = `PSMDB/${database}/${collection}`;
+    await publishFoundationAudit(actor, `psmdb-collection-${action}`, target, 'attempt', reason);
+    await withPsmdb(async (client) => action === 'create' ? client.db(database).createCollection(collection) : client.db(database).dropCollection(collection));
+    await publishFoundationAudit(actor, `psmdb-collection-${action}`, target, 'accepted', reason);
+    return jsonRes(res, 200, { ok: true, action, database, collection });
+  } catch (error) { return jsonRes(res, error.code || 502, { error: error.msg || error.message || String(error) }); }
+}
+async function psmdbUser(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  try {
+    const actor = await psmdbAdminActor(req, true);
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['action', 'username', 'database', 'role', 'reason']);
+    const action = String(body.action || ''), username = requireMongoIdentifier(body.username, 'username'), database = requireMongoIdentifier(body.database, 'database'), role = String(body.role || 'readWrite'), reason = requireOwnerReason(body.reason);
+    if (!['set', 'delete'].includes(action)) throw { code: 400, msg: 'user action must be set or delete' };
+    if (!['read', 'readWrite', 'dbAdmin'].includes(role)) throw { code: 400, msg: 'role must be read, readWrite, or dbAdmin' };
+    const current = await k8sJson('GET', `/apis/psmdb.percona.com/v1/namespaces/${FND_NS}/perconaservermongodbs/${PSMDB_NAME}`);
+    if (!current.ok) throw { code: current.status, msg: k8sFailure(current) };
+    const users = Array.isArray(current.json?.spec?.users) ? current.json.spec.users.filter((item) => item?.name !== username) : [];
+    if (action === 'set') users.push({ name: username, db: database, roles: [{ name: role, db: database }] });
+    const patch = { metadata: { resourceVersion: current.json?.metadata?.resourceVersion }, spec: { users } };
+    const target = `PerconaServerMongoDB/${PSMDB_NAME}/spec.users/${username}`;
+    await publishFoundationAudit(actor, `psmdb-user-${action}`, target, 'attempt', reason);
+    const updated = await k8sJson('PATCH', `/apis/psmdb.percona.com/v1/namespaces/${FND_NS}/perconaservermongodbs/${PSMDB_NAME}`, patch, undefined, 'application/merge-patch+json');
+    if (!updated.ok) throw { code: updated.status, msg: k8sFailure(updated) };
+    await publishFoundationAudit(actor, `psmdb-user-${action}`, target, 'accepted', reason);
+    return jsonRes(res, 200, { ok: true, action, username, database, role, generatedSecret: action === 'set' ? `${PSMDB_NAME}-custom-user-secret` : null });
+  } catch (error) { return jsonRes(res, error.code || 502, { error: error.msg || error.message || String(error) }); }
+}
+
 // 제네릭 K8s API 프록시: /api/k8s/<표준 K8s 경로> → APISERVER.
 // 모든 요청은 Supabase session을 먼저 검증한다. 읽기는 제한된 ServiceAccount 권한으로,
 // 쓰기는 평가된 Console role을 제한된 Kubernetes group으로 매핑해 Impersonate-User로 수행한다.
@@ -1437,6 +1565,9 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/foundation/rustfs/summary') return rustfsSummary(req, res);
     if (p === '/api/foundation/rustfs/bucket') return rustfsBucket(req, res);
     if (p === '/api/foundation/rustfs/credential') return rustfsCredential(req, res);
+    if (p === '/api/foundation/psmdb/summary') return psmdbSummary(req, res);
+    if (p === '/api/foundation/psmdb/collection') return psmdbCollection(req, res);
+    if (p === '/api/foundation/psmdb/user') return psmdbUser(req, res);
     if (p === '/api/foundation/his-status') return hisStatusProxy(req, res);
     if (p === '/api/foundation/establishment/status') return foundationEstablishmentStatus(req, res);
     if (p === '/api/foundation/bootstrap/plan') return foundationBootstrapPlan(req, res);
