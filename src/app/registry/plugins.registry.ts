@@ -64,9 +64,9 @@ export const FOUNDATION_PLUGINS: HostedPlugin[] = [
     activation: { packageId: 'keycloak', element: 'osp-foundation-keycloak' },
   },
   {
-    id: 'samba', name: 'Samba-AD', icon: 'users', kind: 'plugin', hostRef: 'foundation',
+    id: 'samba', name: 'Directory Providers', icon: 'users', kind: 'plugin', hostRef: 'foundation',
     capability: 'identity.directory.ad', capabilityLabel: '디렉터리 (AD/LDAP)',
-    desc: 'workspace/사원 디렉터리 capability · Samba AD DC(identity 번들, engines.samba 설치옵션). Keycloak이 LDAP(389)로 federation.',
+    desc: '고객 선택형 Directory authority · OpenSphere 관리형 Samba-AD 또는 기존 Windows AD/Samba AD/LDAP 연결. 공급자별 권위 범위와 쓰기 권한을 분리.',
     consumePoint: 'foundation-identity-samba.opensphere-foundation.svc:389',
     healthRef: 'samba', model: 'identity', view: { module: 'addc' },
     surface: PG_SURFACE,
