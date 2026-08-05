@@ -113,6 +113,7 @@ data:
     security.aesSecretKey=${SYNCOPE_AES_SECRET_KEY}
     management.endpoints.web.exposure.include=health,info
     management.endpoint.health.probes.enabled=true
+    management.health.mail.enabled=false
     server.shutdown=graceful
 ---
 apiVersion: v1
