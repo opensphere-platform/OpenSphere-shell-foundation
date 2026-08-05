@@ -18,7 +18,7 @@ spec:
   serviceAccountName: opensphere-foundation
   image:
     repository: ghcr.io/opensphere-platform/opensphere-shell-foundation
-    digest: sha256:5a8d2993f3669e3cffd8a452e3de63a959c2a9d2ed6413cd2a2db7b5ff46bd71
+    digest: sha256:3c4982b6f6ded01030daaa590f0dcf4287509ec538442a4dba83571ae2370873
   nav:
     band: "운영 Operate"
     label: "Foundation"
