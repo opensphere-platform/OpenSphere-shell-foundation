@@ -14,6 +14,8 @@ interface InstallStep {
   time: string;
 }
 
+const PLUGIN_NAMESPACE = 'opensphere-console';
+
 @Component({
   selector: 'app-opensearch-engine',
   standalone: true,
@@ -131,14 +133,16 @@ export class OpenSearchEngineComponent {
     this.busy.set(true);
     this.installSteps.set([]);
     try {
-      await this.checkJson('Plugin registration', this.k('apis/plugins.opensphere.io/v1alpha1/namespaces/opensphere-system/uipluginregistrations/opensearch'), 'UIPluginRegistration/opensearch is registered');
-      await this.checkJson('CLI contribution', this.plugin('/cli/manifest'), 'os opensearch status/indices/events/access manifest returned');
-      this.addStep('Manual / OAA / Search', 'pass', 'manual:contribute declares plugin:opensearch/operations for Manual Registry, global search, and OAA retrieval');
-      await this.checkJson('ServiceMonitor registration', this.k('apis/monitoring.coreos.com/v1/namespaces/opensphere-system/servicemonitors/opensearch'), 'ServiceMonitor/opensearch targets /metrics');
-      await this.checkText('Metrics endpoint', this.plugin('/metrics'), 'opensphere_opensearch_plugin_up exposed');
-      await this.checkJson('Grafana connection', this.plugin('/api/grafana'), 'Grafana health, Prometheus datasource, Alertmanager datasource returned');
-      await this.checkJson('Logs connection', this.plugin('/api/logs?minutes=5'), 'Loki log endpoint returned');
-      await this.checkJson('Operand declaration', this.plugin('/operand/manifests'), 'OpenSearch operand declaration endpoint returned');
+      const registration = await this.checkJson(
+        'Plugin registration',
+        this.k(`apis/plugins.opensphere.io/v1alpha1/namespaces/${PLUGIN_NAMESPACE}/uipluginregistrations/opensearch`),
+        'UIPluginRegistration/opensearch is registered in the Console plugin authority namespace',
+      );
+      await this.checkJson('CLI contribution', this.plugin('/cli/manifest'), 'os opensearch status/describe/plan manifest returned');
+      this.checkIntegrations(registration, ['manual', 'search', 'metrics', 'logs']);
+      await this.checkText('Metrics endpoint', this.plugin('/metrics'), 'opensphere_foundation_plugin_info{plugin="opensearch"');
+      await this.checkJson('Operand declaration', this.plugin('/api/plan'), 'OpenSearch exact-version operand plan returned');
+      await this.checkJson('Runtime projection', this.plugin('/api/runtime/status'), 'FoundationModel runtime projection returned');
       this.addStep('FoundationModel declaration', 'running', 'patch spec.parameters.engines.opensearch=enabled');
       await this.reg.setEnabled('opensearch', true);
       if (this.reg.lastError()) {
@@ -220,6 +224,17 @@ export class OpenSearchEngineComponent {
     }
     this.updateLastStep('pass', needle);
     return body;
+  }
+
+  private checkIntegrations(registration: unknown, names: string[]): void {
+    this.addStep('Manual / Search / Observability', 'running', 'checking registration integration conditions...');
+    const integrations = (registration as { status?: { integrations?: Record<string, { phase?: string }> } })
+      ?.status?.integrations ?? {};
+    const unavailable = names.filter((name) => integrations[name]?.phase !== 'Ready');
+    if (unavailable.length) {
+      throw new Error(`Plugin integrations are not Ready: ${unavailable.join(', ')}`);
+    }
+    this.updateLastStep('pass', `${names.join(', ')} integrations are Ready`);
   }
 
   stepPill(state: InstallStepState): string {

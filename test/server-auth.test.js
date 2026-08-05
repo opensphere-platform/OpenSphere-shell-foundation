@@ -290,3 +290,13 @@ test('Valkey credential path is exact-name and ServiceAccount scoped', () => {
   assert.match(rbac, /name: foundation-console-valkey-secret-manager[\s\S]*resourceNames: \["foundation-data-valkey-auth"\][\s\S]*verbs: \["get", "patch"\]/);
   assert.match(rbac, /kind: ServiceAccount[\s\S]*name: opensphere-foundation[\s\S]*namespace: opensphere-console/);
 });
+
+test('OpenSearch preparation follows the current Console plugin authority contract', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'foundation', 'opensearch-engine.component.ts'), 'utf8');
+  assert.match(source, /const PLUGIN_NAMESPACE = 'opensphere-console'/);
+  assert.match(source, /this\.plugin\('\/api\/plan'\)/);
+  assert.match(source, /this\.plugin\('\/api\/runtime\/status'\)/);
+  assert.match(source, /opensphere_foundation_plugin_info\{plugin="opensearch"/);
+  assert.doesNotMatch(source, /namespaces\/opensphere-system\/uipluginregistrations\/opensearch/);
+  assert.doesNotMatch(source, /\/api\/grafana|\/api\/logs|\/operand\/manifests/);
+});
