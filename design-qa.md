@@ -43,31 +43,38 @@ final result: passed
 
 # PostgreSQL Administration Design QA
 
-- Final result: passed
-- Reference source: official pgAdmin 4 9.17 tabbed browser and Query Tool documentation
-- Implementation: `src/app/modules/postgres/admin/pg-admin.tab.ts`
+- 검증일: 2026-08-05
+- Reference source: official pgAdmin 4 View Data and Query Tool screenshots
+- Implementation: `src/app/modules/postgres/admin/pg-admin.tab.ts`, `src/app/modules/postgres/admin/pg-admin.service.ts`
 - Runtime: `https://localhost:1114/p/foundation/postgres/admin`
-- Comparison evidence: `../.codex-tmp/pgadmin-redesign-audit/06-reference-implementation-comparison.png`
+- Final comparison evidence: `../.codex-tmp/pgadmin-data-query-redesign/09-final-reference-comparison.png`
 
 ## Visible comparison
 
 - Left Object Explorer follows the pgAdmin server → database → schema → object hierarchy.
-- Right workspace exposes Dashboard, Properties, SQL, Statistics, Dependencies, Dependents, and a separate Query Tool tab.
-- Query Tool preserves editor, Data Output, Messages, and Query History regions while using OpenSphere Carbon/Clarity styling.
-- Layout, spacing, borders, tab states, icons, and selected-tree state were checked together with the official pgAdmin references.
+- Table selection opens a dedicated `Data View` containing only the read-only row grid, refresh action, row limit, and result status.
+- `Query - appdb` remains an independent workspace with editor, Data Output, Messages, and Query History.
+- `Data View` and `Query - appdb` remain simultaneously visible at the verified desktop viewport; the selected table path stays in the context/header instead of widening the tab.
+- Layout, spacing, borders, tab states, icons, selected-tree state, data grid, and query split were checked together with the official pgAdmin references in one comparison image.
 
 ## Interaction verification
 
-- Selected `public.opensphere_opa_decision_log` from the live Object Explorer.
-- Properties showed live owner, tablespace, estimated rows, and column metadata.
-- SQL produced PostgreSQL 19-compatible `CREATE TABLE`, constraints, and indexes without duplicated NOT NULL constraints.
-- Query Tool executed `SELECT current_database(), current_user, version();` and returned `appdb`, `appuser`, and PostgreSQL 19beta2.
+- Selected `public.opensphere_opa_decision_log`; Data View loaded four live rows without exposing the SQL editor.
+- Collapsed and reopened `Tables`: `aria-expanded` changed `true → false → true`, and the table node count changed `1 → 0 → 1`.
+- Collapsed and reopened `public`; all descendant groups were removed and restored.
+- Query Tool executed `SELECT 1 AS query_tool_check;` and preserved its result independently.
+- Returning to Data View restored the four table rows and did not show the Query Tool editor/result.
 - Read-only query limits remain visible: 10 second timeout and 500 row maximum.
 
 ## Runtime verification
 
-- Foundation deployment rolled out with 2/2 replicas on the exact published digest.
+- Official version: `202608052305`
+- Source revision: `61e0536de1915d98e5b4e5d1fbf24c386f1c4940`
+- Foundation deployment rolled out with 2/2 replicas on exact digest `sha256:e2a21d8c67b5906ac0ef29507cf7dee4e9d05b3fc78259df42c921cc4f57aadd`.
+- Immutable version tag and `edge` resolve to the same digest.
 - Browser console errors: none.
 - P0 findings: none.
 - P1 findings: none.
 - P2 findings: none.
+
+final result: passed
