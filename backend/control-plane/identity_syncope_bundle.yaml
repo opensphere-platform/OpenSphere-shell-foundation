@@ -229,16 +229,16 @@ spec:
             - { name: logs, mountPath: /opt/syncope/log }
             - { name: tmp, mountPath: /tmp }
           startupProbe:
-            httpGet: { path: /syncope/actuator/health, port: https, scheme: HTTPS }
+            tcpSocket: { port: https }
             periodSeconds: 10
             failureThreshold: 36
           readinessProbe:
-            httpGet: { path: /syncope/actuator/health/readiness, port: https, scheme: HTTPS }
+            httpGet: { path: /readyz, port: metrics, scheme: HTTP }
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
           livenessProbe:
-            httpGet: { path: /syncope/actuator/health/liveness, port: https, scheme: HTTPS }
+            tcpSocket: { port: https }
             periodSeconds: 20
             timeoutSeconds: 3
             failureThreshold: 3
@@ -251,11 +251,17 @@ spec:
             - --syncope-url=https://$(POD_NAME).foundation-identity-syncope-headless.__NAMESPACE__.svc.cluster.local:8080/syncope/actuator/health
             - --syncope-ca-file=/etc/syncope/tls/ca.crt
             - --syncope-database-url=$(DATABASE_URL)
+            - --syncope-username=$(SYNCOPE_USERNAME)
+            - --syncope-password=$(SYNCOPE_PASSWORD)
           env:
             - name: POD_NAME
               valueFrom: { fieldRef: { fieldPath: metadata.name } }
             - name: DATABASE_URL
               valueFrom: { secretKeyRef: { name: foundation-identity-syncope-db-auth, key: uri } }
+            - name: SYNCOPE_USERNAME
+              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-runtime, key: anonymous-user } }
+            - name: SYNCOPE_PASSWORD
+              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-runtime, key: anonymous-key } }
           ports: [{ name: metrics, containerPort: 9090 }]
           resources:
             requests: { cpu: 20m, memory: 32Mi }

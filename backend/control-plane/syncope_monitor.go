@@ -22,12 +22,16 @@ type syncopeMonitorOptions struct {
 	syncopeURL    string
 	caFile        string
 	databaseURL   string
+	username      string
+	password      string
 }
 
 type syncopeMonitor struct {
 	client        *http.Client
 	syncopeURL    string
 	db            *sql.DB
+	username      string
+	password      string
 	ready         atomic.Bool
 	up            prometheus.Gauge
 	databaseUp    prometheus.Gauge
@@ -59,6 +63,8 @@ func newSyncopeMonitor(opts syncopeMonitorOptions, registry *prometheus.Registry
 		}}},
 		syncopeURL:    opts.syncopeURL,
 		db:            db,
+		username:      opts.username,
+		password:      opts.password,
 		up:            prometheus.NewGauge(prometheus.GaugeOpts{Name: "opensphere_syncope_up", Help: "Whether the local Apache Syncope Core health endpoint is healthy."}),
 		databaseUp:    prometheus.NewGauge(prometheus.GaugeOpts{Name: "opensphere_syncope_database_up", Help: "Whether the Syncope PostgreSQL database is queryable."}),
 		users:         prometheus.NewGauge(prometheus.GaugeOpts{Name: "opensphere_syncope_users", Help: "Current number of Syncope users in the Master domain."}),
@@ -76,6 +82,7 @@ func newSyncopeMonitor(opts syncopeMonitorOptions, registry *prometheus.Registry
 func (m *syncopeMonitor) sample(ctx context.Context) {
 	started := time.Now()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, m.syncopeURL, nil)
+	req.SetBasicAuth(m.username, m.password)
 	resp, err := m.client.Do(req)
 	healthy := err == nil && resp.StatusCode >= 200 && resp.StatusCode < 300
 	if resp != nil {

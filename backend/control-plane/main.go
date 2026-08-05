@@ -61,7 +61,7 @@ func gvkObj(g schema.GroupVersionKind) *unstructured.Unstructured {
 func main() {
 	cfg := &config{}
 	var mode, opaControlListen, opaControlMetrics, opaControlDatabaseURL, opaControlTLSCert, opaControlTLSKey, opaControlTLSCA string
-	var syncopeMonitorListen, syncopeURL, syncopeCAFile, syncopeDatabaseURL string
+	var syncopeMonitorListen, syncopeURL, syncopeCAFile, syncopeDatabaseURL, syncopeUsername, syncopePassword string
 	var opaDecisionRetentionDays int
 	flag.StringVar(&mode, "mode", "manager", "process mode: manager, opa-control, or syncope-monitor")
 	flag.StringVar(&opaControlListen, "listen-address", ":8443", "OPA control service mTLS listen address")
@@ -75,6 +75,8 @@ func main() {
 	flag.StringVar(&syncopeURL, "syncope-url", "https://127.0.0.1:8080/syncope/actuator/health", "Syncope Core actuator health URL")
 	flag.StringVar(&syncopeCAFile, "syncope-ca-file", "/etc/syncope/tls/ca.crt", "Syncope Core server CA file")
 	flag.StringVar(&syncopeDatabaseURL, "syncope-database-url", "", "Syncope PostgreSQL URL for durable IGA metrics")
+	flag.StringVar(&syncopeUsername, "syncope-username", "", "Syncope internal health probe username")
+	flag.StringVar(&syncopePassword, "syncope-password", "", "Syncope internal health probe password")
 	flag.StringVar(&cfg.managedNS, "managed-namespace", "opensphere-foundation", "관리 번들(operand)을 배치할 네임스페이스")
 	// [[ghcr-image-mirror-policy]]: 원본 레지스트리 직접참조 폐지, ghcr.io/opensphere-platform/mirror/* 경유로 조달.
 	flag.StringVar(&cfg.collectorImage, "collector-image", "ghcr.io/opensphere-platform/mirror/opentelemetry-collector-contrib:0.111.0", "observability collector operand 이미지(GHCR 미러, origin=otel/opentelemetry-collector-contrib:0.111.0)")
@@ -110,7 +112,7 @@ func main() {
 		if syncopeDatabaseURL == "" {
 			syncopeDatabaseURL = os.Getenv("DATABASE_URL")
 		}
-		if err := runSyncopeMonitorServer(ctrl.SetupSignalHandler(), syncopeMonitorOptions{listenAddress: syncopeMonitorListen, syncopeURL: syncopeURL, caFile: syncopeCAFile, databaseURL: syncopeDatabaseURL}); err != nil {
+		if err := runSyncopeMonitorServer(ctrl.SetupSignalHandler(), syncopeMonitorOptions{listenAddress: syncopeMonitorListen, syncopeURL: syncopeURL, caFile: syncopeCAFile, databaseURL: syncopeDatabaseURL, username: syncopeUsername, password: syncopePassword}); err != nil {
 			ctrl.Log.Error(err, "Syncope monitor failed")
 			os.Exit(1)
 		}
