@@ -7,7 +7,7 @@ import { Phase, State, phaseClass } from '../postgres/cnpg.types';
 // 2026-07-06(Samba-AD 편입): 워크로드 이름을 control-plane identity 번들 정본(foundation-identity-*)으로 정합.
 //   구 bootstrap 이름(opensphere-keycloak/opensphere-samba)은 폐기 — 실물은 FoundationModel(identity) CR →
 //   reconciler(SSA)가 만든다. UI 폴러는 그 실물을 본다("메뉴=실재의 투영").
-abstract class WorkloadHealth {
+export abstract class WorkloadHealth {
   abstract readonly name: string;
   readonly ns = FND_NS;
   readonly deploy = signal<any>(null);

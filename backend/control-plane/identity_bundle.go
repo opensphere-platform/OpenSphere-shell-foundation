@@ -18,9 +18,13 @@ import (
 //go:embed identity_bundle.yaml
 var identityBundleYAML string
 
+//go:embed identity_opa_bundle.yaml
+var identityOPABundleYAML string
+
 const (
 	keycloakName   = "foundation-identity-keycloak"
 	sambaName      = "foundation-identity-samba"
+	opaName        = "foundation-identity-opa"
 	workforceRealm = "opensphere-workforce"
 	sambaRealm     = "OPENSPHERE.LOCAL" // 번들 env DOMAIN과 단일 선언(치환 아님 — 변경 시 둘 다)
 )
@@ -31,6 +35,7 @@ func issuerURL(ns string) string {
 	return "http://" + keycloakSvcDNS(ns) + ":8080/realms/" + workforceRealm
 }
 func ldapURL(ns string) string { return "ldap://" + sambaSvcDNS(ns) + ":389" }
+func opaURL(ns string) string  { return "http://" + opaName + "." + ns + ".svc:8181" }
 
 func configuredSambaRealm(fm *unstructured.Unstructured) string {
 	v, found, _ := unstructured.NestedString(fm.Object, "spec", "parameters", "samba", "domain")
@@ -77,6 +82,87 @@ type identityEngineOpts struct {
 	ingressMode, databaseMode                        string
 	replicas                                         int64
 	monitoring                                       bool
+}
+
+type opaEngineOpts struct {
+	version, profile, cpuRequest, memoryRequest, cpuLimit, memoryLimit string
+	replicas                                                           int64
+	monitoring                                                         bool
+}
+
+func opaExplicitlyEnabled(fm *unstructured.Unstructured) bool {
+	v, found, _ := unstructured.NestedString(fm.Object, "spec", "parameters", "engines", "opa")
+	return found && v == "enabled"
+}
+
+func opaParams(fm *unstructured.Unstructured) opaEngineOpts {
+	o := opaEngineOpts{version: "1.18.2-static", profile: "development", replicas: 1, cpuRequest: "50m", memoryRequest: "64Mi", cpuLimit: "500m", memoryLimit: "256Mi", monitoring: true}
+	p, _, _ := unstructured.NestedMap(fm.Object, "spec", "parameters", "identityEngines", "opa")
+	if p == nil {
+		return o
+	}
+	o.version = pStr(p, "version", o.version)
+	if o.version != "1.18.2-static" {
+		o.version = "1.18.2-static"
+	}
+	o.profile = pStr(p, "profile", o.profile)
+	o.cpuRequest = pStr(p, "cpuRequest", o.cpuRequest)
+	o.memoryRequest = pStr(p, "memoryRequest", o.memoryRequest)
+	o.cpuLimit = pStr(p, "cpuLimit", o.cpuLimit)
+	o.memoryLimit = pStr(p, "memoryLimit", o.memoryLimit)
+	o.replicas = pInt(p, "replicas", o.replicas)
+	if o.replicas < 1 {
+		o.replicas = 1
+	}
+	if o.replicas > 5 {
+		o.replicas = 5
+	}
+	o.monitoring = pBool(p, "monitoring", true)
+	return o
+}
+
+func buildOPABundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructured.Unstructured, error) {
+	objs, err := buildBundle(identityOPABundleYAML, cfg.managedNS, cfg.opaImage, "identity", fm.GetName())
+	if err != nil {
+		return nil, err
+	}
+	o := opaParams(fm)
+	out := make([]*unstructured.Unstructured, 0, len(objs))
+	for _, obj := range objs {
+		labels := obj.GetLabels()
+		if labels == nil {
+			labels = map[string]string{}
+		}
+		labels[lblEngine] = "opa"
+		obj.SetLabels(labels)
+		if !o.monitoring && obj.GetKind() == "ServiceMonitor" {
+			continue
+		}
+		if obj.GetKind() == "Deployment" && obj.GetName() == opaName {
+			_ = unstructured.SetNestedField(obj.Object, o.replicas, "spec", "replicas")
+			containers, found, _ := unstructured.NestedSlice(obj.Object, "spec", "template", "spec", "containers")
+			if found && len(containers) > 0 {
+				container := containers[0].(map[string]interface{})
+				container["image"] = imageWithTag(cfg.opaImage, o.version)
+				container["resources"] = map[string]interface{}{
+					"requests": map[string]interface{}{"cpu": o.cpuRequest, "memory": o.memoryRequest},
+					"limits":   map[string]interface{}{"cpu": o.cpuLimit, "memory": o.memoryLimit},
+				}
+				containers[0] = container
+				_ = unstructured.SetNestedSlice(obj.Object, containers, "spec", "template", "spec", "containers")
+			}
+			annotations := obj.GetAnnotations()
+			if annotations == nil {
+				annotations = map[string]string{}
+			}
+			annotations["foundation.opensphere.io/profile"] = o.profile
+			annotations["foundation.opensphere.io/monitoring"] = boolStr(o.monitoring)
+			annotations["foundation.opensphere.io/policy-mode"] = "bootstrap-fail-closed"
+			obj.SetAnnotations(annotations)
+		}
+		out = append(out, obj)
+	}
+	return out, nil
 }
 
 func keycloakParams(fm *unstructured.Unstructured) identityEngineOpts {
@@ -191,6 +277,15 @@ func buildIdentityBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstruc
 			out = append(out, o)
 		}
 	}
+	// OPA is opt-in because it introduces a policy enforcement endpoint. Existing
+	// identity installations must not silently gain a new PDP during an upgrade.
+	if opaExplicitlyEnabled(fm) {
+		oobjs, oerr := buildOPABundle(cfg, fm)
+		if oerr != nil {
+			return nil, fmt.Errorf("opa operand build 실패: %w", oerr)
+		}
+		out = append(out, oobjs...)
+	}
 	return out, nil
 }
 
@@ -234,6 +329,9 @@ func identityReady(ctx context.Context, r *modelReconciler, fm *unstructured.Uns
 	if engineEnabled(fm, "samba") {
 		ok = ok && r.deploymentReady(ctx, sambaName)
 	}
+	if opaExplicitlyEnabled(fm) {
+		ok = ok && r.deploymentReady(ctx, opaName)
+	}
 	return ok
 }
 
@@ -255,12 +353,17 @@ func observeIdentity(ctx context.Context, r *modelReconciler, fm *unstructured.U
 	}
 	kc := engineUp("keycloak_up", keycloakName, engineEnabled(fm, "keycloak"))
 	sm := engineUp("samba_up", sambaName, engineEnabled(fm, "samba"))
+	opa := engineUp("opa_up", opaName, opaExplicitlyEnabled(fm))
+	if !opaExplicitlyEnabled(fm) {
+		opa["note"] = "engines.opa=enabled 명시 전 비활성(opt-in)"
+	}
 	login := map[string]interface{}{"id": "oidc_login_success_ratio", "unit": "ratio", "value": "n/a", "healthy": false, "source": "observability(D-7)", "note": "실 로그인 데이터 없음(D-7 연동)"}
 	scim := map[string]interface{}{"id": "scim_sync_lag_s", "unit": "s", "value": "n/a", "healthy": false, "source": "Syncope SCIM(D-7)", "note": "Syncope SCIM endpoint/connector 미구현(D-7)"}
 	ko := keycloakParams(fm)
 	kv := map[string]interface{}{"id": "keycloak_version", "unit": "", "value": ko.version, "healthy": true, "source": "spec.parameters.identityEngines.keycloak.version"}
 	kr := map[string]interface{}{"id": "keycloak_replicas", "unit": "count", "value": fmt.Sprintf("%d", ko.replicas), "healthy": true, "source": "spec.parameters.identityEngines.keycloak.replicas"}
-	return []interface{}{kc, kv, kr, sm, login, scim}, nil
+	decisionTelemetry := map[string]interface{}{"id": "opa_decision_outcomes", "unit": "count", "value": "n/a", "healthy": false, "source": "decision_logs", "note": "allow/deny는 HTTP 200 결과값이므로 native Prometheus metric으로 구분 불가; 영속 decision-log sink 필요"}
+	return []interface{}{kc, kv, kr, sm, opa, decisionTelemetry, login, scim}, nil
 }
 
 // extraIdentity — OIDC issuer + LDAP 디렉터리 좌표를 status에 노출(소비자·UI가 읽는 연결 정본).
@@ -270,6 +373,8 @@ func extraIdentity(cfg *config, o *unstructured.Unstructured) {
 	setNested(o, issuerURL(cfg.managedNS)+"/protocol/openid-connect/certs", "status", "jwksURL")
 	setNested(o, ldapURL(cfg.managedNS), "status", "ldapURL")
 	setNested(o, configuredSambaRealm(o), "status", "directoryRealm")
+	setNested(o, opaURL(cfg.managedNS), "status", "opaURL")
+	setNested(o, "bootstrap-fail-closed", "status", "opaPolicyMode")
 	setNested(o, keycloakParams(o).version, "status", "keycloakVersion")
 	setNested(o, keycloakParams(o).profile, "status", "keycloakProfile")
 }
@@ -314,7 +419,7 @@ var bundles = map[string]bundleSpec{
 		observe:  observeIdentity,
 		extra:    extraIdentity,
 		ready:    identityReady, // 2026-07-06: Keycloak+Samba 복수 엔진 — 활성 엔진 전부 ready 기준
-		engines:  []string{"keycloak", "samba"},
+		engines:  []string{"keycloak", "samba", "opa"},
 		endpoint: func(c *config) string { return issuerURL(c.managedNS) },
 		probe:    func(c *config) string { return keycloakSvcDNS(c.managedNS) + ":8080" },
 	},

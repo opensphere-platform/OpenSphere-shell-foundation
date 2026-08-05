@@ -44,6 +44,7 @@ spec:
             - --valkey-exporter-image=ghcr.io/opensphere-platform/mirror/redis-exporter@sha256:bbc0b673a89296eab36d6c6c2bde8571ee868dc4059306be482c03d7b05aa662
             - --rustfs-image=ghcr.io/opensphere-platform/mirror/rustfs@sha256:60f4f2f41ce95216f8cac676e69f9d90c0bfec458a3bc7fd7fb9b7c2452ac57a
             - --opensearch-image=ghcr.io/opensphere-platform/mirror/opensearch@sha256:44ba7ea58a319adf61c33ab16873f9ef5dbb30b291a832d375172f0b2d24e3c9
+            - --opa-image=ghcr.io/opensphere-platform/mirror/opa@sha256:3ece20d3a58eb4051db71c0b84fc962bca2a6f9aa74ee8ea3d027d693fdc2d1a
             - --default-storage-class=standard
           env:
             - name: FOUNDATION_DIRECT_APPLY

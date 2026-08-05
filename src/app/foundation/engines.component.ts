@@ -4,12 +4,13 @@ import { ClarityModule } from '@clr/angular';
 import { EnginesService } from './engines.service';
 import { ViewRouter } from '../view-router';
 import { OtelComponent } from './otel/otel.component';
+import { OpaComponent } from '../modules/identity/opa.component';
 import { RoadmapModuleComponent } from './roadmap-module.component';
 import { PluginPageHeaderComponent, PluginPageHeaderModel } from '../shared/plugin-page-shell.component';
 
-const REAL_DETAIL_TABS = new Set(['otel']);
+const REAL_DETAIL_TABS = new Set(['otel', 'opa']);
 const PLACEHOLDER_TABS = new Set([
-  'syncope', 'opa',
+  'syncope',
   'litellm', 'langfuse',
   'stalwart', 'novu', 'mattermost',
   'tempo', 'loki', 'grafana-operator',
@@ -51,9 +52,10 @@ const LOGO_BASE = 'https://logos.opl.io.kr/i';
 @Component({
   selector: 'app-foundation-engines',
   standalone: true,
-  imports: [CommonModule, ClarityModule, OtelComponent, RoadmapModuleComponent, PluginPageHeaderComponent],
+  imports: [CommonModule, ClarityModule, OtelComponent, OpaComponent, RoadmapModuleComponent, PluginPageHeaderComponent],
   template: `
     <app-otel *ngIf="currentId() === 'otel'"></app-otel>
+    <app-opa *ngIf="currentId() === 'opa'"></app-opa>
     <app-roadmap-module *ngIf="placeholderCard() as pc" [module]="pc"></app-roadmap-module>
 
     <ng-container *ngIf="vr.module() === 'modules' && vr.tab() === 'overview'">
@@ -193,9 +195,9 @@ export class FoundationEnginesComponent {
     },
     {
       id: 'opa', name: 'OPA', provider: 'openpolicyagent.org', version: '', logo: 'opa', mono: 'OPA', detail: true,
-      category: 'identity', impl: 'phase1', liveKey: '',
-      role: '정책 평가 엔진 후보. identity와 authorization 경계의 정책 결정을 담당할 예정.',
-      wiring: '아직 착수 전 — 정책 bundle과 admission 연동 설계가 필요하다.',
+      category: 'identity', impl: 'real', liveKey: '',
+      role: 'Rego 정책 결정점. fail-closed 평가, 정책 공급망과 decision telemetry 경계를 관리한다.',
+      wiring: 'FoundationModel/identity가 OPA, ServiceMonitor, 제한된 evaluation API를 선언형으로 관리한다.',
     },
     {
       id: 'postgres', name: 'PostgreSQL', provider: 'CloudNativePG managed plugin', version: 'PG 19 beta2', logo: 'postgresql', mono: 'PG', detail: true, module: 'postgres',

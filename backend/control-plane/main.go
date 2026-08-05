@@ -43,6 +43,7 @@ type config struct {
 	valkeyExporterImage string
 	rustfsImage         string
 	opensearchImage     string
+	opaImage            string
 	veleroNamespace     string // 이전 backup 계약 호환용. 현재 data bundle에서는 미사용.
 	defaultStorageClass string // HostRequirements 기본값(§1.2) — Basic StorageClass 이름의 단일 선언점
 }
@@ -72,6 +73,7 @@ func main() {
 	// HostRequirements(§1.2 "Basic은 요구만 선언") 기본값 — 클러스터 실측 StorageClass 이름(rancher.io/local-path 기반 "standard").
 	flag.StringVar(&cfg.defaultStorageClass, "default-storage-class", "standard", "PVC가 참조할 Basic StorageClass 기본값(FoundationModel.spec.parameters.hostRequirements.storageClass로 모델별 override 가능)")
 	flag.StringVar(&cfg.opensearchImage, "opensearch-image", "ghcr.io/opensphere-platform/mirror/opensearch:3.7.0", "data OpenSearch operand image(GHCR mirror, origin=opensearchproject/opensearch:3.7.0)")
+	flag.StringVar(&cfg.opaImage, "opa-image", "ghcr.io/opensphere-platform/mirror/opa:1.18.2-static", "identity OPA operand image(GHCR mirror, origin=openpolicyagent/opa:1.18.2-static)")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New())

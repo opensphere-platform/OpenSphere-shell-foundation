@@ -8,7 +8,7 @@
     "rustfs": { "model": "data", "engineId": "rustfs", "parameterPath": "dataEngines.rustfs", "reconciler": "implemented" },
     "keycloak": { "model": "identity", "engineId": "keycloak", "parameterPath": "identityEngines.keycloak", "reconciler": "implemented" },
     "apache-syncope": { "model": "identity", "engineId": "syncope", "parameterPath": "identityEngines.syncope", "reconciler": "pending", "blocker": "Apache Syncope 전용 operand renderer와 readiness adapter가 아직 control-plane에 등록되지 않았습니다." },
-    "opa": { "model": "identity", "engineId": "opa", "parameterPath": "identityEngines.opa", "reconciler": "pending", "blocker": "OPA bundle·policy distribution·readiness adapter가 아직 control-plane에 등록되지 않았습니다." },
+    "opa": { "model": "identity", "engineId": "opa", "parameterPath": "identityEngines.opa", "reconciler": "foundation-control-plane", "blocker": "운영 승격 전 서명 bundle 저장소와 영속 decision-log sink 연결이 필요합니다." },
     "litellm": { "model": "ai", "engineId": "litellm", "parameterPath": "aiEngines.litellm", "reconciler": "pending", "blocker": "LiteLLM gateway와 provider SecretRef를 처리하는 AI bundle이 아직 control-plane에 등록되지 않았습니다." },
     "langfuse": { "model": "ai", "engineId": "langfuse", "parameterPath": "aiEngines.langfuse", "reconciler": "pending", "blocker": "Langfuse web·worker·ClickHouse·PostgreSQL 연결 bundle이 아직 control-plane에 등록되지 않았습니다." },
     "stalwart": { "model": "communication", "engineId": "stalwart", "parameterPath": "communicationEngines.stalwart", "reconciler": "pending", "blocker": "Stalwart mail domain·TLS·DNS·storage 계약 renderer가 아직 control-plane에 등록되지 않았습니다." },

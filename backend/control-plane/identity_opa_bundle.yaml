@@ -1,0 +1,155 @@
+# OPA policy decision point — FoundationModel/identity.spec.parameters.engines.opa=enabled.
+# The bootstrap policy is deliberately fail-closed. Runtime policy mutation APIs are denied;
+# production policy delivery must replace this bootstrap with a verified signed bundle.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: foundation-identity-opa
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foundation-identity-opa-bootstrap
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+data:
+  config.yaml: |
+    labels:
+      system: opensphere
+      capability: identity.policy.opa
+    status:
+      prometheus: true
+  system-authz.rego: |
+    package system.authz
+
+    default allow := false
+
+    # Consumers can only evaluate the OpenSphere policy namespace. Policy/data
+    # mutation, ad-hoc queries, compile and configuration APIs stay denied.
+    allow if {
+      input.method == "POST"
+      count(input.path) >= 3
+      input.path[0] == "v1"
+      input.path[1] == "data"
+      input.path[2] == "opensphere"
+    }
+  bootstrap.rego: |
+    package opensphere.authz
+
+    # No request is allowed until an approved policy bundle replaces this
+    # development bootstrap. Undefined input therefore cannot become allow.
+    default allow := false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: foundation-identity-opa
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: foundation-identity-opa }
+  template:
+    metadata:
+      labels: { app: foundation-identity-opa, foundation.opensphere.io/engine: opa }
+    spec:
+      serviceAccountName: foundation-identity-opa
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: opensphere-ghcr-pull
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000 }
+      containers:
+        - name: opa
+          image: __IMAGE__
+          args:
+            - run
+            - --server
+            - --addr=0.0.0.0:8181
+            - --diagnostic-addr=0.0.0.0:8282
+            - --authorization=basic
+            - --config-file=/etc/opa/config.yaml
+            - --log-format=json
+            - --log-level=info
+            - /etc/opa/policies
+          ports:
+            - { name: http, containerPort: 8181 }
+            - { name: diagnostic, containerPort: 8282 }
+          readinessProbe:
+            httpGet: { path: "/health?plugins", port: diagnostic }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: diagnostic }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          volumeMounts:
+            - { name: config, mountPath: /etc/opa/config.yaml, subPath: config.yaml, readOnly: true }
+            - { name: config, mountPath: /etc/opa/policies/system-authz.rego, subPath: system-authz.rego, readOnly: true }
+            - { name: config, mountPath: /etc/opa/policies/bootstrap.rego, subPath: bootstrap.rego, readOnly: true }
+      volumes:
+        - name: config
+          configMap: { name: foundation-identity-opa-bootstrap }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: foundation-identity-opa
+  namespace: __NAMESPACE__
+  labels: { app: foundation-identity-opa, foundation.opensphere.io/engine: opa }
+spec:
+  selector: { app: foundation-identity-opa }
+  ports:
+    - { name: http, port: 8181, targetPort: http }
+    - { name: diagnostic, port: 8282, targetPort: diagnostic }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: foundation-identity-opa
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+spec:
+  selector:
+    matchLabels: { app: foundation-identity-opa }
+  namespaceSelector:
+    matchNames: [__NAMESPACE__]
+  endpoints:
+    - port: diagnostic
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: foundation-identity-opa
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa }
+spec:
+  podSelector:
+    matchLabels: { app: foundation-identity-opa }
+  policyTypes: [Ingress]
+  ingress:
+    # Evaluation clients must be explicitly placed in the Foundation namespace.
+    - from:
+        - podSelector: {}
+      ports:
+        - { protocol: TCP, port: 8181 }
+    # Prometheus receives only health and metrics on the diagnostic listener.
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - key: kubernetes.io/metadata.name
+                operator: In
+                values: [monitoring, opensphere-monitoring]
+      ports:
+        - { protocol: TCP, port: 8282 }

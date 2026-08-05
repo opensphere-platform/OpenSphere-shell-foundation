@@ -83,7 +83,7 @@ export const FOUNDATION_PLUGINS: HostedPlugin[] = [
     id: 'opa', name: 'Open Policy Agent', icon: 'key', kind: 'plugin', hostRef: 'foundation',
     capability: 'identity.policy.opa', capabilityLabel: 'Policy Decision',
     desc: 'Rego 기반 정책 결정점과 정책 bundle 배포 capability.', consumePoint: 'foundation-identity-opa.opensphere-foundation.svc:8181',
-    healthRef: 'declared', model: 'identity', view: { module: 'opa' }, surface: PG_SURFACE,
+    healthRef: 'opa', model: 'identity', view: { module: 'opa' }, surface: PG_SURFACE,
     activation: { packageId: 'opa', element: 'osp-foundation-opa', installModule: 'opa' },
   },
   {

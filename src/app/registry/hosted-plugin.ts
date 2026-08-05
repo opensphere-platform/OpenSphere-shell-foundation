@@ -13,7 +13,7 @@ export interface HostedPlugin {
   capabilityLabel: string;        // '관계형 DB' 등 — 칩 표시용
   desc: string;
   consumePoint: string;           // 백킹서비스 소비 엔드포인트(이 plugin이 '제공하는 것')
-  healthRef: 'cnpg' | 'data-engine' | 'os' | 'rustfs' | 'keycloak' | 'samba' | 'declared'; // ⬅ probe() 대체. 어느 서비스가 이 plugin의 health 진실인가
+  healthRef: 'cnpg' | 'data-engine' | 'os' | 'rustfs' | 'keycloak' | 'samba' | 'opa' | 'declared'; // ⬅ probe() 대체. 어느 서비스가 이 plugin의 health 진실인가
   model: 'data' | 'identity' | 'ai' | 'communication' | 'observability' | 'backup' | 'delivery';
   dataEngineId?: 'psmdb' | 'valkey';
   surface: PluginSurfaceContract; // 모든 plugin은 PostgreSQL 수준 관리 표면 계약을 충족해야 등록 가능
