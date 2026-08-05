@@ -6,18 +6,21 @@ export interface PgAdminDatabase {
 }
 export interface PgAdminObject {
   schema: string; name: string; kind: string; owner: string; estimated_rows: string; size_bytes: string;
+  comment?: string; persistence?: string; tablespace?: string; definition?: string;
 }
 export interface PgAdminCatalog {
   schema: string; actor: string; cluster: string; selectedDatabase: string; rowLimit: number; refreshedAt: string;
   databases: PgAdminDatabase[]; schemas: Array<{ name: string; owner: string }>; objects: PgAdminObject[];
   columns: any[]; indexes: any[]; constraints: any[]; functions: any[]; extensions: any[]; roles: any[]; activity: any[];
+  dependencies: any[]; settings: Record<string, unknown>;
 }
 export interface PgQueryResult {
   command: string; rowCount: number; truncated: boolean; durationMs: number;
   fields: Array<{ name: string; dataTypeID: number }>; rows: Array<Record<string, unknown>>;
 }
 export interface PgTypedAction {
-  action: 'create-schema' | 'drop-schema' | 'create-table' | 'drop-table' | 'create-index' | 'drop-index';
+  action: 'create-schema' | 'drop-schema' | 'create-table' | 'drop-table' | 'create-index' | 'drop-index'
+    | 'drop-view' | 'drop-materialized-view' | 'drop-sequence' | 'drop-foreign-table';
   database: string; schema: string; name?: string; table?: string; reason: string; unique?: boolean;
   columns?: Array<{ name: string; type: string; nullable: boolean; default: string }>; indexColumns?: string[];
 }
@@ -43,6 +46,16 @@ export class PgAdminService {
   readonly selectedColumns = computed(() => this.related('columns'));
   readonly selectedIndexes = computed(() => this.related('indexes'));
   readonly selectedConstraints = computed(() => this.related('constraints'));
+  readonly selectedDependencies = computed(() => {
+    const object = this.selectedObject();
+    if (!object) return [];
+    return (this.catalog()?.dependencies ?? []).filter((row: any) => row.schema === object.schema && row.object === object.name);
+  });
+  readonly selectedDependents = computed(() => {
+    const object = this.selectedObject();
+    if (!object) return [];
+    return (this.catalog()?.dependencies ?? []).filter((row: any) => row.referenced_schema === object.schema && row.referenced_object === object.name);
+  });
 
   private endpoint(path: string): string { return `${apiBase()}/api/foundation/postgres/admin/${path}`; }
   private related(key: 'columns' | 'indexes' | 'constraints'): any[] {

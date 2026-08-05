@@ -236,15 +236,20 @@ async function postgresAdminCatalog(req, res, url) {
     const selected = requestedDatabase || databases.find((item) => item.name === credentials.database)?.name || databases[0]?.name;
     if (!selected || !databases.some((item) => item.name === selected)) throw { code: 404, msg: `database not found: ${selected || requestedDatabase}` };
     const pool = await postgresPool(selected, actor);
-    const [schemas, objects, columns, indexes, constraints, functions, extensions, roles, activity] = await Promise.all([
+    const [schemas, objects, columns, indexes, constraints, functions, extensions, roles, activity, dependencies, settings] = await Promise.all([
       pgRows(pool, `SELECT nspname AS name, pg_get_userbyid(nspowner) AS owner
         FROM pg_namespace WHERE nspname NOT LIKE 'pg_toast%' ORDER BY CASE WHEN nspname='public' THEN 0 ELSE 1 END, nspname`),
       pgRows(pool, `SELECT n.nspname AS schema, c.relname AS name,
         CASE c.relkind WHEN 'r' THEN 'table' WHEN 'p' THEN 'partitioned table' WHEN 'v' THEN 'view'
           WHEN 'm' THEN 'materialized view' WHEN 'S' THEN 'sequence' WHEN 'f' THEN 'foreign table' ELSE c.relkind::text END AS kind,
         pg_get_userbyid(c.relowner) AS owner, c.reltuples::bigint AS estimated_rows,
-        pg_total_relation_size(c.oid)::bigint AS size_bytes
+        pg_total_relation_size(c.oid)::bigint AS size_bytes,
+        obj_description(c.oid, 'pg_class') AS comment,
+        CASE c.relpersistence WHEN 'p' THEN 'permanent' WHEN 'u' THEN 'unlogged' WHEN 't' THEN 'temporary' ELSE c.relpersistence::text END AS persistence,
+        COALESCE(t.spcname, 'pg_default') AS tablespace,
+        CASE WHEN c.relkind IN ('v','m') THEN pg_get_viewdef(c.oid, true) ELSE NULL END AS definition
         FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+        LEFT JOIN pg_tablespace t ON t.oid=c.reltablespace
         WHERE c.relkind IN ('r','p','v','m','S','f') AND n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema'
         ORDER BY n.nspname, kind, c.relname`),
       pgRows(pool, `SELECT table_schema AS schema, table_name AS table, ordinal_position, column_name AS name,
@@ -264,7 +269,10 @@ async function postgresAdminCatalog(req, res, url) {
         ORDER BY n.nspname, c.relname, con.conname`),
       pgRows(pool, `SELECT n.nspname AS schema, p.proname AS name,
         pg_get_function_identity_arguments(p.oid) AS arguments,
-        pg_get_function_result(p.oid) AS result, l.lanname AS language
+        pg_get_function_result(p.oid) AS result, l.lanname AS language,
+        pg_get_userbyid(p.proowner) AS owner, obj_description(p.oid, 'pg_proc') AS comment,
+        CASE WHEN p.prokind IN ('f','p') THEN pg_get_functiondef(p.oid) ELSE NULL END AS definition,
+        CASE p.prokind WHEN 'f' THEN 'function' WHEN 'p' THEN 'procedure' WHEN 'a' THEN 'aggregate' WHEN 'w' THEN 'window' ELSE p.prokind::text END AS kind
         FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_language l ON l.oid=p.prolang
         WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema'
         ORDER BY n.nspname, p.proname LIMIT 500`),
@@ -275,11 +283,28 @@ async function postgresAdminCatalog(req, res, url) {
         rolconnlimit AS connection_limit FROM pg_roles ORDER BY rolname`),
       pgRows(pool, `SELECT datname AS database, COALESCE(state,'unknown') AS state, count(*)::int AS sessions
         FROM pg_stat_activity GROUP BY datname, state ORDER BY datname, state`),
+      pgRows(pool, `SELECT n.nspname AS schema, c.relname AS object,
+        rn.nspname AS referenced_schema, rc.relname AS referenced_object,
+        CASE rc.relkind WHEN 'r' THEN 'table' WHEN 'p' THEN 'partitioned table' WHEN 'v' THEN 'view'
+          WHEN 'm' THEN 'materialized view' WHEN 'S' THEN 'sequence' WHEN 'f' THEN 'foreign table' ELSE rc.relkind::text END AS referenced_kind,
+        d.deptype AS dependency_type
+        FROM pg_depend d
+        JOIN pg_class c ON c.oid=d.objid JOIN pg_namespace n ON n.oid=c.relnamespace
+        JOIN pg_class rc ON rc.oid=d.refobjid JOIN pg_namespace rn ON rn.oid=rc.relnamespace
+        WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema'
+          AND rn.nspname NOT LIKE 'pg_%' AND rn.nspname <> 'information_schema'
+          AND c.oid <> rc.oid ORDER BY n.nspname, c.relname, rn.nspname, rc.relname LIMIT 1000`),
+      pgRows(pool, `SELECT current_setting('server_version') AS server_version,
+        current_setting('server_encoding') AS server_encoding,
+        current_setting('TimeZone') AS timezone,
+        pg_postmaster_start_time() AS started_at,
+        current_database() AS database, current_user AS username`),
     ]);
     return jsonRes(res, 200, {
       schema: 'foundation.postgres.database-admin/v1alpha1', actor: actor.username,
       cluster: POSTGRES_ADMIN.cluster, selectedDatabase: selected, rowLimit: POSTGRES_ADMIN.rowLimit,
       databases, schemas, objects, columns, indexes, constraints, functions, extensions, roles, activity,
+      dependencies, settings: settings[0] || {},
       refreshedAt: new Date().toISOString(),
     });
   } catch (e) {
@@ -348,6 +373,22 @@ function postgresActionPlan(body) {
   if (action === 'drop-table') {
     if (!name) throw { code: 400, msg: 'table name is required' };
     return { database, target: `table/${schema}.${name}`, sql: `DROP TABLE ${pgIdentifier(schema)}.${pgIdentifier(name)} RESTRICT` };
+  }
+  if (action === 'drop-view') {
+    if (!name) throw { code: 400, msg: 'view name is required' };
+    return { database, target: `view/${schema}.${name}`, sql: `DROP VIEW ${pgIdentifier(schema)}.${pgIdentifier(name)} RESTRICT` };
+  }
+  if (action === 'drop-materialized-view') {
+    if (!name) throw { code: 400, msg: 'materialized view name is required' };
+    return { database, target: `materialized-view/${schema}.${name}`, sql: `DROP MATERIALIZED VIEW ${pgIdentifier(schema)}.${pgIdentifier(name)} RESTRICT` };
+  }
+  if (action === 'drop-sequence') {
+    if (!name) throw { code: 400, msg: 'sequence name is required' };
+    return { database, target: `sequence/${schema}.${name}`, sql: `DROP SEQUENCE ${pgIdentifier(schema)}.${pgIdentifier(name)} RESTRICT` };
+  }
+  if (action === 'drop-foreign-table') {
+    if (!name) throw { code: 400, msg: 'foreign table name is required' };
+    return { database, target: `foreign-table/${schema}.${name}`, sql: `DROP FOREIGN TABLE ${pgIdentifier(schema)}.${pgIdentifier(name)} RESTRICT` };
   }
   if (action === 'create-index') {
     if (!name || !body.table) throw { code: 400, msg: 'index name and table are required' };

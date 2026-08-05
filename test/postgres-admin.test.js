@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost, POSTGRES_ADMIN } = require('../server.js');
 
@@ -45,6 +47,10 @@ test('drop plans are RESTRICT-only and index columns are identifier-checked', ()
     action: 'create-index', database: 'app', schema: 'public', table: 'event', name: 'event_idx',
     indexColumns: ['created_at DESC'],
   }), /supported PostgreSQL identifier/);
+  assert.equal(postgresActionPlan({ action: 'drop-view', database: 'app', schema: 'public', name: 'active_users' }).sql,
+    'DROP VIEW "public"."active_users" RESTRICT');
+  assert.equal(postgresActionPlan({ action: 'drop-sequence', database: 'app', schema: 'public', name: 'event_id_seq' }).sql,
+    'DROP SEQUENCE "public"."event_id_seq" RESTRICT');
 });
 
 test('PostgreSQL admin contract pins one cluster and bounded query execution', () => {
@@ -62,4 +68,13 @@ test('PostgreSQL Secret short service hosts are qualified for the target namespa
   assert.equal(postgresServiceHost(''), POSTGRES_ADMIN.service);
   assert.equal(postgresServiceHost('10.96.154.32'), '10.96.154.32');
   assert.equal(postgresServiceHost('localhost'), 'localhost');
+});
+
+test('PostgreSQL administration surface follows the pgAdmin explorer and tabbed-workspace model', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/admin/pg-admin.tab.ts'), 'utf8');
+  for (const contract of ['Object Explorer', 'Dashboard', 'Properties', 'SQL', 'Statistics', 'Dependencies', 'Dependents', 'Query Tool', 'Data Output', 'Query History']) {
+    assert.match(source, new RegExp(contract));
+  }
+  assert.match(source, /Servers[\s\S]*Databases[\s\S]*Schemas/);
+  assert.doesNotMatch(source, /pga-lower/);
 });
