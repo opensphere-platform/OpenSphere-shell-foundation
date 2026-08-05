@@ -1,5 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { apiBase, FND_NS } from '../../api-base';
+import { apiBase, FND_NS, hostFetch } from '../../api-base';
 import { PollBackoff } from '../../shared/poll-backoff';
 import { Phase, State, phaseClass } from '../postgres/cnpg.types';
 
@@ -42,7 +42,7 @@ export abstract class WorkloadHealth {
   async loadDeploy(): Promise<void> {
     if (!this.backoff.due('deploy')) { return; }
     try {
-      const r = await fetch(this.k(`apis/apps/v1/namespaces/${this.ns}/deployments/${this.name}`));
+      const r = await hostFetch(this.k(`apis/apps/v1/namespaces/${this.ns}/deployments/${this.name}`), { cache: 'no-store' });
       const s: State = r.status === 403 ? 'noperm' : !r.ok ? 'nocrd' : 'ok';
       this.backoff.report('deploy', s);
       this.state.set(s);
@@ -53,7 +53,7 @@ export abstract class WorkloadHealth {
     if (!this.backoff.due('pods')) { return; }
     try {
       const sel = encodeURIComponent(`app=${this.name}`);
-      const r = await fetch(this.k(`api/v1/namespaces/${this.ns}/pods?labelSelector=${sel}`));
+      const r = await hostFetch(this.k(`api/v1/namespaces/${this.ns}/pods?labelSelector=${sel}`), { cache: 'no-store' });
       this.backoff.report('pods', r.ok ? 'ok' : r.status === 404 ? 'nocrd' : 'error');
       this.pods.set(r.ok ? ((await r.json()).items || []) : []);
     } catch { this.backoff.report('pods', 'error'); this.pods.set([]); }
@@ -95,7 +95,7 @@ export class KcService extends WorkloadHealth {
   private async loadFm(): Promise<void> {
     if (!this.backoff.due('kc-fm')) return;
     try {
-      const r = await fetch(this.k('apis/foundation.opensphere.io/v1alpha1/foundationmodels/identity'));
+      const r = await hostFetch(this.k('apis/foundation.opensphere.io/v1alpha1/foundationmodels/identity'), { cache: 'no-store' });
       this.backoff.report('kc-fm', r.ok ? 'ok' : r.status === 404 ? 'nocrd' : 'error');
       this.fm.set(r.ok ? await r.json() : null);
     } catch { this.backoff.report('kc-fm', 'error'); }
@@ -104,7 +104,7 @@ export class KcService extends WorkloadHealth {
     if (!this.backoff.due('kc-events')) return;
     try {
       const fs = encodeURIComponent(`involvedObject.name=${this.name}`);
-      const r = await fetch(this.k(`api/v1/namespaces/${this.ns}/events?fieldSelector=${fs}&limit=30`));
+      const r = await hostFetch(this.k(`api/v1/namespaces/${this.ns}/events?fieldSelector=${fs}&limit=30`), { cache: 'no-store' });
       this.backoff.report('kc-events', r.ok ? 'ok' : 'error');
       const items = r.ok ? ((await r.json()).items || []) : [];
       items.sort((a: any, b: any) => String(b.lastTimestamp || b.eventTime || '').localeCompare(String(a.lastTimestamp || a.eventTime || '')));
@@ -139,7 +139,7 @@ export class SambaService extends WorkloadHealth {
   private async loadFm(): Promise<void> {
     if (!this.backoff.due('fm')) { return; }
     try {
-      const r = await fetch(this.k('apis/foundation.opensphere.io/v1alpha1/foundationmodels/identity'));
+      const r = await hostFetch(this.k('apis/foundation.opensphere.io/v1alpha1/foundationmodels/identity'), { cache: 'no-store' });
       const s: State = r.status === 403 ? 'noperm' : r.status === 404 ? 'nocrd' : !r.ok ? 'error' : 'ok';
       this.backoff.report('fm', s);
       this.fmState.set(s);
@@ -150,7 +150,7 @@ export class SambaService extends WorkloadHealth {
     if (!this.backoff.due('events')) { return; }
     try {
       const fs = encodeURIComponent(`involvedObject.name=${this.name}`);
-      const r = await fetch(this.k(`api/v1/namespaces/${this.ns}/events?fieldSelector=${fs}&limit=15`));
+      const r = await hostFetch(this.k(`api/v1/namespaces/${this.ns}/events?fieldSelector=${fs}&limit=15`), { cache: 'no-store' });
       this.backoff.report('events', r.ok ? 'ok' : 'error');
       const items: any[] = r.ok ? ((await r.json()).items || []) : [];
       items.sort((a, b) => String(b.lastTimestamp || b.eventTime || '').localeCompare(String(a.lastTimestamp || a.eventTime || '')));
