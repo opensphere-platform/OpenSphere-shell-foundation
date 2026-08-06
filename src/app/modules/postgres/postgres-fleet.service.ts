@@ -18,6 +18,7 @@ export class PostgresFleetService {
   readonly clusters = signal<PostgresFleetCluster[]>([]);
   readonly plans = signal<any[]>([]);
   readonly claims = signal<any[]>([]);
+  readonly namespaces = signal<string[]>(['opensphere-foundation']);
   readonly selectedId = signal('cloudnativepg:opensphere-foundation:foundation-data-pg');
   readonly state = signal<'loading' | 'ok' | 'empty' | 'error'>('loading');
   readonly error = signal('');
@@ -29,10 +30,11 @@ export class PostgresFleetService {
   async refresh(): Promise<void> {
     this.busy.set(true); this.error.set('');
     try {
-      const [fleet, plans, claims] = await Promise.all([
+      const [fleet, plans, claims, namespaces] = await Promise.all([
         hostFetch(this.api('/api/foundation/postgres/clusters'), { cache: 'no-store' }),
         hostFetch(this.api('/api/k8s/apis/catalog.opensphere.io/v1alpha1/addonplans'), { cache: 'no-store' }),
         hostFetch(this.api('/api/k8s/apis/provisioning.opensphere.io/v1beta1/postgresclaims'), { cache: 'no-store' }),
+        hostFetch(this.api('/api/foundation/postgres/namespaces'), { cache: 'no-store' }),
       ]);
       const fleetBody = await fleet.json().catch(() => ({}));
       if (!fleet.ok) throw new Error(fleetBody.error || `PostgreSQL fleet HTTP ${fleet.status}`);
@@ -41,6 +43,13 @@ export class PostgresFleetService {
       if (!clusterRows.some((cluster) => cluster.id === this.selectedId()) && clusterRows[0]) this.selectedId.set(clusterRows[0].id);
       this.plans.set(plans.ok ? ((await plans.json()).items || []).filter((item: any) => item.spec?.capabilityRef === 'postgresql') : []);
       this.claims.set(claims.ok ? ((await claims.json()).items || []) : []);
+      if (namespaces.ok) {
+        const rows: string[] = ((await namespaces.json()).namespaces || [])
+          .map((item: any): string => String(item.name || ''))
+          .filter((name: string) => Boolean(name));
+        const available = rows.length ? rows : ['opensphere-foundation'];
+        this.namespaces.set([...new Set<string>(available)]);
+      }
       this.state.set(clusterRows.length ? 'ok' : 'empty');
     } catch (error: any) {
       this.error.set(error?.message || String(error)); this.state.set('error');
@@ -48,6 +57,15 @@ export class PostgresFleetService {
   }
 
   select(id: string): void { this.selectedId.set(id); }
+
+  async createNamespace(name: string, reason: string): Promise<void> {
+    const response = await hostFetch(this.api('/api/foundation/postgres/namespaces'), {
+      method: 'POST', headers: writeHeaders(), body: JSON.stringify({ name, reason }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.message || body.error || `Namespace HTTP ${response.status}`);
+    if (!this.namespaces().includes(name)) this.namespaces.update((rows) => [...rows, name].sort());
+  }
 
   async createClaim(draft: PostgresClaimDraft): Promise<void> {
     const spec: any = {

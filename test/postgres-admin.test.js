@@ -139,11 +139,22 @@ test('PostgreSQL administration surface separates Data View from Query Tool and 
 test('PostgreSQL landing surface exposes a multi-cluster fleet and v1beta1 claim workflow', () => {
   const component = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/postgres-plugin.component.ts'), 'utf8');
   const fleet = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/postgres-fleet.service.ts'), 'utf8');
+  const app = fs.readFileSync(path.join(__dirname, '../src/app/app.component.ts'), 'utf8');
+  const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+  const rbac = fs.readFileSync(path.join(__dirname, '../deploy/postgres-fleet-console-rbac.yaml'), 'utf8');
   assert.match(component, /PFSS PostgreSQL Fleet/);
   assert.match(component, /Create dedicated cluster/);
   assert.match(component, /LegacyShared/);
+  assert.match(component, /\+ 새 Namespace 추가/);
+  assert.match(component, /claimNamespaceReason/);
   assert.match(fleet, /provisioning\.opensphere\.io\/v1beta1/);
   assert.match(fleet, /PostgresClaim/);
+  assert.match(fleet, /api\/foundation\/postgres\/namespaces/);
+  assert.match(server, /postgresFleetNamespaces/);
+  assert.match(server, /postgres-namespace-create/);
+  assert.match(server, /Namespace creation must use \/api\/foundation\/postgres\/namespaces/);
+  assert.match(rbac, /resources: \[namespaces\][\s\S]*verbs: \[get, create\]/);
+  assert.match(app, /if \(id === 'postgres'\) return undefined/);
 });
 
 test('PostgreSQL Cluster plan offers an explicit compact two-instance profile', () => {

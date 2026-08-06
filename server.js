@@ -239,6 +239,57 @@ async function postgresFleetClusters(req, res) {
     return jsonRes(res, typeof e.code === 'number' ? e.code : 502, { error: e.msg || e.message || String(e) });
   }
 }
+async function postgresFleetNamespaces(req, res) {
+  if (!['GET', 'POST'].includes(req.method || '')) return jsonRes(res, 405, { error: 'method not allowed' });
+  let actor;
+  try {
+    actor = req.method === 'POST'
+      ? await foundationOwnerActor(req)
+      : requireConsoleAdmin(await verifyToken(requestToken(req)));
+    if (req.method === 'GET') {
+      const result = await k8sJson('GET', '/api/v1/namespaces', undefined, actor);
+      if (!result.ok) throw { code: result.status, msg: 'PostgreSQL Namespace inventory unavailable: ' + k8sFailure(result) };
+      const namespaces = (result.json?.items || [])
+        .filter((item) => !item?.metadata?.deletionTimestamp)
+        .map((item) => ({
+          name: item?.metadata?.name || '',
+          managed: item?.metadata?.labels?.['opensphere.io/managed-by'] === 'foundation',
+          phase: item?.status?.phase || 'Active',
+        }))
+        .filter((item) => item.name)
+        .sort((a, b) => Number(b.managed) - Number(a.managed) || a.name.localeCompare(b.name));
+      return jsonRes(res, 200, { schema: 'foundation.postgres.namespaces/v1', namespaces });
+    }
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['name', 'reason']);
+    const name = requireK8sName(body.name, 'namespace');
+    const reason = requireOwnerReason(body.reason);
+    const existing = await k8sJson('GET', `/api/v1/namespaces/${name}`, undefined, actor);
+    if (existing.ok) {
+      if (existing.json?.metadata?.deletionTimestamp) throw { code: 409, msg: `Namespace ${name} is terminating` };
+      return jsonRes(res, 200, { accepted: true, created: false, namespace: name });
+    }
+    if (existing.status !== 404) throw { code: existing.status, msg: k8sFailure(existing) };
+    await publishFoundationAudit(actor, 'postgres-namespace-create', `Namespace/${name}`, 'attempt', reason);
+    const created = await k8sJson('POST', '/api/v1/namespaces', {
+      apiVersion: 'v1', kind: 'Namespace', metadata: {
+        name,
+        labels: {
+          'opensphere.io/managed-by': 'foundation',
+          'opensphere.io/purpose': 'postgres-fleet',
+          'pod-security.kubernetes.io/enforce': 'baseline',
+          'pod-security.kubernetes.io/warn': 'restricted',
+        },
+      },
+    }, actor);
+    if (!created.ok && created.status !== 409) throw { code: created.status, msg: k8sFailure(created) };
+    await publishFoundationAudit(actor, 'postgres-namespace-create', `Namespace/${name}`, 'accepted', reason);
+    return jsonRes(res, created.status === 409 ? 200 : 201, { accepted: true, created: created.status !== 409, namespace: name });
+  } catch (e) {
+    if (actor && req.method === 'POST') await publishFoundationAudit(actor, 'postgres-namespace-create', 'Namespace', 'failed', e.msg || e.message || String(e)).catch(() => {});
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 400, { error: e.msg || e.message || String(e) });
+  }
+}
 async function postgresCredentials(clusterId, actor) {
   const target = parsePostgresClusterId(clusterId);
   let secretName = POSTGRES_ADMIN.secret;
@@ -1837,6 +1888,9 @@ async function k8sProxy(req, res, rawUrl) {
   if (segs.includes('serviceaccounts') && last === 'token') return jsonRes(res, 403, { error: 'token subresource blocked by policy' });
 
   const isWrite = WRITE_METHODS.has(req.method);
+  if (isWrite && pathOnly === '/api/v1/namespaces') {
+    return jsonRes(res, 403, { error: 'Namespace creation must use /api/foundation/postgres/namespaces' });
+  }
   const idToken = requestToken(req); // Main Shell host-mediated fetch가 주입한 Supabase access token
   // 헤더는 새로 구성 — 클라이언트의 Impersonate-*/Authorization은 절대 전달하지 않음(위조 차단)
   const headers = { Authorization: `Bearer ${tok()}`, Accept: 'application/json' };
@@ -1947,6 +2001,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/foundation/psmdb/collection') return psmdbCollection(req, res);
     if (p === '/api/foundation/psmdb/user') return psmdbUser(req, res);
     if (p === '/api/foundation/postgres/clusters') return postgresFleetClusters(req, res);
+    if (p === '/api/foundation/postgres/namespaces') return postgresFleetNamespaces(req, res);
     if (p === '/api/foundation/postgres/admin/catalog') return postgresAdminCatalog(req, res, new URL(req.url || '/', 'http://localhost'));
     if (p === '/api/foundation/postgres/admin/query') return postgresAdminQuery(req, res);
     if (p === '/api/foundation/postgres/admin/action') return postgresAdminAction(req, res);

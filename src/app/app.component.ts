@@ -264,6 +264,11 @@ export class AppComponent implements OnInit, OnDestroy {
   activePlugin(): HostedPlugin | undefined {
     const route = this.vr.module();
     const id = this.pluginId(route === 'delivery' ? this.vr.tab() : route);
+    // PostgreSQL is activated and governed as a child UIPluginPackage, but its
+    // operational surface is the Foundation-native Fleet/PGAdmin workspace.
+    // The generic child runtime is only a package fallback and must not replace
+    // the richer host-owned database administration UI after activation.
+    if (id === 'postgres') return undefined;
     const p = this.reg.all.find((x) => x.id === id && !!x.activation);
     if (!p) { return undefined; }
     return p.activation?.element && customElements.get(p.activation.element) ? p : undefined;

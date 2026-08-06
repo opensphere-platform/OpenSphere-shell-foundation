@@ -99,11 +99,13 @@ const DEFAULT_FORM: PgForm = {
         <form class="pgp-form" (ngSubmit)="createDedicatedCluster()">
           <fieldset [disabled]="creatingClaim"><legend>Create dedicated cluster</legend><div class="pgp-form-grid">
             <label><span>Claim name</span><input name="claimName" [(ngModel)]="claimName" placeholder="orders-db" /></label>
-            <label><span>Namespace</span><input name="claimNamespace" [(ngModel)]="claimNamespace" /></label>
+            <label><span>Namespace</span><select name="claimNamespaceChoice" [(ngModel)]="claimNamespaceChoice"><option *ngFor="let namespace of fleet.namespaces()" [value]="namespace">{{namespace}}</option><option value="__new__">+ 새 Namespace 추가</option></select></label>
+            <label *ngIf="claimNamespaceChoice==='__new__'"><span>새 Namespace</span><input name="claimNewNamespace" [(ngModel)]="claimNewNamespace" placeholder="team-orders" /></label>
+            <label *ngIf="claimNamespaceChoice==='__new__'"><span>생성 사유</span><input name="claimNamespaceReason" [(ngModel)]="claimNamespaceReason" placeholder="운영 변경 사유(8자 이상)" /></label>
             <label><span>Database</span><input name="claimDatabase" [(ngModel)]="claimDatabase" /></label>
             <label><span>Application owner</span><input name="claimOwner" [(ngModel)]="claimOwner" /></label>
             <label><span>Plan</span><select name="claimPlan" [(ngModel)]="claimPlan"><option *ngFor="let plan of fleet.plans()" [value]="plan.metadata.name">{{plan.metadata.name}} · {{plan.spec.instances}} instances</option></select></label>
-          </div><button class="btn btn-primary" type="submit" [disabled]="!claimName||!claimDatabase||!claimOwner||!claimPlan">PostgresClaim 생성</button><span class="os-dim">PostgresClaim v1beta1 → AddOnInstall → dedicated SGCluster</span></fieldset>
+          </div><button class="btn btn-primary" type="submit" [disabled]="!claimName||!claimDatabase||!claimOwner||!claimPlan||!claimTargetNamespace()||(claimNamespaceChoice==='__new__'&&claimNamespaceReason.trim().length<8)">PostgresClaim 생성</button><span class="os-dim">PostgresClaim v1beta1 → AddOnInstall → dedicated SGCluster</span></fieldset>
         </form>
         <clr-alert *ngIf="claimResult" [clrAlertType]="claimFailed?'danger':'success'" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">{{claimResult}}</span></clr-alert-item></clr-alert>
       </section>
@@ -304,7 +306,7 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
   readonly applyProgress = signal(0);
   readonly applyLogs = signal<string[]>([]);
   private installTimer: ReturnType<typeof setInterval> | undefined;
-  claimName = ''; claimNamespace = 'opensphere-foundation'; claimDatabase = ''; claimOwner = ''; claimPlan = 'postgresql-dev-single';
+  claimName = ''; claimNamespaceChoice = 'opensphere-foundation'; claimNewNamespace = ''; claimNamespaceReason = ''; claimDatabase = ''; claimOwner = ''; claimPlan = 'postgresql-dev-single';
   creatingClaim = false; claimResult = ''; claimFailed = false;
 
   readonly tabs: { id: PackageTab; label: string; requiresCluster?: boolean; badge?: boolean }[] = [
@@ -359,11 +361,15 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
     this.selectFleetCluster(selected.id);
     this.openTab('admin');
   }
+  claimTargetNamespace(): string { return (this.claimNamespaceChoice === '__new__' ? this.claimNewNamespace : this.claimNamespaceChoice).trim(); }
   async createDedicatedCluster(): Promise<void> {
     this.creatingClaim = true; this.claimResult = ''; this.claimFailed = false;
     try {
-      await this.fleet.createClaim({ name: this.claimName.trim(), namespace: this.claimNamespace.trim(), database: this.claimDatabase.trim(), owner: this.claimOwner.trim(), plan: this.claimPlan });
-      this.claimResult = `PostgresClaim ${this.claimNamespace}/${this.claimName} 생성 요청이 승인되었습니다.`;
+      const namespace = this.claimTargetNamespace();
+      if (this.claimNamespaceChoice === '__new__') await this.fleet.createNamespace(namespace, this.claimNamespaceReason.trim());
+      await this.fleet.createClaim({ name: this.claimName.trim(), namespace, database: this.claimDatabase.trim(), owner: this.claimOwner.trim(), plan: this.claimPlan });
+      this.claimResult = `PostgresClaim ${namespace}/${this.claimName} 생성 요청이 승인되었습니다.`;
+      this.claimNamespaceChoice = namespace; this.claimNewNamespace = ''; this.claimNamespaceReason = '';
       this.claimName = ''; this.claimDatabase = ''; this.claimOwner = '';
     } catch (error: any) { this.claimFailed = true; this.claimResult = error?.message || String(error); }
     finally { this.creatingClaim = false; }
