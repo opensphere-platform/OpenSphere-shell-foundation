@@ -33,13 +33,14 @@ import { PgState } from '../ui/pg-state';
     </div>
 
     <div class="os-sech">postgresql.conf 파라미터</div>
-    <pg-state [state]="state()" hint="명시 파라미터 없음" sub="CNPG 기본 튜닝을 사용합니다." (retry)="svc.refresh()">
+    <pg-state [state]="state()" hint="명시 파라미터 없음" [sub]="providerLabel() + ' 기본 튜닝을 사용합니다.'" (retry)="svc.refresh()">
       <pg-kv [params]="svc.params()"></pg-kv>
     </pg-state>
   `,
 })
 export class PgConfigTab {
   readonly svc = inject(CnpgService);
+  providerLabel(): string { return this.svc.provider() === 'stackgres' ? 'StackGres' : 'CloudNativePG'; }
   readonly res = computed(() => this.svc.resources());
   readonly paramCount = computed(() => Object.keys(this.svc.params()).length);
   readonly state = computed(() => (this.paramCount() ? 'ok' : (this.svc.clusterState() === 'ok' ? 'empty' : this.svc.clusterState())));

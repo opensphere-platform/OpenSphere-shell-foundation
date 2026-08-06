@@ -9,7 +9,7 @@ import { PgState } from '../ui/pg-state';
   standalone: true,
   imports: [CommonModule, PgTopoCard, PgState],
   template: `
-    <p class="os-sub">CNPG 인스턴스 토폴로지 — primary 1 + replica {{ replicaN() }}. rw는 primary로, ro는 replica(없으면 primary)로 라우팅.</p>
+    <p class="os-sub">{{ providerLabel() }} 인스턴스 토폴로지 — primary 1 + replica {{ replicaN() }}. rw는 primary로, ro는 replica(없으면 primary)로 라우팅.</p>
     <pg-state [state]="state()" hint="인스턴스 Pod 없음" sub="Cluster가 생성 중이거나 read 권한이 없습니다." (retry)="svc.refresh()">
       <div class="os-cardgrid">
         <pg-topo-card *ngFor="let i of svc.instances()" [instance]="i"></pg-topo-card>
@@ -34,6 +34,7 @@ import { PgState } from '../ui/pg-state';
 })
 export class PgTopologyTab {
   readonly svc = inject(CnpgService);
+  providerLabel(): string { return this.svc.provider() === 'stackgres' ? 'StackGres' : 'CloudNativePG'; }
   readonly replicaN = computed(() => this.svc.instances().filter((i) => i.role !== 'primary').length);
   readonly state = computed(() => (this.svc.instances().length ? 'ok' : (this.svc.clusterState() === 'loading' && !this.svc.pods().length ? 'loading' : 'empty')));
 }

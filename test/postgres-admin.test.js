@@ -155,7 +155,7 @@ test('PostgreSQL landing surface is namespace-first and exposes fleet as a secon
   assert.match(component, /이 Namespace에는 PostgreSQL이 없습니다/);
   assert.match(component, /\*ngIf="!fleet\.busy\(\) && !selectedContextCluster\(\)"[\s\S]*PostgreSQL 설치/);
   assert.match(component, /Secondary view[\s\S]*PFSS PostgreSQL Fleet/);
-  assert.match(component, /Database Objects & Query/);
+  assert.match(component, /Objects & Query/);
   assert.match(component, /LegacyShared/);
   assert.match(component, /aria-label="Namespace 추가"[\s\S]*\(click\)="openNamespaceModal\(\)"[^>]*>추가<\/button>/);
   assert.match(component, /aria-label="PostgreSQL 컨텍스트 새로고침"/);
@@ -188,7 +188,7 @@ test('PostgreSQL keeps the complete provider-neutral operations menu', () => {
     ['cluster', 'Cluster plan'],
     ['topology', 'Topology'],
     ['config', 'Configuration'],
-    ['admin', 'Database Objects'],
+    ['databases', 'Databases & Roles'],
     ['backups', 'Backups'],
     ['events', 'Events'],
     ['claims', 'Claims'],
@@ -202,15 +202,30 @@ test('PostgreSQL keeps the complete provider-neutral operations menu', () => {
     cursor = next;
   }
   assert.match(component, /tabs\.filter\(\(t\) => !t\.secondary\)/);
+  assert.match(component, /\{ id: 'admin', label: 'Database Objects'.*secondary: true/);
   assert.doesNotMatch(component, /legacyOnly/);
   assert.match(component, /tab\(\) === 'monitoring'/);
   assert.match(component, /tab\(\) === 'operator' && !selectedIsLegacy\(\)/);
   assert.match(component, /tab\(\) === 'cluster' && !selectedIsLegacy\(\)/);
-  assert.match(component, /tab\(\) === 'topology' && !selectedIsLegacy\(\)/);
-  assert.match(component, /tab\(\) === 'config' && !selectedIsLegacy\(\)/);
-  assert.match(component, /tab\(\) === 'backups' && !selectedIsLegacy\(\)/);
-  assert.match(component, /tab\(\) === 'events' && !selectedIsLegacy\(\)/);
-  assert.match(component, /tab\(\) === 'claims' && !selectedIsLegacy\(\)/);
+  assert.match(component, /<pg-topology \*ngIf="tab\(\) === 'topology' && hasSelectedCluster\(\)"/);
+  assert.match(component, /<pg-config \*ngIf="tab\(\) === 'config' && hasSelectedCluster\(\)"/);
+  assert.match(component, /<pg-backups \*ngIf="tab\(\) === 'backups' && hasSelectedCluster\(\)"/);
+  assert.match(component, /<pg-events \*ngIf="tab\(\) === 'events' && hasSelectedCluster\(\)"/);
+  assert.match(component, /<pg-claims \*ngIf="tab\(\) === 'claims' && hasSelectedCluster\(\)"/);
+});
+
+test('PostgreSQL restores the detailed Overview and Prometheus monitoring workspaces', () => {
+  const component = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/postgres-plugin.component.ts'), 'utf8');
+  const overview = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/tabs/pg-overview.tab.ts'), 'utf8');
+  const monitoring = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/tabs/pg-monitoring.tab.ts'), 'utf8');
+  const service = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/cnpg.service.ts'), 'utf8');
+  for (const marker of ['pgp-steps', 'Package readiness', 'Cluster health', 'Operations policy', 'pgp-description', '<pg-overview']) assert.match(component, new RegExp(marker));
+  for (const marker of ['LIVE MONITORING', 'Persistent volumes', 'writeService', 'readService', 'conditions']) assert.match(overview, new RegExp(marker));
+  for (const marker of ['OPERATIONS · PROMETHEUS', '활성 연결', 'WAL 생성량', '복제 지연', 'CPU 사용량', '메모리 사용량']) assert.match(monitoring, new RegExp(marker));
+  assert.match(service, /selectTarget\(provider: 'cloudnativepg' \| 'stackgres'/);
+  assert.match(service, /stackgres\.io\/cluster-name/);
+  assert.match(service, /sgpgconfigs/);
+  assert.match(service, /sginstanceprofiles/);
 });
 
 test('PostgreSQL Cluster plan offers an explicit compact two-instance profile', () => {

@@ -27,17 +27,17 @@ import { PgState } from '../ui/pg-state';
           <tbody>
             <tr *ngFor="let b of svc.backups()">
               <td class="os-mono">{{ b.metadata?.name }}</td>
-              <td><span class="label" [ngClass]="bcls(b)">{{ b.status?.phase || '—' }}</span></td>
-              <td>{{ b.spec?.method || b.status?.method || '—' }}</td>
-              <td>{{ b.status?.startedAt || '—' }}</td>
-              <td>{{ b.status?.stoppedAt || '—' }}</td>
+              <td><span class="label" [ngClass]="bcls(b)">{{ backupPhase(b) }}</span></td>
+              <td>{{ b.spec?.method || b.status?.method || (svc.provider() === 'stackgres' ? 'SGBackup' : '—') }}</td>
+              <td>{{ b.status?.startedAt || b.status?.process?.timing?.start || '—' }}</td>
+              <td>{{ b.status?.stoppedAt || b.status?.process?.timing?.end || '—' }}</td>
             </tr>
           </tbody>
         </table>
       </pg-state>
     </ng-container>
 
-    <div class="os-sech">스케줄 (ScheduledBackup)</div>
+    <div class="os-sech">스케줄 ({{ svc.provider() === 'stackgres' ? 'SGCluster backup configuration' : 'ScheduledBackup' }})</div>
     <clr-alert *ngIf="!svc.scheduled().length" clrAlertType="info" [clrAlertClosable]="false" [clrAlertLightweight]="true">
       <clr-alert-item><span class="alert-text">스케줄된 백업 없음.</span></clr-alert-item>
     </clr-alert>
@@ -60,19 +60,27 @@ export class PgBackupsTab {
   readonly busy = signal(false);
   readonly msg = signal('');
 
-  bcls(b: any): string { return PILL[phaseClass(b.status?.phase || '', false)]; }
+  backupPhase(b: any): string { return b.status?.phase || b.status?.process?.status || '—'; }
+  bcls(b: any): string { return PILL[phaseClass(this.backupPhase(b), false)]; }
 
   // on-demand Backup — Host-mediated Authorization 임퍼소네이션. backupConfigured일 때만 노출.
   async trigger(): Promise<void> {
     this.busy.set(true);
     this.msg.set('');
-    const obj = {
+    const stackgres = this.svc.provider() === 'stackgres';
+    const obj = stackgres ? {
+      apiVersion: 'stackgres.io/v1', kind: 'SGBackup',
+      metadata: { generateName: this.svc.name + '-ondemand-', namespace: this.svc.ns },
+      spec: { sgCluster: this.svc.name },
+    } : {
       apiVersion: 'postgresql.cnpg.io/v1', kind: 'Backup',
       metadata: { generateName: this.svc.name + '-ondemand-', namespace: this.svc.ns },
       spec: { cluster: { name: this.svc.name } },
     };
     try {
-      const r = await hostFetch(`${apiBase()}/api/k8s/apis/postgresql.cnpg.io/v1/namespaces/${this.svc.ns}/backups`, {
+      const endpoint = stackgres ? 'apis/stackgres.io/v1' : 'apis/postgresql.cnpg.io/v1';
+      const plural = stackgres ? 'sgbackups' : 'backups';
+      const r = await hostFetch(`${apiBase()}/api/k8s/${endpoint}/namespaces/${this.svc.ns}/${plural}`, {
         method: 'POST', headers: writeHeaders(), body: JSON.stringify(obj),
       });
       if (r.ok) { this.msg.set('✓ 백업 요청됨'); await this.svc.refresh(); }

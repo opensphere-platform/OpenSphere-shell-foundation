@@ -25,7 +25,7 @@ import { PgChart, PgChartSeries } from '../ui/pg-chart';
         <div>
           <span class="pg-live-eyebrow">LIVE MONITORING</span>
           <h2 id="pg-live-title">PostgreSQL 운영 상태</h2>
-          <p>Kubernetes 상태와 CloudNativePG exporter의 최근 1시간 시계열을 함께 표시합니다.</p>
+          <p>Kubernetes 상태와 {{ providerLabel() }} exporter의 최근 1시간 시계열을 함께 표시합니다.</p>
         </div>
         <div class="pg-live-sync">
           <span [class.pg-live-ok]="svc.metricsState() === 'ok'">{{ monitoringStatus() }}</span>
@@ -70,7 +70,16 @@ import { PgChart, PgChartSeries } from '../ui/pg-chart';
           </div>
         </article>
       </div>
-      <p class="pg-live-note"><b>수집:</b> 15초 자동 갱신 · CloudNativePG PodMonitor · Prometheus query_range(60초 간격). 메트릭 부재를 정상값 0으로 표시하지 않습니다.</p>
+      <p class="pg-live-note"><b>수집:</b> 15초 자동 갱신 · {{ providerLabel() }} exporter · Prometheus query_range(60초 간격). 메트릭 부재를 정상값 0으로 표시하지 않습니다.</p>
+    </section>
+
+    <section class="pg-storage" aria-labelledby="pg-storage-title">
+      <div class="os-sech" id="pg-storage-title">Persistent volumes</div>
+      <table class="table" *ngIf="svc.pvcRows().length; else noPvcs">
+        <thead><tr><th>PVC</th><th>상태</th><th>용량</th><th>StorageClass</th><th>PersistentVolume</th></tr></thead>
+        <tbody><tr *ngFor="let pvc of svc.pvcRows()"><td class="os-mono">{{ pvc.name }}</td><td><span class="label" [ngClass]="pvc.status === 'Bound' ? 'label-success' : 'label-warning'">{{ pvc.status }}</span></td><td>{{ pvc.capacity }}</td><td class="os-mono">{{ pvc.storageClass }}</td><td class="os-mono">{{ pvc.volume }}</td></tr></tbody>
+      </table>
+      <ng-template #noPvcs><p class="pg-live-empty pg-live-empty--compact">PostgreSQL 데이터 PVC가 아직 발견되지 않았습니다.</p></ng-template>
     </section>
 
     <div class="os-cardgrid">
@@ -89,9 +98,9 @@ import { PgChart, PgChartSeries } from '../ui/pg-chart';
         <div class="card-header">연결 — 상위 서비스 소비점</div>
         <div class="card-block">
           <dl class="os-kv">
-            <dt>쓰기(RW)</dt><dd class="os-mono">{{ svc.name }}-rw.{{ svc.ns }}.svc:5432</dd>
-            <dt>읽기(RO)</dt><dd class="os-mono">{{ svc.name }}-ro.{{ svc.ns }}.svc:5432</dd>
-            <dt>자격 Secret</dt><dd class="os-mono">{{ svc.name }}-app · pgc-&lt;claim&gt;-conn</dd>
+            <dt>쓰기(RW)</dt><dd class="os-mono">{{ svc.writeService() }}</dd>
+            <dt>읽기(RO)</dt><dd class="os-mono">{{ svc.readService() }}</dd>
+            <dt>자격 Secret</dt><dd class="os-mono">{{ svc.credentialSecret() }}</dd>
           </dl>
           <p class="os-sub">키: host·port·dbname·user·password·uri. 값은 정책상 비노출 — <code>kubectl get secret</code>.</p>
         </div>
@@ -135,6 +144,7 @@ export class PgOverviewTab {
   @Output() jump = new EventEmitter<string>();
 
   primaryShort(): string { const p = this.svc.primary(); return p ? p.replace(this.svc.name + '-', '#') : '—'; }
+  providerLabel(): string { return this.svc.provider() === 'stackgres' ? 'StackGres' : 'CloudNativePG'; }
   imageShort(): string { const i = this.svc.image(); return i ? (i.split('/').pop() || i) : '—'; }
 
   readonly instanceLabels = computed(() => this.svc.instances().map((item) => item.name.replace(`${this.svc.name}-`, '#')));
@@ -154,7 +164,7 @@ export class PgOverviewTab {
   restartTotal(): number { return this.svc.instances().reduce((sum, item) => sum + item.restarts, 0); }
   instanceSummary(): string { return this.svc.instances().map((item) => `${item.name} ${item.ready ? 'Ready' : 'Not Ready'}`).join(', '); }
   monitoringStatus(): string {
-    if (!this.svc.monitoringEnabled()) return 'PodMonitor disabled';
+    if (!this.svc.monitoringEnabled()) return 'Exporter disabled';
     if (this.svc.metricsState() === 'ok') return 'Prometheus connected';
     if (this.svc.metricsState() === 'error') return 'Prometheus unavailable';
     return 'Metrics pending';

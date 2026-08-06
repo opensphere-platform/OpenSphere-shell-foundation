@@ -9,7 +9,7 @@ import { PgState } from '../ui/pg-state';
   standalone: true,
   imports: [CommonModule, ClarityModule, PgState],
   template: `
-    <div class="os-sech">Databases (CNPG Database CR)</div>
+    <div class="os-sech">Databases ({{ providerLabel() }} declaration)</div>
     <pg-state [state]="svc.dbState()" hint="선언된 Database 없음" sub="Claims 탭에서 PostgresClaim으로 전용 DB를 발급하세요." (retry)="svc.refresh()">
       <table class="table">
         <thead><tr><th>CR 이름</th><th>DB</th><th>Owner</th><th>적용</th></tr></thead>
@@ -45,6 +45,7 @@ import { PgState } from '../ui/pg-state';
 })
 export class PgDatabasesTab {
   readonly svc = inject(CnpgService);
+  providerLabel(): string { return this.svc.provider() === 'stackgres' ? 'StackGres binding' : 'CloudNativePG Database CR'; }
   appliedLabel(d: any): string {
     if (d.status?.applied === true) { return 'applied'; }
     if (d.status?.applied === false) { return 'failed'; }
