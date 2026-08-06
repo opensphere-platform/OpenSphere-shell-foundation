@@ -13,7 +13,7 @@ test('OpenSearch Monitoring uses uPlot and updates an existing chart instance', 
   assert.match(monitoring, /<os-uplot-line-chart/);
   assert.doesNotMatch(monitoring, /CarbonLineChart|os-carbon-line-chart/);
   assert.match(chart, /from 'uplot'/);
-  assert.match(chart, /this\.chart\.setData\(data, true\)/);
+  assert.match(chart, /this\.chart\.setData\(data, !retainedRange\)/);
   assert.match(chart, /uPlot\.paths\.spline/);
   assert.match(chart, /cap: 'round'/);
   assert.match(chart, /fill: this\.alpha/);
@@ -40,22 +40,30 @@ test('node charts follow configured pods, live cluster inventory, and Prometheus
 
 test('background refresh preserves the current chart state and last-known data', () => {
   const metrics = read('src/app/modules/opensearch/os-metrics.service.ts');
+  const chart = read('src/app/shared/uplot-line-chart.ts');
   assert.match(metrics, /if \(!this\.series\(\)\.timestamps\.length\) this\.state\.set\('loading'\)/);
   assert.match(metrics, /마지막 정상 시계열 유지/);
+  assert.match(chart, /const retainedRange = this\.zoomRange/);
+  assert.match(chart, /if \(retainedRange\) this\.setTimeRange/);
 });
 
-test('Foundation delegates page scrolling to Main Shell and charts can expand in place', () => {
+test('Foundation delegates page scrolling to Main Shell and charts zoom the time axis', () => {
   const app = read('src/app/app.component.ts');
   const plugin = read('src/app/modules/data-engine/data-engine-plugin.component.ts');
   const monitoring = read('src/app/modules/opensearch/tabs/os-monitoring.tab.ts');
+  const chart = read('src/app/shared/uplot-line-chart.ts');
   assert.match(app, /\.cm-nav \{ min-height: 100%/);
   assert.match(app, /\.os-content \{ min-width: 0; min-height: 0; overflow: visible/);
   assert.doesNotMatch(app, /\.os-content \{[^}]*overflow: auto/);
   assert.match(plugin, /de-work de-work--flush/);
-  assert.match(monitoring, /expandedChart = signal/);
-  assert.match(monitoring, /toggleChart\('resources'\)/);
-  assert.match(monitoring, /\[height\]="chartHeight/);
-  assert.match(monitoring, /grid-column:1\/-1/);
+  assert.doesNotMatch(monitoring, /expandedChart|chartHeight|grid-column:1\/-1/);
+  assert.match(chart, />시간 확대</);
+  assert.match(chart, />시간 축소</);
+  assert.match(chart, />전체 보기</);
+  assert.match(chart, /zoomIn\(\): void/);
+  assert.match(chart, /zoomOut\(\): void/);
+  assert.match(chart, /resetZoom\(\): void/);
+  assert.match(chart, /cursor: \{ drag: \{ x: true, y: false \} \}/);
   assert.match(monitoring, /\.osm-chart-card\{padding:9px 10px 4px!important\}/);
   assert.match(monitoring, /\.osm-chart-head\{[^}]*margin-bottom:0/);
 });
