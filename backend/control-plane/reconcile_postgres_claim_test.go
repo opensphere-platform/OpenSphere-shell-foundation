@@ -166,6 +166,38 @@ func TestStackGresBootstrapFailureIsNotReady(t *testing.T) {
 	}
 }
 
+func TestStackGresBootstrapCurrentEntryFailureWinsOverCompletedTimestamp(t *testing.T) {
+	cluster := gvkObj(sgClusterGVK)
+	cluster.Object["status"] = map[string]interface{}{
+		"managedSql": map[string]interface{}{"scripts": []interface{}{
+			map[string]interface{}{
+				"id": int64(1), "completedAt": "2026-08-06T00:00:00Z", "failedAt": "2026-08-06T00:01:00Z",
+				"scripts": []interface{}{map[string]interface{}{"id": int64(2), "failure": "duplicate database"}},
+			},
+		}},
+	}
+	ready, failed, _ := stackGresBootstrapStatus(cluster)
+	if ready || !failed {
+		t.Fatalf("current script failure was ignored: ready=%v failed=%v", ready, failed)
+	}
+}
+
+func TestStackGresBootstrapIgnoresStaleFailedTimestampAfterRetrySuccess(t *testing.T) {
+	cluster := gvkObj(sgClusterGVK)
+	cluster.Object["status"] = map[string]interface{}{
+		"managedSql": map[string]interface{}{"scripts": []interface{}{
+			map[string]interface{}{
+				"id": int64(1), "completedAt": "2026-08-06T00:00:00Z", "failedAt": "2026-08-06T00:01:00Z",
+				"scripts": []interface{}{map[string]interface{}{"id": int64(1), "version": int64(2)}, map[string]interface{}{"id": int64(2), "version": int64(1)}},
+			},
+		}},
+	}
+	ready, failed, _ := stackGresBootstrapStatus(cluster)
+	if !ready || failed {
+		t.Fatalf("successful retry was not recognized: ready=%v failed=%v", ready, failed)
+	}
+}
+
 func TestBootstrapStatementsAreSeparateAutoCommitEntries(t *testing.T) {
 	resources := renderPostgresResources(testPostgresClaim(), postgresPlan{
 		Name: "postgresql-dev-single", Version: "18", Profile: "development",

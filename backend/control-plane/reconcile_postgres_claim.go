@@ -416,22 +416,25 @@ func stackGresBootstrapStatus(cluster *unstructured.Unstructured) (ready, failed
 		if !ok || fmt.Sprint(entry["id"]) != "1" {
 			continue
 		}
+		failureDetail := ""
+		if scripts, ok := entry["scripts"].([]interface{}); ok {
+			for _, scriptItem := range scripts {
+				if script, ok := scriptItem.(map[string]interface{}); ok {
+					if detail, _ := script["failure"].(string); detail != "" {
+						failureDetail = detail
+						break
+					}
+				}
+			}
+		}
+		if failureDetail != "" {
+			return false, true, "StackGres application database bootstrap failed: " + failureDetail
+		}
 		if completedAt, _ := entry["completedAt"].(string); completedAt != "" {
 			return true, false, ""
 		}
 		if failedAt, _ := entry["failedAt"].(string); failedAt != "" {
-			failureMessage := "StackGres application database bootstrap failed"
-			if scripts, ok := entry["scripts"].([]interface{}); ok {
-				for _, scriptItem := range scripts {
-					if script, ok := scriptItem.(map[string]interface{}); ok {
-						if detail, _ := script["failure"].(string); detail != "" {
-							failureMessage += ": " + detail
-							break
-						}
-					}
-				}
-			}
-			return false, true, failureMessage
+			return false, true, "StackGres application database bootstrap failed"
 		}
 		return false, false, "StackGres application database bootstrap is pending"
 	}
