@@ -2,6 +2,8 @@
 # OpenSphere supplies the user-facing fleet/admin UI; upstream REST/Admin UI is disabled.
 containerRegistry: ghcr.io/opensphere-platform/mirror
 imagePullPolicy: IfNotPresent
+imagePullSecrets:
+  - name: opensphere-ghcr-pull
 serviceAccount:
   create: true
   repoCredentials: [opensphere-ghcr-pull]
@@ -25,3 +27,14 @@ extensions:
   repositoryUrls: []
   cache:
     enabled: false
+# StackGres supports operator-side component image templates through SG_IMAGE_*.
+# OpenSphere intentionally supplies constants (no version placeholders) so every
+# generated workload passes the exact-digest admission boundary.
+developer:
+  extraEnv:
+    SG_IMAGE_PATRONI: "ghcr.io/opensphere-platform/mirror/ongres/patroni@sha256:e5207dd1c6bb0b9a1870bf285b71391fac2798c8155db923039b306ad51f66c2"
+    SG_IMAGE_POSTGRES_UTIL: "ghcr.io/opensphere-platform/mirror/ongres/postgres-util@sha256:09dd7ce7dfd4bb5c472ed9d1e028ebe7b14a6ae93742255030f3720b7c8fb18a"
+    SG_IMAGE_PGBOUNCER: "ghcr.io/opensphere-platform/mirror/ongres/pgbouncer@sha256:0427310241959868a11f042f952e993d687ecdeb9fc187dce3594122ab297a6b"
+    SG_IMAGE_PROMETHEUS_POSTGRES_EXPORTER: "ghcr.io/opensphere-platform/mirror/ongres/prometheus-postgres-exporter@sha256:c9245e885328aa78e2b16b36f9e9ab68a014f7735b577b3fabc10de68e7db051"
+    SG_IMAGE_CLUSTER_CONTROLLER: "ghcr.io/opensphere-platform/mirror/stackgres/cluster-controller@sha256:cf7688abcc08655752ecb5ab830f90df4eb741eb9d810ab7846ec372a970ebe4"
+    SG_IMAGE_KUBECTL: "ghcr.io/opensphere-platform/mirror/ongres/kubectl@sha256:5a24225d7d6aedcbe927687001018ee8e6ba5277a9d128046b9b98348ed414c5"

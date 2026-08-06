@@ -117,3 +117,22 @@ func TestRetainIsTheDefaultInstallDeletionPolicy(t *testing.T) {
 		t.Fatalf("deletionPolicy=%s", got)
 	}
 }
+
+func TestStackGres119ConditionsAreReadyWithBinding(t *testing.T) {
+	cluster := gvkObj(sgClusterGVK)
+	cluster.Object["status"] = map[string]interface{}{
+		"binding": map[string]interface{}{"name": "orders-binding"},
+		"conditions": []interface{}{
+			map[string]interface{}{"type": "Bootstrapped", "status": "True"},
+			map[string]interface{}{"type": "ComponentsUpdated", "status": "True"},
+			map[string]interface{}{"type": "Failed", "status": "False"},
+		},
+	}
+	if !stackGresReady(cluster) {
+		t.Fatal("StackGres 1.19 ready conditions were not recognized")
+	}
+	cluster.Object["status"].(map[string]interface{})["conditions"].([]interface{})[2] = map[string]interface{}{"type": "Failed", "status": "True"}
+	if stackGresReady(cluster) {
+		t.Fatal("failed StackGres cluster was reported Ready")
+	}
+}

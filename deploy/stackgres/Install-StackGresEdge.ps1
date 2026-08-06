@@ -47,7 +47,7 @@ $manifest = ($renderOutput -join "`n").Replace($operatorTag, $operatorExact).Rep
 $manifest = ([regex]::Split($manifest, '(?m)^---\s*$') |
   Where-Object {
     $_ -notmatch 'name:\s+"?stackgres-operator-remove-sgconfig"?' -and
-    $_ -notmatch 'name:\s+''?stackgres-operator-test-connection''?'
+    $_ -notmatch 'name:\s+["'']?stackgres-operator-test-connection["'']?'
   }) -join "`n---`n"
 if ($manifest.Contains('quay.io/') -or $manifest.Contains('registry.access.redhat.com/')) {
   throw 'Rendered StackGres manifest contains a direct upstream image reference'
@@ -65,7 +65,7 @@ $pullSecretProjection = [ordered]@{
   type = $sourcePullSecret.type; data = $sourcePullSecret.data
 }
 $pullSecretProjection | ConvertTo-Json -Depth 8 -Compress | kubectl --context $KubeContext apply -f - | Out-Null
-kubectl --context $KubeContext apply --server-side --field-manager=opensphere-stackgres-installer -f $rendered
+kubectl --context $KubeContext apply --server-side --force-conflicts --field-manager=opensphere-stackgres-installer -f $rendered
 kubectl --context $KubeContext wait -n stackgres --for=condition=complete job/stackgres-operator-install-sgconfig --timeout=300s
 kubectl --context $KubeContext wait -n stackgres deployment/stackgres-operator --for=condition=Available --timeout=300s
 kubectl --context $KubeContext get deployment,job,pod -n stackgres -o wide

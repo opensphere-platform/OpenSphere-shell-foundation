@@ -9,8 +9,10 @@ Supply-chain constraints:
 
 - official chart URL is version-pinned and verified with SHA-256
   `355CAA7BCED88B52A57B44B3945C0F9F44F19C3A952F181D0BA5622558A0BDEB`;
-- runtime images are OpenSphere GHCR mirrors and are replaced with exact
-  linux/amd64 digests after Helm rendering;
+- operator/install-job images are OpenSphere GHCR mirrors and are replaced
+  with exact linux/amd64 digests after Helm rendering;
+- StackGres `SG_IMAGE_*` templates are fixed to curated GHCR operand digests,
+  so generated StatefulSets and Jobs cannot fall back to mutable tags;
 - upstream StackGres REST API/Admin UI are disabled because PFSS supplies the
   authenticated fleet and database-object UI;
 - StackGres is AGPL-3.0-only. Production adoption requires the platform license

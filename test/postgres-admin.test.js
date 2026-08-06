@@ -82,6 +82,23 @@ test('StackGres fleet projection is dedicated and uses status binding', () => {
   assert.equal(projected.bindingSecret, 'orders-binding');
 });
 
+test('StackGres 1.19 native conditions project a ready dedicated cluster', () => {
+  const projected = postgresClusterProjection({
+    metadata: { name: 'orders', namespace: 'tenant-a', uid: 'u1' },
+    spec: { instances: 1, postgres: { version: '18' } },
+    status: {
+      binding: { name: 'orders-binding' },
+      conditions: [
+        { type: 'Bootstrapped', status: 'True' },
+        { type: 'ComponentsUpdated', status: 'True' },
+        { type: 'Failed', status: 'False' },
+      ],
+    },
+  }, 'stackgres');
+  assert.equal(projected.ready, true);
+  assert.equal(projected.phase, 'Ready');
+});
+
 test('PostgreSQL Secret short service hosts are qualified for the target namespace', () => {
   assert.equal(postgresServiceHost('foundation-data-pg-rw'),
     'foundation-data-pg-rw.opensphere-foundation.svc');

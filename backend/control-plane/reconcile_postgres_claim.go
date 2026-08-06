@@ -357,13 +357,24 @@ func randomPassword(size int) (string, error) {
 
 func stackGresReady(cluster *unstructured.Unstructured) bool {
 	conditions, _, _ := unstructured.NestedSlice(cluster.Object, "status", "conditions")
+	bootstrapped, componentsUpdated, failed := false, false, false
 	for _, item := range conditions {
 		condition, _ := item.(map[string]interface{})
 		if (condition["type"] == "ClusterReady" || condition["type"] == "Ready") && condition["status"] == "True" {
 			return true
 		}
+		if condition["type"] == "Bootstrapped" && condition["status"] == "True" {
+			bootstrapped = true
+		}
+		if condition["type"] == "ComponentsUpdated" && condition["status"] == "True" {
+			componentsUpdated = true
+		}
+		if condition["type"] == "Failed" && condition["status"] == "True" {
+			failed = true
+		}
 	}
-	return false
+	bindingName, _, _ := unstructured.NestedString(cluster.Object, "status", "binding", "name")
+	return bootstrapped && componentsUpdated && !failed && bindingName != ""
 }
 
 func setPostgresCondition(o *unstructured.Unstructured, conditionType, status, reason, message string) {

@@ -196,8 +196,13 @@ function postgresClusterProjection(item, provider) {
   const namespace = item?.metadata?.namespace || '';
   const name = item?.metadata?.name || '';
   const isStackGres = provider === 'stackgres';
+  const stackGresConditions = item?.status?.conditions || [];
   const ready = isStackGres
-    ? (item?.status?.conditions || []).some((condition) => ['ClusterReady', 'Ready'].includes(condition.type) && condition.status === 'True')
+    ? (stackGresConditions.some((condition) => ['ClusterReady', 'Ready'].includes(condition.type) && condition.status === 'True')
+      || (stackGresConditions.some((condition) => condition.type === 'Bootstrapped' && condition.status === 'True')
+        && stackGresConditions.some((condition) => condition.type === 'ComponentsUpdated' && condition.status === 'True')
+        && !stackGresConditions.some((condition) => condition.type === 'Failed' && condition.status === 'True')
+        && !!item?.status?.binding?.name))
     : Number(item?.status?.readyInstances || 0) === Number(item?.spec?.instances || 0) && Number(item?.spec?.instances || 0) > 0;
   return {
     id: provider + ':' + namespace + ':' + name, provider, namespace, name,
