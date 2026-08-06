@@ -133,6 +133,12 @@ test('PostgreSQL administration surface separates Data View from Query Tool and 
   assert.match(source, /Servers[\s\S]*Databases[\s\S]*Schemas/);
   assert.match(source, /aria-expanded/);
   assert.match(source, /groupKey\(db\.name,schema\.name,group\.label\)/);
+  assert.match(source, /\.pga-app\{[^}]*height:42rem;[^}]*overflow:hidden/);
+  assert.match(source, /\.pga-body\{[^}]*min-height:0;overflow:hidden/);
+  assert.match(source, /\.pga-tree\{min-height:0;overflow:auto/);
+  assert.match(source, /\.pga-workspace\{[^}]*min-height:0;overflow:hidden/);
+  assert.match(source, /<div class="pga-menu"><strong>pgAdmin<\/strong><\/div>/);
+  assert.doesNotMatch(source, /<span>File<\/span>|<span>Object<\/span>|<span>Tools<\/span>|<span>Help<\/span>/);
   assert.match(source, /activeTab\(\)==='data'[\s\S]*activeTab\(\)==='query'/);
   assert.match(service, /dataResult = signal<PgQueryResult \| null>/);
   assert.match(service, /queryResult = signal<PgQueryResult \| null>/);
@@ -163,7 +169,7 @@ test('PostgreSQL landing surface is namespace-first and exposes fleet as a secon
   assert.match(component, /이 Namespace에는 PostgreSQL이 없습니다/);
   assert.match(component, /\*ngIf="!fleet\.busy\(\) && !selectedContextCluster\(\)"[\s\S]*PostgreSQL 설치/);
   assert.match(component, /Secondary view[\s\S]*PFSS PostgreSQL Fleet/);
-  assert.match(component, /pgAdmin Tool/);
+  assert.match(component, /pgAdmin/);
   assert.doesNotMatch(component, /LegacyShared|CloudNativePG/);
   assert.match(component, /aria-label="Namespace 추가"[\s\S]*\(click\)="openNamespaceModal\(\)"[^>]*>추가<\/button>/);
   assert.match(component, /aria-label="PostgreSQL 컨텍스트 새로고침"/);
@@ -203,7 +209,7 @@ test('PostgreSQL keeps the complete provider-neutral operations menu', () => {
     ['topology', 'Topology'],
     ['config', 'Configuration'],
     ['databases', 'Databases & Roles'],
-    ['admin', 'pgAdmin Tool'],
+    ['admin', 'pgAdmin'],
     ['backups', 'Backups'],
     ['events', 'Events'],
     ['claims', 'Claims'],
@@ -217,7 +223,7 @@ test('PostgreSQL keeps the complete provider-neutral operations menu', () => {
     cursor = next;
   }
   assert.match(component, /tabs\.filter\(\(t\) => !t\.secondary\)/);
-  assert.match(component, /\{ id: 'admin', label: 'pgAdmin Tool', requiresCluster: true \}/);
+  assert.match(component, /\{ id: 'admin', label: 'pgAdmin', requiresCluster: true \}/);
   assert.doesNotMatch(component, /\{ id: 'admin'.*secondary: true/);
   assert.doesNotMatch(component, /legacyOnly/);
   assert.match(component, /tab\(\) === 'monitoring'/);

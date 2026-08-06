@@ -140,7 +140,7 @@ const DEFAULT_FORM: PgForm = {
           </article>
           <article class="pgp-panel">
             <h2>Operations policy</h2><p>생성 선언에 포함된 보호·접속·관측 정책입니다.</p>
-            <div class="pgp-policy-grid"><div><span>TLS</span><b class="ok">{{ providerName(selected) }} managed</b></div><div><span>Monitoring</span><b [class.ok]="pg.monitoringEnabled()">{{ pg.monitoringEnabled() ? 'Enabled' : 'Disabled' }}</b></div><div><span>Backup</span><b [class.ok]="pg.backupConfigured()">{{ pg.backupConfigured() ? 'Configured' : 'Not configured' }}</b></div><div><span>Access</span><b class="ok">Secret governed</b></div><div><span>Plan</span><b>{{ selected.plan || selected.mode }}</b></div><div><span>Database</span><button class="btn btn-sm btn-link" type="button" (click)="openSelectedAdmin()">pgAdmin Tool</button></div></div>
+            <div class="pgp-policy-grid"><div><span>TLS</span><b class="ok">{{ providerName(selected) }} managed</b></div><div><span>Monitoring</span><b [class.ok]="pg.monitoringEnabled()">{{ pg.monitoringEnabled() ? 'Enabled' : 'Disabled' }}</b></div><div><span>Backup</span><b [class.ok]="pg.backupConfigured()">{{ pg.backupConfigured() ? 'Configured' : 'Not configured' }}</b></div><div><span>Access</span><b class="ok">Secret governed</b></div><div><span>Plan</span><b>{{ selected.plan || selected.mode }}</b></div><div><span>Database</span><button class="btn btn-sm btn-link" type="button" (click)="openSelectedAdmin()">pgAdmin</button></div></div>
           </article>
         </section>
 
@@ -292,7 +292,7 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
     { id: 'topology', label: 'Topology', requiresCluster: true },
     { id: 'config', label: 'Configuration', requiresCluster: true },
     { id: 'databases', label: 'Databases & Roles', requiresCluster: true, badge: true },
-    { id: 'admin', label: 'pgAdmin Tool', requiresCluster: true },
+    { id: 'admin', label: 'pgAdmin', requiresCluster: true },
     { id: 'backups', label: 'Backups', requiresCluster: true, badge: true },
     { id: 'events', label: 'Events', requiresCluster: true, badge: true },
     { id: 'claims', label: 'Claims', requiresCluster: true },

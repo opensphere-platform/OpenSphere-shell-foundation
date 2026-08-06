@@ -41,7 +41,7 @@ Development 단일 인스턴스는 기능 검증용이다. 장애 내성이 필�
 
 - StackGres 전용 인스턴스: `<cluster>-binding` 또는 화면에 표시된 application Secret
 - 읽기/쓰기: `<cluster>.<namespace>.svc:5432`, 읽기 전용: `<cluster>-replicas.<namespace>.svc:5432`
-- Database Objects & Query: 선택한 StackGres 인스턴스에만 연결
+- pgAdmin: 선택한 StackGres 인스턴스와 데이터베이스의 객체만 표시
 - application owner: 필요한 database/schema 권한만 보유하고 superuser로 사용하지 않음
 
 Claims 조회·생성은 Main Shell의 인증된 host API 경로와 사용자 권한 정책을 통과해야 한다.
