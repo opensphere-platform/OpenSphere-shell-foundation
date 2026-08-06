@@ -12,7 +12,7 @@
 
 | Route | Package | Element | Install source |
 | --- | --- | --- | --- |
-| `/pfss/samba` | `samba-ad` | `osp-samba-ad` | `OpenSphere-plugin-samba-ad` |
+| `/pfss/directory` | `directory` | `osp-directory` | `OpenSphere-plugin-directory` |
 | `/pfss/opensearch` | `opensearch` | `osp-opensearch` | `OpenSphere-plugin-opensearch` |
 
 ## OpenSearch 0-Stage Flow

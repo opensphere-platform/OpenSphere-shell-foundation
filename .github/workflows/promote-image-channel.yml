@@ -239,7 +239,7 @@ jobs:
           done
 
           samba_image="$(jq -r '.components["samba-ad"].image' "$bom")"
-          test "$(crane digest "$REGISTRY/opensphere-plugin-samba-ad:$TARGET")" = "${samba_image##*@}"
+          test "$(crane digest "$REGISTRY/opensphere-plugin-directory:$TARGET")" = "${samba_image##*@}"
           jq --arg target "$TARGET" '.channel=$target | .operands |= with_entries(.value.channel=$target)' "$bom" \
             > "$RUNNER_TEMP/target-foundation-bom.json"
           echo "anchor-digest=$(jq -r '.components.shell.image | split("@")[1]' "$bom")" >> "$GITHUB_OUTPUT"

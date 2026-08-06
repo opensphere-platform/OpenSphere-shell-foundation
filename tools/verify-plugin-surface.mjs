@@ -4,10 +4,10 @@ import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
-const sambaRoot = process.env.SAMBA_PLUGIN_ROOT
-  ? resolve(root, process.env.SAMBA_PLUGIN_ROOT)
-  : resolve(root, '..', 'OpenSphere-plugin-samba-ad');
-const readSamba = (path) => readFileSync(resolve(sambaRoot, path), 'utf8');
+const directoryRoot = process.env.DIRECTORY_PLUGIN_ROOT || process.env.SAMBA_PLUGIN_ROOT
+  ? resolve(root, process.env.DIRECTORY_PLUGIN_ROOT || process.env.SAMBA_PLUGIN_ROOT)
+  : resolve(root, '..', 'OpenSphere-plugin-directory');
+const readDirectory = (path) => readFileSync(resolve(directoryRoot, path), 'utf8');
 
 // Compatibility SemVer is shared by the signed module sources. The official
 // image version is injected separately as a KST release tag at build time.
@@ -106,7 +106,7 @@ for (const file of [
 
 // Samba-AD는 Foundation 안층에 마운트되지만 독립 서명 plugin이므로 Angular 공통
 // component 대신 동일 CSS 계약과 동일한 capability tab 집합을 light DOM으로 구현한다.
-const samba = readSamba('ui-shell/ui-shell.plugin.js');
+const samba = readDirectory('ui-shell/ui-shell.plugin.js');
 assert.match(samba, /pgp-page-frame/, 'Samba-AD: PostgreSQL 공통 page frame 누락');
 assert.match(samba, /pfs-plugin-head/, 'Samba-AD: 공통 header 누락');
 assert.match(samba, /pfs-plugin-tabs/, 'Samba-AD: 공통 tabs 누락');
@@ -124,6 +124,8 @@ for (const id of registryIds) {
   assert.match(registry, new RegExp(`id: ['\"]${id}['\"]`), `registry plugin ${id} 누락`);
 }
 assert.equal((registry.match(/surface: PG_SURFACE/g) || []).length, registryIds.length, `registry plugin ${registryIds.length}종 모두 PostgreSQL surface 계약을 선언해야 합니다.`);
+assert.match(registry, /view: \{ module: 'directory' \}/, 'Directory Services 정식 route 누락');
+assert.match(registry, /activation: \{ packageId: 'directory', element: 'osp-directory' \}/, 'Directory Services package activation 계약 누락');
 
 // PFS 모듈 카탈로그는 목록 화면일 뿐 URL 부모가 아니다. 각 plugin은 PostgreSQL과
 // 동일하게 /pfss/<plugin>을 정식 주소로 소유한다.
@@ -186,6 +188,6 @@ for (const file of ['src/app/modules/data-engine/data-engine.spec.ts', 'src/app/
 }
 assert.match(read('src/app/api-base.ts'), /FND_NS = 'opensphere-foundation'/, 'Foundation API namespace 정본 누락');
 assert.match(read('src/app/modules/identity/identity.services.ts'), /readonly ns = FND_NS/, 'Identity member가 Foundation namespace 정본을 사용하지 않습니다.');
-assert.match(readSamba('server.js'), /FOUNDATION_NS \|\| 'opensphere-foundation'/, 'Samba-AD operand namespace가 Foundation에 수렴하지 않았습니다.');
+assert.match(readDirectory('server.js'), /FOUNDATION_NS \|\| 'opensphere-foundation'/, 'Samba-AD operand namespace가 Foundation에 수렴하지 않았습니다.');
 
 console.log(`Foundation PostgreSQL-level surface contract: passed (${surfaces.length + 1} implementations, ${manualCount} manuals)`);

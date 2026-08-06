@@ -3,8 +3,8 @@ import { Injectable, signal } from '@angular/core';
 // Foundation 딥링크 — 플랫폼 표준(shell-template 원본)과 동일: **경로 세그먼트 + pushState/popstate**.
 // 콘솔 host matcher가 PFSS 정본 `/pfss/*`를 Foundation에 위임하므로, 경로가 바뀌어도
 // id(foundation)가 그대로면 재마운트되지 않는다. 주소 형태:
-//   · 모듈:      /pfss/<module>            (예: /pfss/addc)
-//   · 모듈+탭:   /pfss/<module>/<tab>       (예: /pfss/addc/operator)
+//   · 모듈:      /pfss/<module>            (예: /pfss/directory)
+//   · 모듈+탭:   /pfss/<module>/<tab>       (예: /pfss/directory/operator)
 //   · overview:  /pfss/foundation          (fragment 없음)
 // (구 `?fview=<module>.<tab>` 쿼리 방식 폐기 — D-14. select()/syncUrl() 한 곳만 URL을 건드린다.)
 @Injectable({ providedIn: 'root' })
@@ -65,7 +65,7 @@ export class ViewRouter {
     try {
       const m = this.module();
       const hasTabs = [
-        'postgres', 'psmdb', 'valkey', 'rustfs', 'opensearch', 'keycloak', 'addc',
+        'postgres', 'psmdb', 'valkey', 'rustfs', 'opensearch', 'keycloak', 'directory',
         'syncope', 'opa', 'litellm', 'langfuse', 'stalwart', 'novu', 'mattermost',
         'otel', 'tempo', 'loki', 'grafana-operator', 'ptm', 'delivery',
       ].includes(m);

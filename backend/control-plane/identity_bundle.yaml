@@ -2,7 +2,7 @@
 # D-3: Keycloak(start-dev, H2) operand. ★2026-07-23 핸드오프: workforce realm 정의는 이 번들이 소유하지 않는다 —
 #   P3 identity operator 소유 CM `keycloak-realm-import`(ns opensphere-foundation)를 --import-realm 으로 마운트만 한다
 #   (인라인 realm CM 폐기, 아래 volumes). 소유권: control-plane=Keycloak operand / P3=realm config·Syncope·IGA.
-# 2026-07-06 self-contained: Samba-AD operand 선언은 이 번들에서 제거됨 — plugin(OpenSphere-plugin-samba-ad)이
+# 2026-07-06 self-contained: Samba-AD operand 선언은 이 번들에서 제거됨 — plugin(OpenSphere-plugin-directory)이
 #   소유하고 GET /operand/manifests로 내민다. control-plane은 engines.samba=enabled면 그 선언을 fetch해
 #   라벨 스탬프 후 SSA apply(buildIdentityBundle). 이 파일엔 keycloak operand만 남는다.
 #   엔진별 설치옵션: FoundationModel.spec.parameters.engines.{keycloak|samba} = enabled|disabled.

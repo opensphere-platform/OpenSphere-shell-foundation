@@ -68,9 +68,9 @@ export const FOUNDATION_PLUGINS: HostedPlugin[] = [
     capability: 'identity.directory.ad', capabilityLabel: '디렉터리 (AD/LDAP)',
     desc: '고객 선택형 Directory authority · OpenSphere 관리형 Samba-AD 또는 기존 Windows AD/Samba AD/LDAP 연결. 공급자별 권위 범위와 쓰기 권한을 분리.',
     consumePoint: 'foundation-identity-samba.opensphere-foundation.svc:389',
-    healthRef: 'samba', model: 'identity', view: { module: 'addc' },
+    healthRef: 'samba', model: 'identity', view: { module: 'directory' },
     surface: PG_SURFACE,
-    activation: { packageId: 'samba-ad', element: 'osp-samba-ad' },
+    activation: { packageId: 'directory', element: 'osp-directory' },
   },
   {
     id: 'syncope', name: 'Apache Syncope', icon: 'users', kind: 'plugin', hostRef: 'foundation',

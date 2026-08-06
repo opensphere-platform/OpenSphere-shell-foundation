@@ -255,7 +255,7 @@ func engineEnabled(fm *unstructured.Unstructured, engine string) bool {
 
 // buildIdentityBundle — keycloak operand(임베드 yaml) + samba operand(plugin이 소유·제공).
 // self-contained(2026-07-06): samba 선언은 이 번들에 없다 — engines.samba=enabled면 plugin
-// (OpenSphere-plugin-samba-ad) GET /operand/manifests로 받아 라벨 스탬프 후 SSA 대상에 합류시킨다.
+// (OpenSphere-plugin-directory) GET /operand/manifests로 받아 라벨 스탬프 후 SSA 대상에 합류시킨다.
 // "control-plane은 plugin이 내민 선언을 apply만" 원칙. 회수(withdraw)는 라벨 기반이라 소유 이전 후에도 동일.
 func buildIdentityBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructured.Unstructured, error) {
 	objs, err := buildBundle(identityBundleYAML, cfg.managedNS, cfg.keycloakImage, "identity", fm.GetName())

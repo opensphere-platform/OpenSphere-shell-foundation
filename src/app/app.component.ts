@@ -66,7 +66,7 @@ const CATALOG_MODULES = new Set([
     .os-shell { display: grid; grid-template-columns: 12rem minmax(0, 1fr); min-height: 100%; }
 
     /* 2단 표준(.cm-nav) — AI Hub / shell-template 정본. 흰 배경 + 왼쪽 blue bar active. */
-    .cm-nav { min-height: 100vh; background: #fff; --clr-vertical-nav-bg-color: #ffffff; }
+    .cm-nav { min-height: 100%; background: #fff; --clr-vertical-nav-bg-color: #ffffff; }
     .cm-nav .clr-vertical-nav, .cm-nav .nav-content { background: #fff; }
     .cm-nav .nav-group, .cm-nav .nav-group-content, .cm-nav .nav-group-children { background: transparent; }
     .cm-nav a[clrVerticalNavLink], .cm-nav .nav-link, .cm-nav .nav-trigger { color: #525252; font-size: 0.8rem; }
@@ -79,7 +79,9 @@ const CATALOG_MODULES = new Set([
     .cm-brand strong { font-size: 0.875rem; font-weight: 600; color: #161616; }
     .cm-roadmap-tag { font-size: 0.68rem; color: #8c8c8c; font-weight: 400; margin-left: 4px; }
 
-    .os-content { min-width: 0; min-height: 100vh; overflow: auto; padding: 1.1rem 1.4rem 2rem; background: var(--os-overview-bg, #f4f4f4); }
+    /* Main Shell의 content-area가 유일한 page scroll owner다. Guest가 viewport 높이와
+       overflow를 다시 소유하면 문서/guest 이중 스크롤이 생긴다. */
+    .os-content { min-width: 0; min-height: 0; overflow: visible; padding: 1.1rem 1.4rem 2rem; background: var(--os-overview-bg, #f4f4f4); }
     .os-tree-ic { width: 16px; height: 16px; fill: currentColor; }
 
     /* 페이지 경로 — AI Hub 표준: 상단 회색 박스 바(좌우 풀폭). */
@@ -302,9 +304,9 @@ export class AppComponent implements OnInit, OnDestroy {
     return p ? p.name : id;
   }
 
-  /** Package/engine identity는 samba로 유지하되 사용자 주소 공간은 AD DC 의미의 addc를 사용한다. */
-  routeId(pluginId: string): string { return pluginId === 'samba' ? 'addc' : pluginId; }
-  private pluginId(routeId: string): string { return routeId === 'addc' ? 'samba' : routeId; }
+  /** Foundation engine identity는 samba로 유지하되 사용자 주소 공간은 공급자 중립적인 directory를 사용한다. */
+  routeId(pluginId: string): string { return pluginId === 'samba' ? 'directory' : pluginId; }
+  private pluginId(routeId: string): string { return routeId === 'directory' ? 'samba' : routeId; }
 
   /** 그룹 라벨(모듈이 어느 capability 그룹인지) — breadcrumb 3단용. */
   private groupLabel(id: string): string | null {

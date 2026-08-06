@@ -1,7 +1,7 @@
-# OpenSphere Samba AD DC 플러그인 설치 및 운영 안내서
+# OpenSphere Directory Services 설치 및 운영 안내서
 
 ## 1. 역할
-workforce 디렉터리의 AD/LDAP capability입니다. package ID는 `samba-ad`, 사용자 경로는 `/pfss/addc`입니다.
+고객이 OpenSphere 관리형 Samba-AD 또는 기존 Windows AD·LDAP 공급자를 선택하는 디렉터리 capability입니다. package ID는 `directory`, 사용자 경로는 `/pfss/directory`입니다.
 
 ## 2. 설치 순서
 Kubernetes DNS·시간 동기화·영구 스토리지와 Foundation Control Plane을 확인하고 realm, domain, DNS forwarder, StorageClass와 자격 Secret을 설정합니다.

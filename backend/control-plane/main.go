@@ -83,7 +83,7 @@ func main() {
 	flag.StringVar(&cfg.keycloakImage, "keycloak-image", "ghcr.io/opensphere-platform/mirror/keycloak:26.0", "identity Keycloak operand 이미지(GHCR 미러, origin=quay.io/keycloak/keycloak:26.0)")
 	flag.StringVar(&cfg.keycloakPgImage, "keycloak-pg-image", "", "(compatibility) 이전 Keycloak PostgreSQL image 인자를 수용합니다")
 	flag.StringVar(&cfg.sambaImage, "samba-image", "ghcr.io/opensphere-platform/mirror/samba-domain:20260701025204", "(deprecated) samba operand는 plugin이 소유·렌더 — 이 플래그는 미사용(arg 호환)")
-	flag.StringVar(&cfg.sambaPluginSvc, "samba-plugin-svc", "samba-ad.opensphere-console.svc:8080", "samba operand 선언 제공 plugin svc(self-contained, GET /operand/manifests)")
+	flag.StringVar(&cfg.sambaPluginSvc, "samba-plugin-svc", "directory.opensphere-console.svc:8080", "directory plugin이 제공하는 Samba operand 선언 서비스(self-contained, GET /operand/manifests)")
 	flag.StringVar(&cfg.pgImage, "pg-image", "ghcr.io/opensphere-platform/mirror/postgresql:19beta2-standard-trixie", "data PostgreSQL 19 beta operand 이미지(CloudNativePG Cluster) — image-source: OpenSphere curated GHCR mirror")
 	flag.StringVar(&cfg.pgbouncerImage, "pgbouncer-image", "", "(compatibility) 이전 PgBouncer image 인자를 수용합니다")
 	flag.StringVar(&cfg.psmdbImage, "psmdb-image", "ghcr.io/opensphere-platform/mirror/percona-server-mongodb:8.0", "data PSMDB operand image(GHCR mirror)")

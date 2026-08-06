@@ -15,7 +15,7 @@ const FOUNDATION_MANUALS = [
   ['opensearch-operations-ko', 'OpenSphere OpenSearch 플러그인 설치 및 운영 안내서', 'opensearch-operations.ko.md', '/pfss/opensearch', ['opensearch', 'search', 'vector', 'data']],
   ['rustfs-operations-ko', 'OpenSphere RustFS 플러그인 설치 및 운영 안내서', 'rustfs-operations.ko.md', '/pfss/rustfs', ['rustfs', 's3', 'object-storage', 'data']],
   ['keycloak-operations-ko', 'OpenSphere Keycloak 플러그인 설치 및 운영 안내서', 'keycloak-operations.ko.md', '/pfss/keycloak', ['keycloak', 'oidc', 'identity']],
-  ['samba-addc-operations-ko', 'OpenSphere Samba AD DC 플러그인 설치 및 운영 안내서', 'samba-addc-operations.ko.md', '/pfss/addc', ['samba', 'ad-dc', 'ldap', 'identity']],
+  ['directory-operations-ko', 'OpenSphere Directory Services 설치 및 운영 안내서', 'directory-operations.ko.md', '/pfss/directory', ['directory', 'samba', 'windows-ad', 'ldap', 'identity']],
   ['syncope-operations-ko', 'OpenSphere Apache Syncope 플러그인 계획 및 운영 안내서', 'syncope-operations.ko.md', '/pfss/syncope', ['syncope', 'iga', 'scim', 'identity']],
   ['opa-operations-ko', 'OpenSphere OPA 플러그인 계획 및 운영 안내서', 'opa-operations.ko.md', '/pfss/opa', ['opa', 'policy', 'authorization']],
   ['litellm-operations-ko', 'OpenSphere LiteLLM 플러그인 계획 및 운영 안내서', 'litellm-operations.ko.md', '/pfss/litellm', ['litellm', 'llm', 'ai']],
