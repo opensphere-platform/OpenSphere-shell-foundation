@@ -179,6 +179,40 @@ test('PostgreSQL landing surface is namespace-first and exposes fleet as a secon
   assert.match(app, /if \(id === 'postgres'\) return undefined/);
 });
 
+test('PostgreSQL keeps the complete provider-neutral operations menu', () => {
+  const component = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/postgres-plugin.component.ts'), 'utf8');
+  const expectedTabs = [
+    ['overview', 'Overview'],
+    ['monitoring', 'Monitoring'],
+    ['operator', 'Operator'],
+    ['cluster', 'Cluster plan'],
+    ['topology', 'Topology'],
+    ['config', 'Configuration'],
+    ['admin', 'Database Objects'],
+    ['backups', 'Backups'],
+    ['events', 'Events'],
+    ['claims', 'Claims'],
+    ['upgrade', 'Upgrade'],
+    ['documentation', 'Documentation'],
+  ];
+  let cursor = -1;
+  for (const [id, label] of expectedTabs) {
+    const next = component.indexOf(`{ id: '${id}', label: '${label}'`, cursor + 1);
+    assert.ok(next > cursor, `${label} should remain in the canonical menu order`);
+    cursor = next;
+  }
+  assert.match(component, /tabs\.filter\(\(t\) => !t\.secondary\)/);
+  assert.doesNotMatch(component, /legacyOnly/);
+  assert.match(component, /tab\(\) === 'monitoring'/);
+  assert.match(component, /tab\(\) === 'operator' && !selectedIsLegacy\(\)/);
+  assert.match(component, /tab\(\) === 'cluster' && !selectedIsLegacy\(\)/);
+  assert.match(component, /tab\(\) === 'topology' && !selectedIsLegacy\(\)/);
+  assert.match(component, /tab\(\) === 'config' && !selectedIsLegacy\(\)/);
+  assert.match(component, /tab\(\) === 'backups' && !selectedIsLegacy\(\)/);
+  assert.match(component, /tab\(\) === 'events' && !selectedIsLegacy\(\)/);
+  assert.match(component, /tab\(\) === 'claims' && !selectedIsLegacy\(\)/);
+});
+
 test('PostgreSQL Cluster plan offers an explicit compact two-instance profile', () => {
   const source = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/postgres-plugin.component.ts'), 'utf8');
   assert.match(source, /Compact HA · 2 instances/);
