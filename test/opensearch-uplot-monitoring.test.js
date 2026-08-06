@@ -47,6 +47,18 @@ test('background refresh preserves the current chart state and last-known data',
   assert.match(chart, /if \(retainedRange\) this\.setTimeRange/);
 });
 
+test('five-minute samples append on the right while settled history stays immutable', () => {
+  const metrics = read('src/app/modules/opensearch/os-metrics.service.ts');
+  assert.match(metrics, /const STEP_SECONDS = 300/);
+  assert.match(metrics, /Math\.floor\(Date\.now\(\) \/ 1000 \/ STEP_SECONDS\) \* STEP_SECONDS/);
+  assert.match(metrics, /mergeSeries\(this\.series\(\), incomingSeries, end\)/);
+  assert.match(metrics, /mergeNodeSeries\(this\.nodeSeries\(\), incomingNodeSeries, end\)/);
+  assert.match(metrics, /time < latestPrevious && oldValues\.has\(time\)/);
+  assert.match(metrics, /incoming\.filter\(\(time\) => time >= cutoff && time >= latestPrevious\)/);
+  assert.match(metrics, /previous\.filter\(\(time\) => time >= cutoff\)/);
+  assert.doesNotMatch(metrics, /const end = Math\.floor\(Date\.now\(\) \/ 1000\);/);
+});
+
 test('Foundation delegates page scrolling to Main Shell and charts zoom the time axis', () => {
   const app = read('src/app/app.component.ts');
   const plugin = read('src/app/modules/data-engine/data-engine-plugin.component.ts');

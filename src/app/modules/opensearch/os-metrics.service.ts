@@ -35,6 +35,8 @@ export interface OsNodeMetricSeries {
 }
 
 const EMPTY: OsMetricSeries = { timestamps: [], labels: [], heap: [], cpu: [], diskAvailable: [], documents: [], storeBytes: [], rejected: [] };
+const STEP_SECONDS = 300;
+const RETENTION_SECONDS = 3600;
 
 @Injectable({ providedIn: 'root' })
 export class OsMetricsService {
@@ -112,8 +114,11 @@ export class OsMetricsService {
   }
 
   private async loadSeries(): Promise<void> {
-    const end = Math.floor(Date.now() / 1000);
-    const start = end - 3600;
+    // Prometheus evaluation timestamps must stay on fixed five-minute slots.
+    // A moving wall-clock start/end shifts every historical x coordinate and makes
+    // the graph look as if it was rebuilt on each refresh.
+    const end = Math.floor(Date.now() / 1000 / STEP_SECONDS) * STEP_SECONDS;
+    const start = end - RETENTION_SECONDS;
     const match = '{cluster="opensphere-search"}';
     if (!this.series().timestamps.length) this.state.set('loading');
     try {
@@ -135,20 +140,25 @@ export class OsMetricsService {
       const storeBytes = storeSet[0]?.values ?? [];
       const rejected = rejectedSet[0]?.values ?? [];
       const timestamps = this.timestamps(heap, cpu, diskAvailable, documents, storeBytes, rejected);
-      const nodeSeries = this.buildNodeSeries(nodeHeapSet, nodeCpuSet, nodeDiskSet);
-      if (!timestamps.length && !nodeSeries.some((node) => node.timestamps.length)) {
-        this.series.set(EMPTY);
-        this.nodeSeries.set(nodeSeries);
-        this.state.set('empty');
-        this.hint.set('OpenSearch ServiceMonitor는 선언됐지만 시계열이 없습니다. Prometheus target과 플러그인 /metrics를 확인하세요.');
-        return;
-      }
-      this.series.set({
+      const incomingNodeSeries = this.buildNodeSeries(nodeHeapSet, nodeCpuSet, nodeDiskSet);
+      const incomingSeries: OsMetricSeries = {
         timestamps,
         labels: this.labels(timestamps),
         heap: this.align(timestamps, heap), cpu: this.align(timestamps, cpu), diskAvailable: this.align(timestamps, diskAvailable),
         documents: this.align(timestamps, documents), storeBytes: this.align(timestamps, storeBytes), rejected: this.align(timestamps, rejected),
-      });
+      };
+      const mergedSeries = this.mergeSeries(this.series(), incomingSeries, end);
+      const nodeSeries = this.mergeNodeSeries(this.nodeSeries(), incomingNodeSeries, end);
+      if (!timestamps.length && !nodeSeries.some((node) => node.timestamps.length)) {
+        if (!this.series().timestamps.length) this.series.set(EMPTY);
+        this.nodeSeries.set(nodeSeries);
+        this.state.set(this.series().timestamps.length ? 'ok' : 'empty');
+        this.hint.set(this.series().timestamps.length
+          ? 'Prometheus에 새 5분 구간이 없어 기존 시계열을 유지합니다.'
+          : 'OpenSearch ServiceMonitor는 선언됐지만 시계열이 없습니다. Prometheus target과 플러그인 /metrics를 확인하세요.');
+        return;
+      }
+      this.series.set(mergedSeries);
       this.nodeSeries.set(nodeSeries);
       this.state.set('ok');
       this.hint.set(`OpenSearch exporter · Prometheus · 최근 1시간 · 5분 간격 · 구성 ${nodeSeries.filter((node) => node.configured).length} · 합류 ${nodeSeries.filter((node) => node.joined).length} · metrics ${nodeSeries.filter((node) => node.metricsObserved).length}`);
@@ -167,7 +177,7 @@ export class OsMetricsService {
   }
 
   private async range(expression: string, start: number, end: number): Promise<PrometheusSeries[]> {
-    const query = new URLSearchParams({ query: expression, start: String(start), end: String(end), step: '300' });
+    const query = new URLSearchParams({ query: expression, start: String(start), end: String(end), step: String(STEP_SECONDS) });
     const response = await hostFetch(this.prom(`api/v1/query_range?${query.toString()}`), { cache: 'no-store' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const body = await response.json();
@@ -211,6 +221,67 @@ export class OsMetricsService {
         cpu: this.align(timestamps, cpu),
         diskAvailable: this.align(timestamps, diskAvailable),
       };
+    });
+  }
+
+  /**
+   * Append-only time window: settled historical points never change. Only the
+   * newest slot may be refined until a later five-minute slot arrives; then the
+   * oldest slot falls off the left edge once it exceeds retention.
+   */
+  private mergeSeries(previous: OsMetricSeries, incoming: OsMetricSeries, end: number): OsMetricSeries {
+    const cutoff = end - RETENTION_SECONDS;
+    const timestamps = this.mergeTimestamps(previous.timestamps, incoming.timestamps, cutoff);
+    return {
+      timestamps,
+      labels: this.labels(timestamps),
+      heap: this.mergeValues(previous.timestamps, previous.heap, incoming.timestamps, incoming.heap, timestamps),
+      cpu: this.mergeValues(previous.timestamps, previous.cpu, incoming.timestamps, incoming.cpu, timestamps),
+      diskAvailable: this.mergeValues(previous.timestamps, previous.diskAvailable, incoming.timestamps, incoming.diskAvailable, timestamps),
+      documents: this.mergeValues(previous.timestamps, previous.documents, incoming.timestamps, incoming.documents, timestamps),
+      storeBytes: this.mergeValues(previous.timestamps, previous.storeBytes, incoming.timestamps, incoming.storeBytes, timestamps),
+      rejected: this.mergeValues(previous.timestamps, previous.rejected, incoming.timestamps, incoming.rejected, timestamps),
+    };
+  }
+
+  private mergeNodeSeries(previous: OsNodeMetricSeries[], incoming: OsNodeMetricSeries[], end: number): OsNodeMetricSeries[] {
+    const cutoff = end - RETENTION_SECONDS;
+    const previousByNode = new Map(previous.map((node) => [node.node, node]));
+    return incoming.map((node) => {
+      const old = previousByNode.get(node.node);
+      if (!old) return node;
+      const timestamps = this.mergeTimestamps(old.timestamps, node.timestamps, cutoff);
+      return {
+        ...node,
+        timestamps,
+        labels: this.labels(timestamps),
+        heap: this.mergeValues(old.timestamps, old.heap, node.timestamps, node.heap, timestamps),
+        cpu: this.mergeValues(old.timestamps, old.cpu, node.timestamps, node.cpu, timestamps),
+        diskAvailable: this.mergeValues(old.timestamps, old.diskAvailable, node.timestamps, node.diskAvailable, timestamps),
+      };
+    });
+  }
+
+  private mergeTimestamps(previous: number[], incoming: number[], cutoff: number): number[] {
+    const latestPrevious = previous[previous.length - 1] ?? Number.NEGATIVE_INFINITY;
+    return [...new Set([
+      ...previous.filter((time) => time >= cutoff),
+      ...incoming.filter((time) => time >= cutoff && time >= latestPrevious),
+    ])].sort((a, b) => a - b);
+  }
+
+  private mergeValues(
+    previousTimestamps: number[], previousValues: (number | null)[],
+    incomingTimestamps: number[], incomingValues: (number | null)[],
+    timestamps: number[],
+  ): (number | null)[] {
+    const latestPrevious = previousTimestamps[previousTimestamps.length - 1] ?? Number.NEGATIVE_INFINITY;
+    const oldValues = new Map(previousTimestamps.map((time, index) => [time, previousValues[index] ?? null]));
+    const newValues = new Map(incomingTimestamps.map((time, index) => [time, incomingValues[index] ?? null]));
+    return timestamps.map((time) => {
+      if (time < latestPrevious && oldValues.has(time)) return oldValues.get(time) ?? null;
+      const next = newValues.get(time);
+      return next !== null && next !== undefined ? next : (oldValues.get(time) ?? null);
     });
   }
 
