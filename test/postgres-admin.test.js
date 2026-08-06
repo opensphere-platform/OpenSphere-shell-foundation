@@ -172,7 +172,8 @@ test('PostgreSQL landing surface is namespace-first and exposes fleet as a secon
   assert.match(component, /namespaceClusters = computed/);
   assert.match(component, /compactLifecycle\(cluster\.phase, cluster\.ready\)/);
   assert.match(component, /compactPostgresVersion\(cluster\?\.postgresVersion \|\| ''\)/);
-  assert.match(overview, /\[value\]="compactPhase\(\)"/);
+  assert.doesNotMatch(overview, /<pg-metric/);
+  assert.match(overview, /@Input\(\) part: 'monitoring' \| 'details'/);
   assert.match(css, /\.pgp-page-frame \.pfs-plugin-release dd \{[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/);
   assert.match(fleet, /provisioning\.opensphere\.io\/v1beta1/);
   assert.match(fleet, /PostgresClaim/);
@@ -227,6 +228,15 @@ test('PostgreSQL restores the detailed Overview and Prometheus monitoring worksp
   const service = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/cnpg.service.ts'), 'utf8');
   for (const marker of ['pgp-steps', 'Package readiness', 'Cluster health', 'Operations policy', 'pgp-description', '<pg-overview']) assert.match(component, new RegExp(marker));
   for (const marker of ['LIVE MONITORING', 'Persistent volumes', 'writeService', 'readService', 'conditions']) assert.match(overview, new RegExp(marker));
+  assert.match(overview, /@Input\(\) part: 'monitoring' \| 'details'/);
+  assert.match(overview, /\*ngIf="part === 'monitoring'"/);
+  assert.match(overview, /\*ngIf="part === 'details'"/);
+  const monitoringPosition = component.indexOf('<pg-overview part="monitoring"');
+  const dashboardPosition = component.indexOf('<section class="pgp-dashboard">');
+  const detailsPosition = component.indexOf('<pg-overview part="details"');
+  const descriptionPosition = component.indexOf('<section class="pgp-description">');
+  assert.ok(monitoringPosition > -1 && monitoringPosition < dashboardPosition);
+  assert.ok(dashboardPosition < detailsPosition && detailsPosition < descriptionPosition);
   for (const marker of ['OPERATIONS · PROMETHEUS', '활성 연결', 'WAL 생성량', '복제 지연', 'CPU 사용량', '메모리 사용량']) assert.match(monitoring, new RegExp(marker));
   assert.match(service, /selectTarget\(provider: 'cloudnativepg' \| 'stackgres'/);
   assert.match(service, /stackgres\.io\/cluster-name/);

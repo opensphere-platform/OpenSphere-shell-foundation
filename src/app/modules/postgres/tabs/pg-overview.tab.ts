@@ -1,8 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Output, computed, inject } from '@angular/core';
+import { Component, EventEmitter, Input, Output, computed, inject } from '@angular/core';
 import { CnpgService } from '../cnpg.service';
 import { TlItem } from '../cnpg.types';
-import { PgMetric } from '../ui/pg-metric';
 import { PgTimeline } from '../ui/pg-timeline';
 import { PgState } from '../ui/pg-state';
 import { PgChart, PgChartSeries } from '../ui/pg-chart';
@@ -10,17 +9,9 @@ import { PgChart, PgChartSeries } from '../ui/pg-chart';
 @Component({
   selector: 'pg-overview',
   standalone: true,
-  imports: [CommonModule, PgMetric, PgTimeline, PgState, PgChart],
+  imports: [CommonModule, PgTimeline, PgState, PgChart],
   template: `
-    <div class="os-metrics">
-      <pg-metric label="상태" [value]="compactPhase()" [status]="svc.phaseCls()" [sub]="svc.lastSync() ? '동기화 ' + svc.lastSync() : ''"></pg-metric>
-      <pg-metric label="인스턴스" [value]="svc.readyN() + ' / ' + svc.totalN()" [status]="svc.allReady() ? 'ok' : 'warn'" sub="ready" [clickable]="true" (go)="jump.emit('topology')"></pg-metric>
-      <pg-metric label="Primary" [value]="primaryShort()" [status]="svc.primary() ? 'ok' : ''" [sub]="svc.primary() ? 'rw 라우팅' : '미상'" [clickable]="true" (go)="jump.emit('topology')"></pg-metric>
-      <pg-metric label="PostgreSQL" [value]="'v' + svc.pgMajor()" [sub]="imageShort()"></pg-metric>
-      <pg-metric label="Storage" [value]="svc.storage()" [sub]="svc.storageClass()" [clickable]="true" (go)="jump.emit('config')"></pg-metric>
-    </div>
-
-    <section class="pg-live" aria-labelledby="pg-live-title">
+    <section class="pg-live" *ngIf="part === 'monitoring'" aria-labelledby="pg-live-title">
       <header class="pg-live-head">
         <div>
           <span class="pg-live-eyebrow">LIVE MONITORING</span>
@@ -73,6 +64,7 @@ import { PgChart, PgChartSeries } from '../ui/pg-chart';
       <p class="pg-live-note"><b>수집:</b> 15초 자동 갱신 · {{ providerLabel() }} exporter · Prometheus query_range(60초 간격). 메트릭 부재를 정상값 0으로 표시하지 않습니다.</p>
     </section>
 
+    <ng-container *ngIf="part === 'details'">
     <section class="pg-storage" aria-labelledby="pg-storage-title">
       <div class="os-sech" id="pg-storage-title">Persistent volumes</div>
       <table class="table" *ngIf="svc.pvcRows().length; else noPvcs">
@@ -82,13 +74,13 @@ import { PgChart, PgChartSeries } from '../ui/pg-chart';
       <ng-template #noPvcs><p class="pg-live-empty pg-live-empty--compact">PostgreSQL 데이터 PVC가 아직 발견되지 않았습니다.</p></ng-template>
     </section>
 
-    <div class="os-cardgrid">
+    <div class="os-cardgrid pg-overview-details">
       <div class="card">
         <div class="card-header">클러스터 · {{ svc.name }}</div>
         <div class="card-block">
           <dl class="os-kv">
             <dt>네임스페이스</dt><dd class="os-mono">{{ svc.ns }}</dd>
-            <dt>이미지</dt><dd class="os-mono">{{ svc.image() || '—' }}</dd>
+            <dt>이미지</dt><dd><strong>PostgreSQL {{ svc.pgMajor() }}</strong><details class="pg-image-evidence"><summary>이미지 근거</summary><code>{{ svc.image() || '—' }}</code></details></dd>
             <dt>프로파일</dt><dd>{{ svc.instanceProfile() }} (cpu/mem)</dd>
             <dt>관리 role</dt><dd>{{ svc.managedRoles().length }}</dd>
           </dl>
@@ -111,16 +103,19 @@ import { PgChart, PgChartSeries } from '../ui/pg-chart';
     <pg-state [state]="condState()" hint="조건 보고 없음" sub="클러스터가 막 생성되었거나 status를 아직 보고하지 않습니다." (retry)="svc.refresh()">
       <pg-timeline [items]="condItems()"></pg-timeline>
     </pg-state>
+    </ng-container>
   `,
   styles: [`
     .pg-live { margin: 1.1rem 0 1.25rem; }
-    .pg-live-head { display: flex; justify-content: space-between; align-items: end; gap: 1rem; margin-bottom: .55rem; }
-    .pg-live-eyebrow { display: block; color: #4c6fff; font-size: .58rem; font-weight: 700; letter-spacing: .08em; }
-    .pg-live-head h2 { margin: .12rem 0 0; color: #1b2a32; font-size: 1rem; font-weight: 600; }
-    .pg-live-head p { margin: .18rem 0 0; color: #5b6971; font-size: .67rem; }
-    .pg-live-sync { display: grid; grid-template-columns: auto auto auto; align-items: center; gap: .2rem .55rem; text-align: right; color: #a32100; font-size: .62rem; }
-    .pg-live-sync small { color: #5b6971; }
+    .pg-live-head { display: flex; min-height: 5.25rem; box-sizing: border-box; justify-content: space-between; align-items: center; gap: 1.25rem; margin-bottom: .55rem; padding: .9rem 1rem; background: #102a43; }
+    .pg-live-head > div:first-child { display: grid; min-width: 0; align-content: center; gap: .2rem; }
+    .pg-live-eyebrow { display: block; color: #78a9ff; font-size: .58rem; font-weight: 700; line-height: 1.2; letter-spacing: .08em; }
+    .pg-live-head h2 { margin: 0; color: #fff; font-size: .88rem; font-weight: 600; line-height: 1.25; }
+    .pg-live-head p { margin: 0; color: #d9e2ec; font-size: .64rem; line-height: 1.45; }
+    .pg-live-sync { display: grid; grid-template-columns: auto auto auto; align-items: center; gap: .2rem .55rem; text-align: right; color: #ffb3a7; font-size: .62rem; }
+    .pg-live-sync small { color: #d9e2ec; }
     .pg-live-sync .btn { grid-row: 1 / span 2; grid-column: 3; margin: 0; }
+    .pg-live-sync .pg-live-ok { color: #7ee2b8 !important; }
     .pg-live-ok { color: #2f8400 !important; }
     .pg-live-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
     .pg-live-card { min-width: 0; margin: 0; border-radius: 0; box-shadow: 0 2px 0 #d7dcdf; }
@@ -133,19 +128,31 @@ import { PgChart, PgChartSeries } from '../ui/pg-chart';
     .pg-live-state { max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pg-live-empty { display: grid; min-height: 12rem; place-content: center; padding: 1rem; text-align: center; color: #5b6971; background: #f7f8f9; font-size: .65rem; }
     .pg-live-empty--metrics { gap: .3rem; }
+    .pg-live-empty--compact { min-height: 5rem; margin: 0; }
     .pg-live-empty--metrics b { color: #394b54; font-size: .72rem; }
     .pg-live-note { margin: .55rem 0 0; color: #5b6971; font-size: .6rem; }
-    @media (max-width: 1050px) { .pg-live-grid { grid-template-columns: 1fr; } .pg-live-card .card-block { min-height: 17rem; } }
+    .pg-storage { margin: 1rem 0; }
+    .pg-overview-details { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; align-items: stretch; }
+    .pg-overview-details > .card { min-width: 0; width: 100%; margin: 0; }
+    .pg-overview-details .card-header { min-height: 2.5rem; padding: .6rem .8rem; border-bottom: 1px solid #d7dcdf; font-size: .76rem; font-weight: 600; line-height: 1.35; }
+    .pg-overview-details .card-block { min-height: 8.75rem; padding: .65rem .8rem; }
+    .pg-overview-details .os-kv { grid-template-columns: 6.5rem minmax(0, 1fr); gap: .3rem .75rem; font-size: .68rem; line-height: 1.45; }
+    .pg-overview-details .os-kv dd { min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+    .pg-overview-details .os-sub { margin: .55rem 0 0; font-size: .61rem; line-height: 1.45; }
+    .pg-image-evidence { margin-top: .3rem; }
+    .pg-image-evidence summary { cursor: pointer; color: #0067a0; font-size: .62rem; }
+    .pg-image-evidence code { display: block; margin-top: .25rem; overflow-wrap: anywhere; color: #5b6971; font-size: .58rem; line-height: 1.45; }
+    @media (max-width: 1050px) { .pg-live-grid, .pg-overview-details { grid-template-columns: 1fr; } .pg-live-card .card-block { min-height: 17rem; } }
     @media (max-width: 680px) { .pg-live-head { align-items: start; flex-direction: column; } .pg-live-sync { text-align: left; } }
   `],
 })
 export class PgOverviewTab {
   readonly svc = inject(CnpgService);
+  @Input() part: 'monitoring' | 'details' = 'monitoring';
   @Output() jump = new EventEmitter<string>();
 
   primaryShort(): string { const p = this.svc.primary(); return p ? p.replace(this.svc.name + '-', '#') : '—'; }
   providerLabel(): string { return this.svc.provider() === 'stackgres' ? 'StackGres' : 'CloudNativePG'; }
-  imageShort(): string { const i = this.svc.image(); return i ? (i.split('/').pop() || i) : '—'; }
 
   readonly instanceLabels = computed(() => this.svc.instances().map((item) => item.name.replace(`${this.svc.name}-`, '#')));
   readonly instanceSeries = computed<PgChartSeries[]>(() => [{ label: 'Ready', data: this.svc.instances().map((item) => item.ready ? 100 : 0), color: '#003b5c' }]);
@@ -173,14 +180,6 @@ export class PgOverviewTab {
     const values = this.svc.transactionMetrics()[kind];
     const value = values.at(-1);
     return value == null || !Number.isFinite(value) ? '—' : String(Math.round(value * 100) / 100);
-  }
-  compactPhase(): string {
-    if (this.svc.allReady()) return 'Ready';
-    const phase = String(this.svc.phase() || '').trim();
-    if (/waiting for .*instances?.*active|starting|initializ/i.test(phase)) return 'Starting';
-    if (/degraded|failed|error|not ready/i.test(phase)) return 'Degraded';
-    if (/pending|creating|progress/i.test(phase)) return 'Progressing';
-    return phase.length > 18 ? `${phase.slice(0, 17)}…` : (phase || 'Unknown');
   }
 
   readonly condState = computed(() => {

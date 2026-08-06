@@ -132,6 +132,8 @@ const DEFAULT_FORM: PgForm = {
           <button type="button" class="pgp-step" [class.done]="selected.ready" [class.current]="!selected.ready" (click)="openTab('topology')"><span class="pgp-step-n">3</span><span><b>운영 관리</b><small>{{ selected.ready ? '모든 인스턴스 Ready' : '상태·DB·백업·이벤트 관리' }}</small></span></button>
         </section>
 
+        <pg-overview part="monitoring" (jump)="openTab($event)"></pg-overview>
+
         <section class="pgp-dashboard">
           <article class="pgp-panel">
             <h2>Package readiness</h2><p>설치 수명주기의 실제 상태만 표시합니다.</p>
@@ -149,8 +151,9 @@ const DEFAULT_FORM: PgForm = {
           </article>
         </section>
 
+        <pg-overview part="details" (jump)="openTab($event)"></pg-overview>
+
         <section class="pgp-description"><div><h2>Description</h2><p>PostgreSQL plugin은 선택한 Namespace의 {{ providerName(selected) }} 클러스터를 기준으로 토폴로지, 설정, 데이터베이스·역할, 백업, 이벤트와 Claim을 관리합니다. 신규 인스턴스는 전용 StackGres 수명주기로 제공하며 기존 CloudNativePG도 동일한 운영 화면에서 유지합니다.</p></div><div><h2>Documentation</h2><a [href]="manualUrl">OpenSphere PostgreSQL 19 설치·운영 안내서 (한글)</a><a href="https://stackgres.io/doc/latest/" target="_blank" rel="noreferrer">StackGres documentation</a><a href="https://www.postgresql.org/docs/current/" target="_blank" rel="noreferrer">PostgreSQL documentation</a><button class="btn btn-sm btn-link" type="button" (click)="openTab('cluster')">OpenSphere 설치 계약 보기</button></div></section>
-        <pg-overview (jump)="openTab($event)"></pg-overview>
       </ng-container>
       <clr-alert *ngIf="claimResult" [clrAlertType]="claimFailed?'danger':'success'" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">{{claimResult}}</span></clr-alert-item></clr-alert>
       </section>
