@@ -225,7 +225,9 @@ async function postgresFleetClusters(req, res) {
     if (fatal) throw { code: fatal.status, msg: 'PostgreSQL fleet unavailable: ' + k8sFailure(fatal) };
     const clusters = [
       ...((sg.ok ? sg.json?.items : []) || []).map((item) => postgresClusterProjection(item, 'stackgres')),
-      ...((cnpg.ok ? cnpg.json?.items : []) || []).map((item) => postgresClusterProjection(item, 'cloudnativepg')),
+      ...((cnpg.ok ? cnpg.json?.items : []) || [])
+        .filter((item) => item?.metadata?.namespace === POSTGRES_ADMIN.namespace && item?.metadata?.name === POSTGRES_ADMIN.cluster)
+        .map((item) => postgresClusterProjection(item, 'cloudnativepg')),
     ].sort((a, b) => Number(b.ready) - Number(a.ready) || a.displayName.localeCompare(b.displayName));
     return jsonRes(res, 200, { schema: 'foundation.postgres.fleet/v1beta1', clusters, refreshedAt: new Date().toISOString() });
   } catch (e) {
@@ -250,15 +252,20 @@ async function postgresCredentials(clusterId, actor) {
   const cacheKey = actor.username + '|' + target.id + '|' + resourceVersion;
   if (pgCredentialCache.has(cacheKey)) return pgCredentialCache.get(cacheKey);
   const data = result.json?.data || {};
+  const bindingHost = decodeSecretValue(data, 'host');
+  if (target.provider === 'stackgres' && !bindingHost) {
+    throw { code: 503, msg: 'StackGres binding Secret ' + target.namespace + '/' + secretName + ' has no host' };
+  }
   const value = {
     clusterId: target.id, clusterUID, resourceVersion, secretName, namespace: target.namespace,
-    host: postgresServiceHost(decodeSecretValue(data, 'host'), target.namespace),
+    host: postgresServiceHost(bindingHost, target.namespace),
     port: Number(decodeSecretValue(data, 'port') || POSTGRES_ADMIN.port),
     database: decodeSecretValue(data, 'database') || decodeSecretValue(data, 'dbname') || 'app',
     user: decodeSecretValue(data, 'username') || 'app',
     password: decodeSecretValue(data, 'password'),
   };
   if (!value.password) throw { code: 503, msg: 'PostgreSQL Secret ' + target.namespace + '/' + secretName + ' has no password' };
+  if (pgCredentialCache.size >= 256) pgCredentialCache.delete(pgCredentialCache.keys().next().value);
   pgCredentialCache.set(cacheKey, value);
   return value;
 }

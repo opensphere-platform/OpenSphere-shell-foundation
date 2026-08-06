@@ -262,7 +262,7 @@ const DEFAULT_FORM: PgForm = {
     <pg-topology *ngIf="tab() === 'topology' && clusterExists()"></pg-topology>
     <pg-config *ngIf="tab() === 'config' && clusterExists()"></pg-config>
     <pg-databases *ngIf="tab() === 'databases' && clusterExists()"></pg-databases>
-    <pg-admin *ngIf="tab() === 'admin' && clusterExists()"></pg-admin>
+    <pg-admin *ngIf="tab() === 'admin' && hasSelectedCluster()"></pg-admin>
     <pg-backups *ngIf="tab() === 'backups' && clusterExists()"></pg-backups>
     <pg-events *ngIf="tab() === 'events' && clusterExists()"></pg-events>
     <pg-claims *ngIf="tab() === 'claims' && clusterExists()"></pg-claims>
@@ -327,6 +327,7 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
     return this.tabs.some((x) => x.id === t) ? t : 'overview';
   });
   readonly clusterExists = computed(() => this.pg.clusterState() === 'ok' && !!this.pg.cluster());
+  readonly hasSelectedCluster = computed(() => !!this.fleet.selected() || this.clusterExists());
   readonly validationError = computed(() => {
     const f = this.form();
     if (f.instances < 1 || f.instances > 9) return '인스턴스 수는 1~9여야 합니다.';
@@ -407,13 +408,18 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
   headerModel(): PluginPageHeaderModel {
     return {
       name: 'PostgreSQL', logo: LOGO, capability: 'data.sql.postgres',
-      description: 'CloudNativePG 기반의 설치·고가용성·백업·운영 관리를 하나로 제공하는 Foundation plugin',
+      description: 'StackGres 기반의 전용 PostgreSQL fleet와 기존 CloudNativePG 호환 운영을 함께 제공하는 Foundation plugin',
       lifecycle: this.lifecycleLabel(), lifecycleClass: this.lifecyclePill(), versionLabel: 'PostgreSQL',
       version: this.pg.pgMajor() === '—' ? '19 beta2' : this.pg.pgMajor(), profile: this.form().profile, namespace: this.pg.ns,
     };
   }
   tabsForUi(): PluginPageTab[] {
-    return this.tabs.map((t) => ({ id: t.id, label: t.label, disabled: !!t.requiresCluster && !this.clusterExists(), badge: t.badge ? this.badge(t.id) : '' }));
+    return this.tabs.map((t) => ({
+      id: t.id,
+      label: t.label,
+      disabled: !!t.requiresCluster && (t.id === 'admin' ? !this.hasSelectedCluster() : !this.clusterExists()),
+      badge: t.badge ? this.badge(t.id) : '',
+    }));
   }
   availability(): number {
     return this.pg.totalN() ? Math.round((this.pg.readyN() / this.pg.totalN()) * 100) : 0;
