@@ -41,6 +41,65 @@ final result: passed
 
 ---
 
+# PostgreSQL Integrated Header Design QA
+
+- 검증일: 2026-08-06
+- Source visual truth: `C:\Users\cmars\.codex\generated_images\019fd187-a424-7c91-a849-d30a4986c817\exec-66072f01-1084-48f8-a765-f3d22aa727a2.png`
+- Browser-rendered implementation: `implementation-postgres-integrated-header.png`
+- Focused header evidence: `implementation-postgres-integrated-header-focused.png`
+- Runtime: `https://localhost:1114/pfss/postgres`
+- State: `opensphere-foundation` Namespace, `pgc-platform-dev-pg · stackgres` instance, Overview tab
+
+## Capture normalization
+
+- Source pixels: `2213 × 711`; isolated header-and-tabs concept, no browser or Console chrome.
+- Implementation pixels: `2403 × 1857`; default in-app browser viewport and full Console shell.
+- Focused implementation capture: `2021 × 221`; the deployed header band at the same runtime viewport.
+- CSS geometry: PostgreSQL header `1819.38 × 145.54px`, tabs `1819.38 × 54.10px`.
+- Density normalization: no device-density resampling was used. The comparison treated the source as an isolated composition reference and compared the implementation's focused header region at its native browser density. Console chrome and page content outside the header were excluded from fidelity findings.
+
+## Findings
+
+- No actionable P0, P1, or P2 differences remain.
+- Fonts and typography: existing OpenSphere/Clarity typography, hierarchy, weight, line height, wrapping, and compact control labels are preserved. The source concept's larger apparent text is explained by its isolated 2213px crop; normalized hierarchy and optical weight match the deployed header.
+- Spacing and layout rhythm: Namespace and PostgreSQL instance controls are side-by-side in the existing release metadata row. There is no separate context band. The deployed PostgreSQL header and the unchanged Percona PSMDB reference header both measure exactly `145.54px`; tabs start at the same `y=297.69px` and measure `54.10px`.
+- Colors and tokens: Clarity/OpenSphere foreground, border, semantic Ready green, blue action, and white surface tokens match the existing PFS header system and the selected concept.
+- Image and icon fidelity: the existing PostgreSQL logo is reused without replacement or approximation. Refresh uses the Clarity `Renew16` icon and remains sharp at native density.
+- Copy and content: Namespace, PostgreSQL instance, lifecycle, version, profile, add, and refresh labels match the selected concept while retaining Korean product copy and accessible labels.
+- P3 follow-up polish: none required for acceptance.
+
+## Full-view comparison evidence
+
+The source concept and `implementation-postgres-integrated-header.png` were opened together in the same comparison input. The deployed page preserves the selected composition: brand at left, lifecycle/version/profile in the center, Namespace and PostgreSQL instance at right, and tabs immediately below without an intervening block. The surrounding Console shell and Overview cards are expected product context absent from the isolated concept.
+
+## Focused region comparison evidence
+
+The source concept and `implementation-postgres-integrated-header-focused.png` were opened together in a second comparison input. The focused pass verified logo scale, metadata separators, label/value hierarchy, underline selects, add action, refresh icon, one-row control alignment, and the direct header-to-tabs transition. No cropped control, overflow, extra vertical band, or material wrapping mismatch was visible.
+
+## Comparison history
+
+1. Earlier concept iterations placed Namespace and instance controls in a separate band, increasing the apparent header stack. This was rejected because it changed the established PFS layout.
+2. The selected implementation projects both controls into the existing plugin release area, arranges them left-to-right, removes the standalone context bar, and keeps the existing header/tab geometry.
+3. Post-fix visual evidence is the deployed full-view and focused captures above. The final comparison found no actionable P0/P1/P2 issue, so no additional visual-fix iteration was required.
+
+## Primary interactions tested
+
+- Switched Namespace from `opensphere-foundation` to `default`: the instance selector disappeared and the dedicated PostgreSQL installation form appeared.
+- Switched back to `opensphere-foundation`: the instance selector returned.
+- Switched between `pgc-platform-dev-pg · stackgres` and `foundation-data-pg · cloudnativepg`, then restored the StackGres instance.
+- Verified the refresh control and both selects expose accessible labels in the rendered DOM.
+
+## Runtime and console verification
+
+- Official version: `202608062153`
+- Exact digest: `sha256:78e43e90784eb40c76475d31361abf4e6d868eb4aaa0b6a9fd1b84d6811423ed`
+- Foundation rollout: `2/2`; UI registration: `Activated / Current / Ready`.
+- Browser console: no new warning or error after the cache-bypass reload. Two retained warnings at `12:58:12Z` and `12:58:33Z` predate the successful reload and correspond to the old cached manifest during pin rotation.
+
+final result: passed
+
+---
+
 # PostgreSQL Administration Design QA
 
 - 검증일: 2026-08-05
