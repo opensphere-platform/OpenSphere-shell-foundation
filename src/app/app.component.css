@@ -367,7 +367,9 @@ pg-metric { display: block; height: 100%; }
 .pgp-page-frame .pfs-plugin-logo { border: 0; border-radius: 0; background: transparent; }
 .pgp-page-frame .pfs-plugin-logo img { width: 55px; height: 55px; }
 .pgp-page-frame .pfs-plugin-release { grid-template-columns: minmax(5.5rem, 0.65fr) minmax(5rem, 0.6fr) minmax(10rem, 1.2fr) minmax(27rem, 2.8fr); }
-.pgp-page-frame .pfs-plugin-release > div { padding: 0 10px; }
+.pgp-page-frame .pfs-plugin-release > div { min-width: 0; padding: 0 10px; overflow: hidden; }
+.pgp-page-frame .pfs-plugin-release dd { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pgp-page-frame .pfs-plugin-release .label { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 .pgp-page-frame .pfs-plugin-tabs { margin: 0; padding: 0; background: transparent; border-top: 0; border-bottom: 1px solid var(--os-border); }
 .pgp-page-frame .pfs-plugin-tab { min-height: 2.65rem; }
 .pgp-page-frame .pfs-plugin-tab:hover:not(:disabled) { background: transparent; }
@@ -402,7 +404,7 @@ pg-metric { display: block; height: 100%; }
 .pgp-status-list { display: grid; margin: 0 0 16px; border-top: 1px solid #eef0f3; }
 .pgp-status-list div, .pgp-policy-grid div { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 2.35rem; border-bottom: 1px solid #eef0f3; font-size: 0.76rem; }
 .pgp-status-list span, .pgp-policy-grid span { color: var(--os-text-sec); }
-.pgp-status-list b, .pgp-policy-grid b { color: #8d8d8d; font-weight: 600; text-align: right; }
+.pgp-status-list b, .pgp-policy-grid b { min-width: 0; max-width: 58%; overflow: hidden; color: #8d8d8d; font-weight: 600; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
 .pgp-status-list b.ok, .pgp-policy-grid b.ok { color: #198038; }
 .pgp-health { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 2px 10px; margin: 16px 0 18px; }
 .pgp-health strong { font-size: 2.5rem; font-weight: 300; color: var(--os-ink); }

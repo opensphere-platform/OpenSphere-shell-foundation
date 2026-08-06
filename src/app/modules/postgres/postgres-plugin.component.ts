@@ -455,7 +455,7 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
     if (this.fleet.busy() && this.fleet.state() === 'loading') return 'Discovering';
     const cluster = this.selectedContextCluster();
     if (!cluster) return 'Not installed';
-    return cluster.ready ? 'Ready' : (cluster.phase || 'Progressing');
+    return this.compactLifecycle(cluster.phase, cluster.ready);
   }
   lifecyclePill(): string {
     return this.selectedContextCluster()?.ready ? 'label-success' : 'label-warning';
@@ -466,8 +466,26 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
       name: 'PostgreSQL', logo: LOGO, capability: 'data.sql.postgres',
       description: 'Namespace를 먼저 선택하고 전용 StackGres PostgreSQL을 설치·관리·모니터링하는 Foundation service',
       lifecycle: this.lifecycleLabel(), lifecycleClass: this.lifecyclePill(), versionLabel: 'PostgreSQL',
-      version: cluster?.postgresVersion || '—', profile: cluster?.plan || cluster?.mode || 'Not installed',
+      version: this.compactPostgresVersion(cluster?.postgresVersion || ''), profile: cluster?.plan || cluster?.mode || 'Not installed',
     };
+  }
+  compactLifecycle(phase: string, ready = false): string {
+    if (ready) return 'Ready';
+    const value = String(phase || '').trim();
+    if (!value) return 'Progressing';
+    if (/waiting for .*instances?.*active|starting|initializ/i.test(value)) return 'Starting';
+    if (/degraded|failed|error|not ready/i.test(value)) return 'Degraded';
+    if (/pending|creating|progress/i.test(value)) return 'Progressing';
+    return value.length > 18 ? `${value.slice(0, 17)}…` : value;
+  }
+  compactPostgresVersion(version: string): string {
+    const value = String(version || '').trim();
+    if (!value) return '—';
+    const tag = value.includes(':') ? value.slice(value.lastIndexOf(':') + 1) : value;
+    const match = tag.match(/(?:postgres(?:ql)?[^0-9]*)?(\d+(?:\.\d+)?)(?:[-_.]?beta(\d+))?/i)
+      || value.match(/(?:postgres(?:ql)?[^0-9]*)?(\d+(?:\.\d+)?)(?:[-_.]?beta(\d+))?/i);
+    if (!match) return value.length > 14 ? `${value.slice(0, 13)}…` : value;
+    return match[2] ? `${match[1]} beta${match[2]}` : match[1];
   }
   tabsForUi(): PluginPageTab[] {
     return this.tabs.filter((t) => !t.secondary).map((t) => ({

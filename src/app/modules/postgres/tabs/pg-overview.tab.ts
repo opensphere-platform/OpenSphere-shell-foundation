@@ -13,7 +13,7 @@ import { PgChart, PgChartSeries } from '../ui/pg-chart';
   imports: [CommonModule, PgMetric, PgTimeline, PgState, PgChart],
   template: `
     <div class="os-metrics">
-      <pg-metric label="상태" [value]="svc.phase()" [status]="svc.phaseCls()" [sub]="svc.lastSync() ? '동기화 ' + svc.lastSync() : ''"></pg-metric>
+      <pg-metric label="상태" [value]="compactPhase()" [status]="svc.phaseCls()" [sub]="svc.lastSync() ? '동기화 ' + svc.lastSync() : ''"></pg-metric>
       <pg-metric label="인스턴스" [value]="svc.readyN() + ' / ' + svc.totalN()" [status]="svc.allReady() ? 'ok' : 'warn'" sub="ready" [clickable]="true" (go)="jump.emit('topology')"></pg-metric>
       <pg-metric label="Primary" [value]="primaryShort()" [status]="svc.primary() ? 'ok' : ''" [sub]="svc.primary() ? 'rw 라우팅' : '미상'" [clickable]="true" (go)="jump.emit('topology')"></pg-metric>
       <pg-metric label="PostgreSQL" [value]="'v' + svc.pgMajor()" [sub]="imageShort()"></pg-metric>
@@ -173,6 +173,14 @@ export class PgOverviewTab {
     const values = this.svc.transactionMetrics()[kind];
     const value = values.at(-1);
     return value == null || !Number.isFinite(value) ? '—' : String(Math.round(value * 100) / 100);
+  }
+  compactPhase(): string {
+    if (this.svc.allReady()) return 'Ready';
+    const phase = String(this.svc.phase() || '').trim();
+    if (/waiting for .*instances?.*active|starting|initializ/i.test(phase)) return 'Starting';
+    if (/degraded|failed|error|not ready/i.test(phase)) return 'Degraded';
+    if (/pending|creating|progress/i.test(phase)) return 'Progressing';
+    return phase.length > 18 ? `${phase.slice(0, 17)}…` : (phase || 'Unknown');
   }
 
   readonly condState = computed(() => {

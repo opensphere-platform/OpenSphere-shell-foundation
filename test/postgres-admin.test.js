@@ -138,6 +138,8 @@ test('PostgreSQL administration surface separates Data View from Query Tool and 
 
 test('PostgreSQL landing surface is namespace-first and exposes fleet as a secondary view', () => {
   const component = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/postgres-plugin.component.ts'), 'utf8');
+  const overview = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/tabs/pg-overview.tab.ts'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '../src/app/app.component.css'), 'utf8');
   const fleet = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/postgres-fleet.service.ts'), 'utf8');
   const app = fs.readFileSync(path.join(__dirname, '../src/app/app.component.ts'), 'utf8');
   const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
@@ -168,6 +170,10 @@ test('PostgreSQL landing surface is namespace-first and exposes fleet as a secon
   assert.doesNotMatch(component, /claimNamespaceChoice/);
   assert.match(component, /selectedNamespace = signal/);
   assert.match(component, /namespaceClusters = computed/);
+  assert.match(component, /compactLifecycle\(cluster\.phase, cluster\.ready\)/);
+  assert.match(component, /compactPostgresVersion\(cluster\?\.postgresVersion \|\| ''\)/);
+  assert.match(overview, /\[value\]="compactPhase\(\)"/);
+  assert.match(css, /\.pgp-page-frame \.pfs-plugin-release dd \{[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/);
   assert.match(fleet, /provisioning\.opensphere\.io\/v1beta1/);
   assert.match(fleet, /PostgresClaim/);
   assert.match(fleet, /api\/foundation\/postgres\/namespaces/);
