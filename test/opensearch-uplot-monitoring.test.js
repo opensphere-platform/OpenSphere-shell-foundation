@@ -14,7 +14,8 @@ test('OpenSearch Monitoring uses uPlot and updates an existing chart instance', 
   assert.doesNotMatch(monitoring, /CarbonLineChart|os-carbon-line-chart/);
   assert.match(chart, /from 'uplot'/);
   assert.match(chart, /this\.chart\.setData\(data, !retainedRange\)/);
-  assert.match(chart, /uPlot\.paths\.spline/);
+  assert.doesNotMatch(chart, /uPlot\.paths\.spline/);
+  assert.match(chart, /Use uPlot's exact linear path/);
   assert.match(chart, /cap: 'round'/);
   assert.match(chart, /fill: this\.alpha/);
   assert.match(chart, /getFullYear\(\).*getMonth\(\) \+ 1.*getDate\(\)/s);
@@ -61,12 +62,15 @@ test('five-minute samples append on the right while settled history stays immuta
 
 test('Foundation delegates page scrolling to Main Shell and charts zoom the time axis', () => {
   const app = read('src/app/app.component.ts');
+  const globalStyles = read('src/styles.css');
   const plugin = read('src/app/modules/data-engine/data-engine-plugin.component.ts');
   const monitoring = read('src/app/modules/opensearch/tabs/os-monitoring.tab.ts');
   const chart = read('src/app/shared/uplot-line-chart.ts');
   assert.match(app, /\.cm-nav \{ min-height: 100%/);
   assert.match(app, /\.os-content \{ min-width: 0; min-height: 0; overflow: visible/);
   assert.doesNotMatch(app, /\.os-content \{[^}]*overflow: auto/);
+  assert.match(globalStyles, /osp-foundation-shell \{ display: block; min-height: 100%; width: 100%; \}/);
+  assert.doesNotMatch(globalStyles, /osp-foundation-shell \{ display: block; height: 100%/);
   assert.match(plugin, /de-work de-work--flush/);
   assert.doesNotMatch(monitoring, /expandedChart|chartHeight|grid-column:1\/-1/);
   assert.match(chart, />시간 확대</);

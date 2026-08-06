@@ -100,7 +100,6 @@ export class UPlotLineChart implements AfterViewInit, OnChanges, OnDestroy {
       this.chart?.destroy();
       host.replaceChildren();
       this.signature = nextSignature;
-      const splinePath = uPlot.paths.spline?.({ alignGaps: 0 });
       this.chart = new uPlot({
         width: this.width(),
         height: this.height,
@@ -123,7 +122,10 @@ export class UPlotLineChart implements AfterViewInit, OnChanges, OnDestroy {
             fill: this.alpha(item.color ?? '#0f62fe', 0.07),
             width: 1.5,
             cap: 'round' as CanvasLineCap,
-            paths: splinePath,
+            // Use uPlot's exact linear path. Spline interpolation can overshoot
+            // sparse five-minute samples and display values that were never
+            // observed. uPlot already renders round joins; the round cap keeps
+            // the Ceph-like softened stroke without changing the data shape.
             spanGaps: false,
             points: { show: false },
           })),
