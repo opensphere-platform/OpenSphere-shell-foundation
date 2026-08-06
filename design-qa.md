@@ -189,3 +189,47 @@ final result: passed
 - Browser runtime, console, and network error events after the interaction pass: 0.
 
 final result: passed
+
+---
+
+# PostgreSQL Overview Content Hierarchy Design QA
+
+- 검증일: 2026-08-06
+- Source visual truth: `C:\Users\cmars\AppData\Local\Temp\codex-clipboard-d1a104a4-2bbf-407d-9eaf-97ecb63d5871.png`
+- Implementation URL: `https://localhost:1114/pfss/postgres`
+- Implementation screenshot captures: in-app Browser tab 16, `IMPLEMENTATION TOP` and `IMPLEMENTATION DETAILS` capture outputs attached to this task.
+- State: `opensphere-foundation` / `pgc-platform-dev-pg · stackgres` / `Overview`.
+
+## Capture normalization
+
+- Source: 1948 × 1042 pixels at 96 DPI.
+- Implementation: browser-rendered desktop capture at the existing OpenSphere verification viewport (2163 × 1670 CSS viewport, device scale 1, browser zoom 117%).
+- The source is a focused Overview content capture while the implementation includes persistent OpenSphere shell chrome. Comparisons therefore used the matching monitoring-header/chart region and the Persistent volumes/detail-card region rather than treating shell chrome as design drift.
+
+## Findings and comparison history
+
+1. P1 — The source showed the `PostgreSQL 운영 상태` heading and explanatory copy with insufficient contrast against the dark monitoring header. The implementation now uses white heading text and a light secondary foreground on `#102a43`; the post-fix top comparison shows both lines clearly.
+2. P1 — The approved Overview hierarchy had previously been split into monitoring and details, but the restoration commit rendered all content as one trailing block. The implementation again renders monitoring immediately after the three lifecycle steps, the readiness dashboard next, details after the dashboard, and Description/Documentation last.
+3. P2 — The two detail cards used auto-fill tracks, occupied only part of the available row, and presented oversized/heavy copy. The implementation uses two equal `minmax(0, 1fr)` tracks across the full width, equal-height cards, 0.72rem/500 headings, 0.66rem body copy, and 0.65rem/400 monospace values.
+4. Post-fix comparison — The source and final implementation were opened together twice: once for the full monitoring/header region and once for the focused Persistent volumes/detail-card region. No actionable P0, P1, or P2 finding remains.
+
+## Required fidelity surfaces
+
+- Fonts and typography: heading and body optical weights are restrained; endpoint values wrap without dominating their labels.
+- Spacing and layout rhythm: monitoring, readiness, details, and documentation follow the restored operational hierarchy; the detail cards occupy balanced 50/50 tracks.
+- Colors and visual tokens: the monitoring header now has accessible foreground/background separation while existing Clarity semantic colors remain unchanged.
+- Image quality and asset fidelity: the supplied PostgreSQL logo and chart rendering remain unchanged; no placeholder, CSS-drawn, or replacement asset was introduced.
+- Copy and content: the StackGres exporter description, operational labels, endpoint values, PVC evidence, and conditions remain intact.
+
+## Primary interaction and runtime verification
+
+- Completed a `StackGres → CloudNativePG → StackGres` instance-selector round trip.
+- Verified that both providers keep the Overview heading, provider-specific exporter copy, detail cards, and all twelve navigation tabs.
+- Browser navigation and selector interactions completed without runtime exceptions or visible error state; console error output observed during the final interaction pass: 0.
+- Official version: `202608062350`.
+- Source revision: `7dd05564e14c15d40724336b20342c7a22b62fd7`.
+- Foundation deployment: 2/2 replicas on exact digest `sha256:767d18e8eba7ef3b90a9f3ad4322fcb02e98dda8596e9be19e127231065351f0`.
+- Foundation registration: Activated / Current.
+- Immutable version tag and `edge` resolve to the same digest.
+
+final result: passed
