@@ -29,7 +29,7 @@ spec:
       containers:
         - name: manager
           # image-source: ghcr-mirror(ok, 자체빌드) — OPA production supply-chain 지원 edge exact digest
-          image: ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:e72359cdbc14a57d0cc00db31b513a2465aa2944466f6e2fd5e02205b0a2c0af
+          image: ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:be275e49fe488889907772fa7743bc658a05d80b2128ac34c6ba4f0853a04275
           imagePullPolicy: IfNotPresent
           args:
             - --managed-namespace=opensphere-foundation
@@ -48,7 +48,7 @@ spec:
             - --opa-control-image=ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:319dac599cb92910aade08c28fa180a96b7bf96865a5c45e753f243719e4af3a
             # image-source: GHCR mirror, origin=apache/syncope:4.0.7 linux/amd64
             - --syncope-image=ghcr.io/opensphere-platform/mirror/syncope@sha256:970ecea41b897656063eed5b1a8b6637ec84fa8543340831a9f1bbf767f2a2f9
-            - --syncope-monitor-image=ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:e72359cdbc14a57d0cc00db31b513a2465aa2944466f6e2fd5e02205b0a2c0af
+            - --syncope-monitor-image=ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:be275e49fe488889907772fa7743bc658a05d80b2128ac34c6ba4f0853a04275
             - --default-storage-class=standard
           env:
             - name: FOUNDATION_DIRECT_APPLY
