@@ -137,3 +137,55 @@ final result: passed
 - P2 findings: none.
 
 final result: passed
+
+---
+
+# PostgreSQL Instance Switch Layout Design QA
+
+- 검증일: 2026-08-06
+- Approved visual truth: `qa-postgres-overview-header-20260803.png`
+- Same-state regression source: `source-postgres-instance-switch-broken-20260806.png`
+- Implementation screenshot: `implementation-postgres-instance-switch-fixed-20260806.png`
+- Runtime: `https://localhost:1114/pfss/postgres`
+- State: `opensphere-foundation` / `foundation-data-pg · cloudnativepg` / `Overview`
+
+## Capture normalization
+
+- Regression source and implementation capture: 2163 × 1671 pixels.
+- CSS layout viewport: 2163 × 1670; device scale 1; visual scale 1; browser zoom 117%.
+- The same-state pair was captured without resampling and used for exact overflow comparison.
+- The 1973 × 1671 approved reference was used to confirm the established header height, navigation placement, and overall layout contract.
+
+## Full-view comparison evidence
+
+- The broken CloudNativePG state and the fixed CloudNativePG state were opened together at native resolution.
+- The approved existing design and the fixed implementation were also opened together to verify that the compact selector integration did not increase the header height or remove navigation.
+- Lifecycle, PostgreSQL version, profile, namespace, instance selector, twelve navigation tabs, and Overview content remain readable without overlap or horizontal layout growth.
+
+## Focused region comparison
+
+- The full native-resolution comparison kept the dense header labels and values readable, so a separate cropped artifact was not required.
+- The header status cells and Overview status tile were inspected directly at native resolution in both before and after captures.
+
+## Findings and comparison history
+
+1. Before: long raw lifecycle text and the full container image value overflowed fixed-width header/status areas, causing a P1 header collision and P2 Overview-card expansion.
+2. Fix: lifecycle and version use compact display labels; header/package values use `min-width: 0`, no-wrap, ellipsis, and constrained metric layout. Full raw operational details remain available in the detail cards and conditions.
+3. After: no P0, P1, or P2 visual findings remain across typography, spacing, alignment, overflow, and hierarchy.
+
+## Primary interaction verification
+
+- Completed a StackGres → CloudNativePG → StackGres → CloudNativePG instance round trip.
+- Verified all twelve restored tabs: Overview, Monitoring, Operator, Cluster plan, Topology, Configuration, Databases & Roles, Backups, Events, Claims, Upgrade, and Documentation.
+- Namespace and PostgreSQL instance selectors remained stable and the established header height was preserved during state changes.
+
+## Runtime and console verification
+
+- Official version: `202608062257`.
+- Source revision: `dc0e8cacc9653a30c0a631202c8bea267ac37ea3`.
+- Foundation deployment: 2/2 replicas on exact digest `sha256:f137695317cebe02eb7a134d7771e054d0b2d013e04e5da25946256147f25183`.
+- Foundation and PostgreSQL registrations: Activated / Compatible / Current.
+- Immutable version tag and `edge` resolve to the same digest.
+- Browser runtime, console, and network error events after the interaction pass: 0.
+
+final result: passed
