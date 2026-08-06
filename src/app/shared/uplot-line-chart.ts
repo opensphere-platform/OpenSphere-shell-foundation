@@ -18,6 +18,18 @@ export interface UPlotLineSeries {
   color?: string;
 }
 
+const pad2 = (value: number): string => String(value).padStart(2, '0');
+
+const dateLabel = (timestamp: number): string => {
+  const date = new Date(timestamp * 1000);
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+};
+
+const timeLabel = (timestamp: number): string => {
+  const date = new Date(timestamp * 1000);
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+};
+
 @Component({
   selector: 'os-uplot-line-chart',
   standalone: true,
@@ -81,18 +93,30 @@ export class UPlotLineChart implements AfterViewInit, OnChanges, OnDestroy {
       this.chart?.destroy();
       host.replaceChildren();
       this.signature = nextSignature;
+      const splinePath = uPlot.paths.spline?.({ alignGaps: 0 });
       this.chart = new uPlot({
         width: this.width(),
         height: this.height,
         cursor: { drag: { x: true, y: false } },
         legend: { show: true, live: true },
-        axes: [{ stroke: '#697077', grid: { stroke: '#e0e0e0', width: 1 } }, { label: this.valueAxisTitle, stroke: '#697077', grid: { stroke: '#e0e0e0', width: 1 } }],
+        axes: [{
+          stroke: '#697077',
+          grid: { stroke: '#e0e0e0', width: 1 },
+          size: 54,
+          values: (_self: uPlot, splits: number[]) => splits.map((timestamp, index) => {
+            const showDate = index === 0 || dateLabel(timestamp) !== dateLabel(splits[index - 1]);
+            return showDate ? `${timeLabel(timestamp)}\n${dateLabel(timestamp)}` : timeLabel(timestamp);
+          }),
+        }, { label: this.valueAxisTitle, stroke: '#697077', grid: { stroke: '#e0e0e0', width: 1 } }],
         series: [
           {},
           ...this.series.map((item) => ({
             label: item.label,
             stroke: item.color ?? '#0f62fe',
-            width: 2,
+            fill: this.alpha(item.color ?? '#0f62fe', 0.07),
+            width: 1.5,
+            cap: 'round' as CanvasLineCap,
+            paths: splinePath,
             spanGaps: false,
             points: { show: false },
           })),
@@ -117,5 +141,14 @@ export class UPlotLineChart implements AfterViewInit, OnChanges, OnDestroy {
 
   private width(): number {
     return Math.max(320, Math.floor(this.plotRef.nativeElement.clientWidth || 640));
+  }
+
+  private alpha(color: string, opacity: number): string {
+    const hex = color.match(/^#([0-9a-f]{6})$/i)?.[1];
+    if (!hex) return color;
+    const red = Number.parseInt(hex.slice(0, 2), 16);
+    const green = Number.parseInt(hex.slice(2, 4), 16);
+    const blue = Number.parseInt(hex.slice(4, 6), 16);
+    return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
   }
 }

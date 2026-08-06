@@ -14,18 +14,28 @@ test('OpenSearch Monitoring uses uPlot and updates an existing chart instance', 
   assert.doesNotMatch(monitoring, /CarbonLineChart|os-carbon-line-chart/);
   assert.match(chart, /from 'uplot'/);
   assert.match(chart, /this\.chart\.setData\(data, true\)/);
+  assert.match(chart, /uPlot\.paths\.spline/);
+  assert.match(chart, /cap: 'round'/);
+  assert.match(chart, /fill: this\.alpha/);
+  assert.match(chart, /getFullYear\(\).*getMonth\(\) \+ 1.*getDate\(\)/s);
   assert.doesNotMatch(`${monitoring}\n${chart}`, /location\.reload|window\.location|router\.navigate/);
 });
 
-test('node charts follow both live cluster inventory and Prometheus node labels', () => {
+test('node charts follow configured pods, live cluster inventory, and Prometheus node labels', () => {
   const monitoring = read('src/app/modules/opensearch/tabs/os-monitoring.tab.ts');
   const metrics = read('src/app/modules/opensearch/os-metrics.service.ts');
   assert.match(monitoring, /trackBy: trackNode/);
   assert.match(metrics, /this\.os\.nodes\(\)/);
+  assert.match(metrics, /runtime\.runtime\('opensearch'\)\.pods/);
   assert.match(metrics, /max by\(node\)/);
   assert.match(metrics, /min by\(node\)/);
   assert.match(metrics, /body\.data\?\.result \?\? \[\]/);
-  assert.match(metrics, /new Set\(\[\.\.\.inventory, \.\.\.observed\]\)/);
+  assert.match(metrics, /new Set\(\[\.\.\.configured, \.\.\.joined, \.\.\.observed\]\)/);
+  assert.match(metrics, /configuredNodeCount/);
+  assert.match(metrics, /joinedNodeCount/);
+  assert.match(metrics, /metricsNodeCount/);
+  assert.match(monitoring, /nodeColumns/);
+  assert.match(monitoring, /join pending/);
 });
 
 test('background refresh preserves the current chart state and last-known data', () => {

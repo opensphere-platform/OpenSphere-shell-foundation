@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { apiBase, hostFetch } from '../../api-base';
+import { DataEngineRuntimeService } from '../data-engine/data-engine-runtime.service';
 import { OsService } from './os.service';
 
 type MetricPoint = [number, number];
@@ -18,6 +19,14 @@ export interface OsMetricSeries {
 
 export interface OsNodeMetricSeries {
   node: string;
+  configured: boolean;
+  podReady: boolean;
+  podPhase: string;
+  podIP: string;
+  joined: boolean;
+  roles: string;
+  master: boolean;
+  metricsObserved: boolean;
   timestamps: number[];
   labels: string[];
   heap: (number | null)[];
@@ -30,6 +39,7 @@ const EMPTY: OsMetricSeries = { timestamps: [], labels: [], heap: [], cpu: [], d
 @Injectable({ providedIn: 'root' })
 export class OsMetricsService {
   private readonly os = inject(OsService);
+  private readonly runtime = inject(DataEngineRuntimeService);
   readonly series = signal<OsMetricSeries>(EMPTY);
   readonly nodeSeries = signal<OsNodeMetricSeries[]>([]);
   readonly state = signal<'loading' | 'ok' | 'empty' | 'error'>('loading');
@@ -39,6 +49,9 @@ export class OsMetricsService {
   readonly busy = signal(false);
   readonly lastSync = signal('');
   readonly nodes = computed(() => this.nodeSeries());
+  readonly configuredNodeCount = computed(() => this.nodeSeries().filter((node) => node.configured).length);
+  readonly joinedNodeCount = computed(() => this.nodeSeries().filter((node) => node.joined).length);
+  readonly metricsNodeCount = computed(() => this.nodeSeries().filter((node) => node.metricsObserved).length);
   readonly latestHeap = computed(() => this.last(this.series().heap));
   readonly latestCpu = computed(() => this.last(this.series().cpu));
   readonly latestDisk = computed(() => this.last(this.series().diskAvailable));
@@ -138,7 +151,7 @@ export class OsMetricsService {
       });
       this.nodeSeries.set(nodeSeries);
       this.state.set('ok');
-      this.hint.set(`OpenSearch exporter · Prometheus · 최근 1시간 · 5분 간격 · ${nodeSeries.length}개 노드 추적`);
+      this.hint.set(`OpenSearch exporter · Prometheus · 최근 1시간 · 5분 간격 · 구성 ${nodeSeries.filter((node) => node.configured).length} · 합류 ${nodeSeries.filter((node) => node.joined).length} · metrics ${nodeSeries.filter((node) => node.metricsObserved).length}`);
     } catch (error) {
       const message = String((error as Error)?.message ?? error);
       if (this.series().timestamps.length) {
@@ -168,17 +181,30 @@ export class OsMetricsService {
   }
 
   private buildNodeSeries(heapSet: PrometheusSeries[], cpuSet: PrometheusSeries[], diskSet: PrometheusSeries[]): OsNodeMetricSeries[] {
-    const inventory = this.os.nodes().map((item) => String(item.name ?? '').trim()).filter(Boolean);
+    const pods = this.runtime.runtime('opensearch').pods;
+    const configured = pods.map((pod) => String(pod.metadata?.name ?? '').trim()).filter(Boolean);
+    const inventory = this.os.nodes();
+    const joined = inventory.map((item) => String(item.name ?? '').trim()).filter(Boolean);
     const observed = [...heapSet, ...cpuSet, ...diskSet].map((item) => item.metric['node'] ?? '').filter(Boolean);
-    const names = [...new Set([...inventory, ...observed])].sort((a, b) => a.localeCompare(b));
+    const names = [...new Set([...configured, ...joined, ...observed])].sort((a, b) => a.localeCompare(b));
     const select = (set: PrometheusSeries[], node: string) => set.find((item) => item.metric['node'] === node)?.values ?? [];
     return names.map((node) => {
+      const pod = pods.find((item) => item.metadata?.name === node);
+      const joinedNode = inventory.find((item) => String(item.name ?? '').trim() === node);
       const heap = select(heapSet, node);
       const cpu = select(cpuSet, node);
       const diskAvailable = select(diskSet, node);
       const timestamps = this.timestamps(heap, cpu, diskAvailable);
       return {
         node,
+        configured: Boolean(pod),
+        podReady: Boolean((pod?.status?.conditions ?? []).some((condition: any) => condition.type === 'Ready' && condition.status === 'True')),
+        podPhase: String(pod?.status?.phase ?? 'Unknown'),
+        podIP: String(pod?.status?.podIP ?? ''),
+        joined: Boolean(joinedNode),
+        roles: String(joinedNode?.['node.role'] ?? ''),
+        master: joinedNode?.master === '*',
+        metricsObserved: Boolean(timestamps.length),
         timestamps,
         labels: this.labels(timestamps),
         heap: this.align(timestamps, heap),
