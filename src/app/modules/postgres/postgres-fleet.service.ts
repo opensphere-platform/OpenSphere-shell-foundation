@@ -19,7 +19,7 @@ export class PostgresFleetService {
   readonly plans = signal<any[]>([]);
   readonly claims = signal<any[]>([]);
   readonly namespaces = signal<string[]>(['opensphere-foundation']);
-  readonly selectedId = signal('cloudnativepg:opensphere-foundation:foundation-data-pg');
+  readonly selectedId = signal('');
   readonly state = signal<'loading' | 'ok' | 'empty' | 'error'>('loading');
   readonly error = signal('');
   readonly busy = signal(false);
@@ -40,7 +40,9 @@ export class PostgresFleetService {
       if (!fleet.ok) throw new Error(fleetBody.error || `PostgreSQL fleet HTTP ${fleet.status}`);
       const clusterRows = (fleetBody.clusters || []) as PostgresFleetCluster[];
       this.clusters.set(clusterRows);
-      if (!clusterRows.some((cluster) => cluster.id === this.selectedId()) && clusterRows[0]) this.selectedId.set(clusterRows[0].id);
+      if (!clusterRows.some((cluster) => cluster.id === this.selectedId()) && clusterRows[0]) {
+        this.selectedId.set(clusterRows.find((cluster) => cluster.provider === 'stackgres')?.id || clusterRows[0].id);
+      }
       this.plans.set(plans.ok ? ((await plans.json()).items || []).filter((item: any) => item.spec?.capabilityRef === 'postgresql') : []);
       this.claims.set(claims.ok ? ((await claims.json()).items || []) : []);
       if (namespaces.ok) {

@@ -136,20 +136,30 @@ test('PostgreSQL administration surface separates Data View from Query Tool and 
   assert.match(service, /cluster: this\.selectedCluster\(\)/);
 });
 
-test('PostgreSQL landing surface exposes a multi-cluster fleet and v1beta1 claim workflow', () => {
+test('PostgreSQL landing surface is namespace-first and exposes fleet as a secondary view', () => {
   const component = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/postgres-plugin.component.ts'), 'utf8');
   const fleet = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/postgres-fleet.service.ts'), 'utf8');
   const app = fs.readFileSync(path.join(__dirname, '../src/app/app.component.ts'), 'utf8');
   const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
   const rbac = fs.readFileSync(path.join(__dirname, '../deploy/postgres-fleet-console-rbac.yaml'), 'utf8');
   assert.match(component, /PFSS PostgreSQL Fleet/);
-  assert.match(component, /Create dedicated cluster/);
+  assert.match(component, /PostgreSQL 운영 컨텍스트/);
+  assert.match(component, /aria-label="Namespace 선택"/);
+  assert.match(component, /namespaceClusters\(\)\.length > 1/);
+  assert.match(component, /이 Namespace에는 PostgreSQL이 없습니다/);
+  assert.match(component, /\*ngIf="!fleet\.busy\(\) && !selectedContextCluster\(\)"[\s\S]*PostgreSQL 설치/);
+  assert.match(component, /Secondary view[\s\S]*PFSS PostgreSQL Fleet/);
+  assert.match(component, /Database Objects & Query/);
   assert.match(component, /LegacyShared/);
-  assert.match(component, /\+ 새 Namespace 추가/);
-  assert.match(component, /claimNamespaceReason/);
+  assert.match(component, /\+ Namespace 추가/);
+  assert.match(component, /newNamespaceReason/);
+  assert.doesNotMatch(component, /claimNamespaceChoice/);
+  assert.match(component, /selectedNamespace = signal/);
+  assert.match(component, /namespaceClusters = computed/);
   assert.match(fleet, /provisioning\.opensphere\.io\/v1beta1/);
   assert.match(fleet, /PostgresClaim/);
   assert.match(fleet, /api\/foundation\/postgres\/namespaces/);
+  assert.match(fleet, /cluster\.provider === 'stackgres'/);
   assert.match(server, /postgresFleetNamespaces/);
   assert.match(server, /postgres-namespace-create/);
   assert.match(server, /Namespace creation must use \/api\/foundation\/postgres\/namespaces/);
