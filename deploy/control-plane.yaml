@@ -29,7 +29,7 @@ spec:
       containers:
         - name: manager
           # image-source: ghcr-mirror(ok, 자체빌드) — OPA production supply-chain 지원 edge exact digest
-          image: ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:be275e49fe488889907772fa7743bc658a05d80b2128ac34c6ba4f0853a04275
+          image: ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:02e54d96c08104ad7c2cd3778a0fdf0d1212f8aa95ace790254721bb7b7ed08b
           imagePullPolicy: IfNotPresent
           args:
             - --managed-namespace=opensphere-foundation
