@@ -38,7 +38,7 @@ const DEFAULT_FORM: OpaInstallParameters = {
       <div class="pgp-dashboard">
         <article class="opa-panel"><h2>Package readiness</h2><p>실제 Deployment와 정책 보호 상태를 분리합니다.</p><dl class="opa-kv"><dt>FoundationModel/identity</dt><dd>{{svc.modelPhase()}}</dd><dt>OPA Deployment</dt><dd [class.ok]="svc.ready()">{{svc.phase()}}</dd><dt>Replicas</dt><dd>{{svc.readyN()}} / {{svc.totalN()}}</dd><dt>Policy mode</dt><dd class="warn">{{svc.policyMode()}}</dd></dl></article>
         <article class="opa-panel"><h2>Decision point</h2><p>소비자에게 노출되는 제한된 평가 endpoint입니다.</p><dl class="opa-kv"><dt>Endpoint</dt><dd class="os-mono">{{svc.endpoint}}</dd><dt>Allowed API</dt><dd class="os-mono">POST /v1/data/opensphere/**</dd><dt>Mutation API</dt><dd class="ok">Denied</dd><dt>Default decision</dt><dd class="ok">Deny</dd></dl></article>
-        <article class="opa-panel"><h2>Production gates</h2><p>데이터 모듈과 다른 정책 엔진의 필수 판정입니다.</p><dl class="opa-kv"><dt>Signed bundle</dt><dd class="ok">ES256 verified</dd><dt>Durable decision log</dt><dd class="ok">CloudNativePG · 30d</dd><dt>Evaluation transport</dt><dd class="ok">mTLS</dd><dt>Raw decision input</dt><dd class="ok">Erased</dd></dl></article>
+        <article class="opa-panel"><h2>Production gates</h2><p>데이터 모듈과 다른 정책 엔진의 필수 판정입니다.</p><dl class="opa-kv"><dt>Signed bundle</dt><dd class="ok">ES256 verified</dd><dt>Durable decision log</dt><dd class="ok">StackGres · 30d</dd><dt>Evaluation transport</dt><dd class="ok">mTLS</dd><dt>Raw decision input</dt><dd class="ok">Erased</dd></dl></article>
       </div>
 		<clr-alert [clrAlertType]="productionReady()?'success':'warning'" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">{{productionReady()?'서명 bundle, mTLS 평가 경로, 이중화 decision-log sink와 30일 영속 보존이 모두 준비되었습니다.':'OPA production gate를 조정하고 있습니다.'}}</span></clr-alert-item></clr-alert>
     </ng-container>
@@ -80,7 +80,7 @@ const DEFAULT_FORM: OpaInstallParameters = {
         <article><h3>HTTP error ratio</h3><p>평가 API 4xx·5xx 비율</p><os-carbon-line-chart [labels]="metrics.series().labels" [series]="errorSeries()" valueAxisTitle="Percent" ariaLabel="OPA HTTP 오류율" /></article>
         <article><h3>Runtime resources</h3><p>Go heap과 goroutine 수</p><os-carbon-line-chart [labels]="metrics.series().labels" [series]="runtimeSeries()" valueAxisTitle="MiB / count" ariaLabel="OPA runtime 자원" /></article>
       </div>
-		<clr-alert clrAlertType="success" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">allow/deny 결과는 CloudNativePG에 영속 기록한 뒤 제한된 outcome 차원으로만 집계합니다. 원문 input과 non-deterministic cache는 OPA에서 제거하며 sink도 원문 input이 포함된 batch를 거부합니다.</span></clr-alert-item></clr-alert>
+		<clr-alert clrAlertType="success" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">allow/deny 결과는 전용 StackGres PostgreSQL에 영속 기록한 뒤 제한된 outcome 차원으로만 집계합니다. 원문 input과 non-deterministic cache는 OPA에서 제거하며 sink도 원문 input이 포함된 batch를 거부합니다.</span></clr-alert-item></clr-alert>
       <p class="os-dim">{{metrics.hint()}} · 마지막 확인 {{metrics.lastSync() || '—'}}</p>
     </section>
 
@@ -89,7 +89,7 @@ const DEFAULT_FORM: OpaInstallParameters = {
     </section>
 	<section class="opa-work" *ngIf="tab()==='config'"><h2>Security & configuration</h2><div class="opa-gates"><article><b>API authorization</b><p>mTLS client만 POST /v1/data/opensphere/**를 호출하며 mutation API는 거부합니다.</p></article><article><b>Decision privacy</b><p>원문 input은 OPA mask와 sink whitelist 양쪽에서 차단합니다.</p></article><article><b>Policy supply chain</b><p>ES256 서명, scope와 revision을 검증하고 검증 실패 시 기존 bundle을 유지합니다.</p></article><article><b>Failure mode</b><p>정책 부재·undefined·bundle 검증 실패를 allow로 전환하지 않습니다.</p></article></div></section>
     <section class="opa-work" *ngIf="tab()==='domain'"><h2>Policies & Decisions</h2><p>bootstrap 정책은 <span class="os-mono">data.opensphere.authz.allow=false</span>입니다. Console에서 Rego 원문을 직접 편집하지 않으며 승인된 Git/bundle pipeline을 정본으로 사용합니다.</p></section>
-	<section class="opa-work" *ngIf="tab()==='backups'"><h2>Bundle recovery</h2><p>서명 bundle은 exact-digest Control Plane artifact와 revision으로 복구하며 decision log는 CloudNativePG 백업 정책을 따릅니다. 현재 보존기간은 30일입니다.</p></section>
+	<section class="opa-work" *ngIf="tab()==='backups'"><h2>Bundle recovery</h2><p>서명 bundle은 exact-digest Control Plane artifact와 revision으로 복구하며 decision log는 전용 StackGres backup plan을 따릅니다. 현재 보존기간은 30일입니다.</p></section>
     <section class="opa-work" *ngIf="tab()==='events'"><h2>Events</h2><table class="table"><thead><tr><th>Type</th><th>Reason</th><th>Message</th><th>Time</th></tr></thead><tbody><tr *ngFor="let e of svc.events()"><td>{{e.type}}</td><td>{{e.reason}}</td><td>{{e.message}}</td><td>{{e.lastTimestamp || e.eventTime}}</td></tr><tr *ngIf="!svc.events().length"><td colspan="4">관련 이벤트 없음</td></tr></tbody></table></section>
     <section class="opa-work" *ngIf="tab()==='claims'"><h2>Claims</h2><p>정책 소비자는 임의 endpoint 공유가 아니라 PolicyDecisionClaim과 제한된 decision path Binding을 통해 연결해야 합니다.</p></section>
     <section class="opa-work" *ngIf="tab()==='upgrade'"><h2>Upgrade & rollback</h2><p>엔진 image digest와 policy bundle revision을 독립적으로 pin하고 rollback합니다. 새 bundle은 서명 검증, Rego test, shadow evaluation을 통과해야 합니다.</p></section>

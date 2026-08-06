@@ -201,9 +201,9 @@ export class FoundationEnginesComponent {
       wiring: 'FoundationModel/identity가 OPA, ServiceMonitor, 제한된 evaluation API를 선언형으로 관리한다.',
     },
     {
-      id: 'postgres', name: 'PostgreSQL', provider: 'CloudNativePG managed plugin', version: 'PG 19 beta2', logo: 'postgresql', mono: 'PG', detail: true, module: 'postgres',
+      id: 'postgres', name: 'PostgreSQL', provider: 'StackGres 1.19 managed plugin', version: 'PG 18', logo: 'postgresql', mono: 'PG', detail: true, module: 'postgres',
       category: 'data', impl: 'real', liveKey: 'cnpg',
-      role: '관계형 데이터베이스 capability. CloudNativePG operator가 PostgreSQL cluster 수명주기를 운영·관리한다.',
+      role: '관계형 데이터베이스 capability. StackGres operator가 전용 SGCluster 수명주기를 운영·관리한다.',
       wiring: '한 plugin에서 Operator 준비 → Cluster 생성 → 토폴로지·DB·백업·이벤트 운영을 이어서 관리한다.',
     },
     {

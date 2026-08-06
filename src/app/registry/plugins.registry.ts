@@ -10,8 +10,8 @@ export const FOUNDATION_PLUGINS: HostedPlugin[] = [
   {
     id: 'postgres', name: 'PostgreSQL', icon: 'db', kind: 'plugin', hostRef: 'foundation',
     capability: 'data.sql.postgres', capabilityLabel: '관계형 DB',
-    desc: '공용 관계형 데이터베이스 capability · CloudNativePG. PostgresClaim으로 전용 DB 발급.',
-    consumePoint: 'foundation-data-pg-rw.opensphere-foundation.svc:5432',
+    desc: 'StackGres 기반 관계형 데이터베이스 Fleet. PostgresClaim으로 전용 SGCluster와 DB를 발급.',
+    consumePoint: 'PostgresClaim status.bindingRef',
     healthRef: 'cnpg', model: 'data', view: { module: 'postgres' },
     surface: PG_SURFACE,
     activation: { packageId: 'postgres', element: 'osp-foundation-postgres' },

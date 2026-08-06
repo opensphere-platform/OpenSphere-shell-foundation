@@ -222,18 +222,24 @@ func TestBootstrapStatementsAreSeparateAutoCommitEntries(t *testing.T) {
 	t.Fatal("SGScript not rendered")
 }
 
-func TestLegacySharedClaimUsesTheFixedCompatibilityTarget(t *testing.T) {
-	claim := testPostgresClaim()
-	claim.SetName("foundation-data-pg-legacy")
-	claim.SetNamespace("opensphere-foundation")
-	_ = unstructured.SetNestedField(claim.Object, "LegacyShared", "spec", "isolation")
-	setLegacyPostgresStatus(claim, claim.GetNamespace())
-	provider, _, _ := unstructured.NestedMap(claim.Object, "status", "providerRef")
-	if provider["kind"] != "Cluster" || provider["name"] != "foundation-data-pg" {
-		t.Fatalf("unexpected legacy providerRef: %#v", provider)
+func TestDedicatedPostgresRendersPrometheusPodMonitor(t *testing.T) {
+	resources := renderPostgresResources(testPostgresClaim(), postgresPlan{
+		Name: "postgresql-dev-single", Version: "18", Profile: "development",
+		CPU: "500m", Memory: "1Gi", Size: "10Gi", Instances: 1,
+	}, "SecretValue")
+	for _, resource := range resources {
+		if resource.GetKind() != "PodMonitor" {
+			continue
+		}
+		endpoints, _, _ := unstructured.NestedSlice(resource.Object, "spec", "podMetricsEndpoints")
+		if len(endpoints) != 1 {
+			t.Fatalf("PodMonitor endpoints=%d, want 1", len(endpoints))
+		}
+		port, _ := endpoints[0].(map[string]interface{})["port"].(string)
+		if port != "pgexporter" {
+			t.Fatalf("PodMonitor port=%q, want pgexporter", port)
+		}
+		return
 	}
-	binding, _, _ := unstructured.NestedMap(claim.Object, "status", "bindingRef")
-	if binding["name"] != "foundation-data-pg-app" {
-		t.Fatalf("unexpected legacy bindingRef: %#v", binding)
-	}
+	t.Fatal("dedicated StackGres resources did not include a PodMonitor")
 }

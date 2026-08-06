@@ -153,7 +153,7 @@ export const CATALOGS: Record<string, Record<string, OperandCatalog>> = {
       panels: [
         { title: '인스턴스', kpi: true, fields: [
           F('up', RL, { unit: 'bool', slo: '=1', observedId: 'pg_up', liveToday: true }),
-          F('engine', RL, { text: 'CloudNativePG (CNPG)' }),
+          F('engine', RL, { text: 'StackGres 1.19' }),
           F('PG version', RL, { observedId: 'pg_version', liveToday: true }),
           F('topology', RL, { slo: '설치옵션', observedId: 'pg_topology', liveToday: true }),
           F('phase', RL, { slo: 'healthy state', observedId: 'pg_phase', liveToday: true }),

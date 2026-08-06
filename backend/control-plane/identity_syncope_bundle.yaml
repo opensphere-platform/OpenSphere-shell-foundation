@@ -1,6 +1,18 @@
 # Apache Syncope 4.0.7 production IGA operand.
-# Secrets are created by the authenticated Foundation Console exact-name endpoint;
-# the control plane only reconciles non-secret desired state.
+# Its database is a dedicated StackGres SGCluster provisioned through PostgresClaim.
+---
+apiVersion: provisioning.opensphere.io/v1beta1
+kind: PostgresClaim
+metadata:
+  name: foundation-identity-syncope-pg
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: syncope, catalog.opensphere.io/provider: stackgres }
+spec:
+  database: syncope
+  owner: syncope
+  isolation: Dedicated
+  planRef: { name: postgresql-dev-single }
+  deletionPolicy: Delete
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -9,33 +21,6 @@ metadata:
   namespace: __NAMESPACE__
   labels: { foundation.opensphere.io/engine: syncope }
 automountServiceAccountToken: false
----
-apiVersion: postgresql.cnpg.io/v1
-kind: DatabaseRole
-metadata:
-  name: foundation-identity-syncope
-  namespace: __NAMESPACE__
-  labels: { foundation.opensphere.io/engine: syncope }
-spec:
-  name: syncope
-  cluster: { name: foundation-data-pg }
-  login: true
-  connectionLimit: 40
-  passwordSecret: { name: foundation-identity-syncope-db-auth }
-  databaseRoleReclaimPolicy: retain
----
-apiVersion: postgresql.cnpg.io/v1
-kind: Database
-metadata:
-  name: foundation-identity-syncope
-  namespace: __NAMESPACE__
-  labels: { foundation.opensphere.io/engine: syncope }
-spec:
-  name: syncope
-  owner: syncope
-  cluster: { name: foundation-data-pg }
-  ensure: present
-  databaseReclaimPolicy: retain
 ---
 apiVersion: cert-manager.io/v1
 kind: Issuer
@@ -177,11 +162,11 @@ spec:
             - name: POD_NAME
               valueFrom: { fieldRef: { fieldPath: metadata.name } }
             - { name: SPRING_PROFILES_ACTIVE, value: "docker,postgresql,opensphere" }
-            - { name: DB_URL, value: "jdbc:postgresql://foundation-data-pg-rw:5432/syncope?sslmode=require&stringtype=unspecified" }
+            - { name: DB_URL, value: "jdbc:postgresql://pgc-foundation-identity-syncope-pg:5432/syncope?sslmode=prefer&stringtype=unspecified" }
             - name: DB_USER
-              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-db-auth, key: username } }
+              valueFrom: { secretKeyRef: { name: pgc-foundation-identity-syncope-pg-binding, key: username } }
             - name: DB_PASSWORD
-              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-db-auth, key: password } }
+              valueFrom: { secretKeyRef: { name: pgc-foundation-identity-syncope-pg-binding, key: password } }
             - { name: DB_POOL_MAX, value: "20" }
             - { name: DB_POOL_MIN, value: "2" }
             - { name: KEYMASTER_ADDRESS, value: "https://$(POD_NAME).foundation-identity-syncope-headless.__NAMESPACE__.svc.cluster.local:8080/syncope/rest/keymaster" }
@@ -257,7 +242,7 @@ spec:
             - name: POD_NAME
               valueFrom: { fieldRef: { fieldPath: metadata.name } }
             - name: DATABASE_URL
-              valueFrom: { secretKeyRef: { name: foundation-identity-syncope-db-auth, key: uri } }
+              valueFrom: { secretKeyRef: { name: pgc-foundation-identity-syncope-pg-binding, key: uri } }
             - name: SYNCOPE_USERNAME
               valueFrom: { secretKeyRef: { name: foundation-identity-syncope-runtime, key: anonymous-user } }
             - name: SYNCOPE_PASSWORD
@@ -354,7 +339,7 @@ spec:
         - { protocol: TCP, port: 8080 }
         - { protocol: TCP, port: 5636 }
     - to:
-        - podSelector: { matchLabels: { cnpg.io/cluster: foundation-data-pg } }
+        - podSelector: { matchLabels: { stackgres.io/cluster-name: pgc-foundation-identity-syncope-pg } }
       ports: [{ protocol: TCP, port: 5432 }]
     - to:
         - namespaceSelector: {}

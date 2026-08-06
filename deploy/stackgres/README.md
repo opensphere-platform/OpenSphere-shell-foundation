@@ -1,9 +1,8 @@
 # StackGres PFSS control plane
 
-This package installs the shared StackGres 1.19.0 operator control plane. It
-does not replace or mutate the existing `foundation-data-pg` CloudNativePG
-cluster. New `PostgresClaim/v1beta1` objects render isolated `SGCluster`
-resources in the claim namespace.
+This package installs the shared StackGres 1.19.0 operator control plane.
+StackGres is the sole PFSS PostgreSQL execution engine. Every
+`PostgresClaim/v1beta1` renders an isolated `SGCluster` in the claim namespace.
 
 Supply-chain constraints:
 

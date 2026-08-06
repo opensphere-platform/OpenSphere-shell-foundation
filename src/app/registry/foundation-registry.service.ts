@@ -104,7 +104,7 @@ export interface SyncopeInstallParameters {
   cpuLimit: string;
   memoryLimit: string;
   monitoring: boolean;
-  databaseMode: 'cloudnativepg-shared';
+  databaseMode: 'stackgres-dedicated';
   tls: true;
 }
 

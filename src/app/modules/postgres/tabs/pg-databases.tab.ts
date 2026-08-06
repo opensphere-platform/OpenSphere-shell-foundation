@@ -45,7 +45,7 @@ import { PgState } from '../ui/pg-state';
 })
 export class PgDatabasesTab {
   readonly svc = inject(CnpgService);
-  providerLabel(): string { return this.svc.provider() === 'stackgres' ? 'StackGres binding' : 'CloudNativePG Database CR'; }
+  providerLabel(): string { return 'StackGres binding'; }
   appliedLabel(d: any): string {
     if (d.status?.applied === true) { return 'applied'; }
     if (d.status?.applied === false) { return 'failed'; }

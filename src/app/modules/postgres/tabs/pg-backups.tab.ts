@@ -67,20 +67,13 @@ export class PgBackupsTab {
   async trigger(): Promise<void> {
     this.busy.set(true);
     this.msg.set('');
-    const stackgres = this.svc.provider() === 'stackgres';
-    const obj = stackgres ? {
+    const obj = {
       apiVersion: 'stackgres.io/v1', kind: 'SGBackup',
       metadata: { generateName: this.svc.name + '-ondemand-', namespace: this.svc.ns },
       spec: { sgCluster: this.svc.name },
-    } : {
-      apiVersion: 'postgresql.cnpg.io/v1', kind: 'Backup',
-      metadata: { generateName: this.svc.name + '-ondemand-', namespace: this.svc.ns },
-      spec: { cluster: { name: this.svc.name } },
     };
     try {
-      const endpoint = stackgres ? 'apis/stackgres.io/v1' : 'apis/postgresql.cnpg.io/v1';
-      const plural = stackgres ? 'sgbackups' : 'backups';
-      const r = await hostFetch(`${apiBase()}/api/k8s/${endpoint}/namespaces/${this.svc.ns}/${plural}`, {
+      const r = await hostFetch(`${apiBase()}/api/k8s/apis/stackgres.io/v1/namespaces/${this.svc.ns}/sgbackups`, {
         method: 'POST', headers: writeHeaders(), body: JSON.stringify(obj),
       });
       if (r.ok) { this.msg.set('✓ 백업 요청됨'); await this.svc.refresh(); }

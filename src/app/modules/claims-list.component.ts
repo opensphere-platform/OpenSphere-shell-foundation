@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnInit, signal } from '@angular/core';
 import { ClarityModule } from '@clr/angular';
-import { apiBase } from '../api-base';
+import { apiBase, hostFetch } from '../api-base';
 import { PROV_GROUP, PROV_VER, ClaimRow, phaseFromStatus, age } from './claims.types';
 
 // 재사용 Claims 목록 — provisioning.opensphere.io claim을 클러스터 전역으로 나열(read-only).
@@ -53,7 +53,7 @@ export class ClaimsListComponent implements OnInit {
   async load(): Promise<void> {
     this.state.set('loading');
     try {
-      const r = await fetch(`${apiBase()}/api/k8s/apis/${PROV_GROUP}/${PROV_VER}/${this.plural}`);
+      const r = await hostFetch(`${apiBase()}/api/k8s/apis/${PROV_GROUP}/${PROV_VER}/${this.plural}`, { cache: 'no-store' });
       if (r.status === 403) { this.state.set('noperm'); return; }
       if (r.status === 404 || !r.ok) { this.state.set('nocrd'); return; }
       const items = (await r.json()).items || [];

@@ -22,7 +22,7 @@ export class FoundationService {
   }
   private url(p: string) { return `${this.base()}/api/k8s${p}`; }
 
-  /** data 설치옵션 '버전' 목록 — 셸 백엔드가 ghcr(CloudNativePG 이미지) 실시간 조회(하드코딩 아님). */
+  /** 이전 설치 폼 호환용 PostgreSQL version 목록. 실제 실행 버전은 StackGres AddOnPlan이 결정한다. */
   pgImageTags(): Observable<any> { return this.http.get(`${this.base()}/pg-image-tags`, this.hdr()); }
   /** data 설치옵션 '확장' 목록 — 셸 백엔드가 실행 중 PG의 pg_available_extensions 조회(이미지가 실제 제공하는 확장). */
   pgExtensions(): Observable<any> { return this.http.get(`${this.base()}/pg-extensions`, this.hdr()); }

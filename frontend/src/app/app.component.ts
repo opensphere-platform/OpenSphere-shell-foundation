@@ -58,7 +58,7 @@ type Route = { kind: 'index' } | { kind: 'operand'; model: string; operand: Oper
         <!-- ===== PG 설치 옵션 폼(공용 ng-template) — operand 페이지 + 부트스트랩 마법사에서 출력 ===== -->
         <ng-template #pgInstallForm>
           <div class="pg-install">
-            <h4 class="fs-h4">{{ reconfig() ? '재구성' : '설치 옵션' }} <span class="fs-muted">(CloudNativePG 매핑 — 선언형, execInPod 0)</span>
+            <h4 class="fs-h4">{{ reconfig() ? '재구성' : '설치 옵션' }} <span class="fs-muted">(StackGres PostgresClaim — 선언형, execInPod 0)</span>
               <button class="btn btn-sm btn-primary pg-apply" [disabled]="pgBusy()" (click)="installData()">{{ pgInstalled() ? '재구성 적용' : '설치' }}</button>
               <button *ngIf="reconfig()" class="btn btn-sm btn-link fs-btn-ml-sm" (click)="reconfig.set(false)">취소</button>
             </h4>
@@ -603,7 +603,7 @@ export class AppComponent {
   readonly operandsOf = operandsOf;
 
   // ── Bootstrap(Foundation 설립) — PG 기준 상태머신 + preflight ──
-  readonly PF_ORDER = ['cp', 'desc', 'sc', 'cnpg'];
+  readonly PF_ORDER = ['cp', 'desc', 'sc', 'stackgres'];
   readonly preflight = signal<{ id: string; label: string; ok: boolean; detail: string }[]>([]);
   readonly bootstrapBypass = signal(false); // '그래도 둘러보기' 탈출구
   readonly foundationState = computed<'NotEstablished' | 'Establishing' | 'Established'>(() => {
@@ -626,9 +626,9 @@ export class AppComponent {
       next: (r: any) => { const n = (r.items || []).length; this.upsertPf({ id: 'sc', label: 'StorageClass(CSI)', ok: n > 0, detail: n > 0 ? (r.items || []).map((x: any) => x.metadata.name).join(', ') : '없음' }); },
       error: () => this.upsertPf({ id: 'sc', label: 'StorageClass(CSI)', ok: false, detail: '확인 불가(권한)' }),
     });
-    this.svc.deployment('cnpg-system', 'cnpg-controller-manager').subscribe({
-      next: (d: any) => { const rr = d.status?.readyReplicas || 0; this.upsertPf({ id: 'cnpg', label: 'CloudNativePG operator(채택)', ok: rr >= 1, detail: rr + '/1 Ready' }); },
-      error: () => this.upsertPf({ id: 'cnpg', label: 'CloudNativePG operator(채택)', ok: false, detail: '미설치 — 설치 필요' }),
+    this.svc.deployment('stackgres', 'stackgres-operator').subscribe({
+      next: (d: any) => { const rr = d.status?.readyReplicas || 0; this.upsertPf({ id: 'stackgres', label: 'StackGres operator 1.19', ok: rr >= 1, detail: rr + '/1 Ready' }); },
+      error: () => this.upsertPf({ id: 'stackgres', label: 'StackGres operator 1.19', ok: false, detail: '미설치 — 설치 필요' }),
     });
   }
   private prefillPgForm() {

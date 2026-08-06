@@ -39,12 +39,18 @@ func TestOPABundleIsProductionFailClosedAndMonitored(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foundOPA, foundControl, foundMonitor, foundPolicy, foundPDB, foundCertificate, foundRule := false, false, false, false, false, false, false
+	foundOPA, foundControl, foundMonitor, foundPolicy, foundPDB, foundCertificate, foundRule, foundPostgresClaim := false, false, false, false, false, false, false, false
 	for _, obj := range objs {
 		if obj.GetLabels()[lblEngine] != "opa" {
 			t.Fatalf("%s/%s missing OPA engine label", obj.GetKind(), obj.GetName())
 		}
 		switch obj.GetKind() {
+		case "PostgresClaim":
+			foundPostgresClaim = obj.GetName() == "foundation-identity-opa-pg"
+			provider := obj.GetLabels()["catalog.opensphere.io/provider"]
+			if provider != "stackgres" {
+				t.Fatalf("OPA database provider=%q, want stackgres", provider)
+			}
 		case "Deployment":
 			if obj.GetName() == opaName {
 				foundOPA = true
@@ -79,7 +85,7 @@ func TestOPABundleIsProductionFailClosedAndMonitored(t *testing.T) {
 			foundRule = true
 		}
 	}
-	if !foundOPA || !foundControl || !foundMonitor || !foundPolicy || !foundPDB || !foundCertificate || !foundRule {
-		t.Fatalf("OPA production bundle incomplete: opa=%v control=%v monitor=%v signedPolicy=%v pdb=%v cert=%v rule=%v", foundOPA, foundControl, foundMonitor, foundPolicy, foundPDB, foundCertificate, foundRule)
+	if !foundOPA || !foundControl || !foundMonitor || !foundPolicy || !foundPDB || !foundCertificate || !foundRule || !foundPostgresClaim {
+		t.Fatalf("OPA production bundle incomplete: opa=%v control=%v monitor=%v signedPolicy=%v pdb=%v cert=%v rule=%v postgresClaim=%v", foundOPA, foundControl, foundMonitor, foundPolicy, foundPDB, foundCertificate, foundRule, foundPostgresClaim)
 	}
 }

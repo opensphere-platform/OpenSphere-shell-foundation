@@ -24,6 +24,7 @@ var (
 	addOnInstallGVK  = schema.GroupVersionKind{Group: "catalog.opensphere.io", Version: "v1alpha1", Kind: "AddOnInstall"}
 	sgClusterGVK     = schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGCluster"}
 	sgScriptGVK      = schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGScript"}
+	podMonitorGVK    = schema.GroupVersionKind{Group: "monitoring.coreos.com", Version: "v1", Kind: "PodMonitor"}
 )
 
 const postgresFleetFinalizer = "provisioning.opensphere.io/postgres-cluster-protect"
@@ -51,17 +52,8 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 	if claim.GetDeletionTimestamp() != nil {
 		return r.release(ctx, claim)
 	}
-	isolation, _, _ := unstructured.NestedString(claim.Object, "spec", "isolation")
-	if isolation == "LegacyShared" {
-		if claim.GetNamespace() != r.cfg.managedNS {
-			return r.reject(ctx, nn, "NamespaceNotManaged", fmt.Sprintf("LegacyShared PostgreSQL is fixed to namespace %s", r.cfg.managedNS))
-		}
-		return reconcile.Result{}, updateStatusRetry(ctx, r.direct, postgresClaimGVK, nn, func(o *unstructured.Unstructured) {
-			setLegacyPostgresStatus(o, claim.GetNamespace())
-		})
-	}
 	if claim.GetNamespace() != r.cfg.managedNS {
-		return r.reject(ctx, nn, "NamespaceNotManaged", fmt.Sprintf("Dedicated PostgreSQL is currently limited to namespace %s", r.cfg.managedNS))
+		return r.reject(ctx, nn, "NamespaceNotManaged", fmt.Sprintf("StackGres PostgreSQL is currently limited to namespace %s", r.cfg.managedNS))
 	}
 	if !hasFinalizer(claim, postgresFleetFinalizer) {
 		if err := updateMetaRetry(ctx, r.direct, postgresClaimGVK, nn, func(o *unstructured.Unstructured) { addFinalizer(o, postgresFleetFinalizer) }); err != nil {
@@ -149,18 +141,6 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 	return reconcile.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
-func setLegacyPostgresStatus(o *unstructured.Unstructured, namespace string) {
-	setNested(o, "LegacyShared", "status", "phase")
-	_ = unstructured.SetNestedMap(o.Object, map[string]interface{}{
-		"apiVersion": "postgresql.cnpg.io/v1", "kind": "Cluster",
-		"name": "foundation-data-pg", "namespace": namespace,
-	}, "status", "providerRef")
-	_ = unstructured.SetNestedMap(o.Object, map[string]interface{}{
-		"name": "foundation-data-pg-app", "namespace": namespace,
-	}, "status", "bindingRef")
-	setPostgresCondition(o, "Ready", "True", "LegacyShared", "Existing shared CNPG service remains authoritative")
-}
-
 func (r *postgresClaimReconciler) reject(ctx context.Context, nn types.NamespacedName, reason, message string) (reconcile.Result, error) {
 	err := updateStatusRetry(ctx, r.direct, postgresClaimGVK, nn, func(o *unstructured.Unstructured) {
 		setNested(o, "Rejected", "status", "phase")
@@ -211,6 +191,7 @@ func (r *postgresClaimReconciler) release(ctx context.Context, claim *unstructur
 			{Version: "v1", Kind: "Secret"},
 			{Group: "rbac.authorization.k8s.io", Version: "v1", Kind: "Role"},
 			{Group: "rbac.authorization.k8s.io", Version: "v1", Kind: "RoleBinding"},
+			podMonitorGVK,
 		} {
 			if err := r.direct.DeleteAllOf(ctx, gvkObj(gvk), client.InNamespace(claim.GetNamespace()), client.MatchingLabels{"provisioning.opensphere.io/postgres-claim": claim.GetName()}); err != nil && !apierrors.IsNotFound(err) {
 				return reconcile.Result{}, err
@@ -321,11 +302,17 @@ func renderPostgresResources(claim *unstructured.Unstructured, plan postgresPlan
 	binding := object(schema.GroupVersionKind{Group: "rbac.authorization.k8s.io", Version: "v1", Kind: "RoleBinding"}, ns, clusterName+"-binding-reader")
 	binding.Object["roleRef"] = map[string]interface{}{"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": role.GetName()}
 	binding.Object["subjects"] = []interface{}{map[string]interface{}{"apiGroup": "rbac.authorization.k8s.io", "kind": "Group", "name": "opensphere-console-admins"}}
+	podMonitor := object(podMonitorGVK, ns, clusterName)
+	podMonitor.Object["spec"] = map[string]interface{}{
+		"selector":            map[string]interface{}{"matchLabels": map[string]interface{}{"stackgres.io/cluster-name": clusterName}},
+		"podMetricsEndpoints": []interface{}{map[string]interface{}{"port": "pgexporter", "path": "/metrics", "interval": "15s"}},
+	}
+	podMonitor.SetLabels(map[string]string{"release": "kube-prometheus-stack"})
 	resources := []*unstructured.Unstructured{profile, pgConfig}
 	if plan.Pooling {
 		resources = append(resources, pooling)
 	}
-	resources = append(resources, scriptSecret, script, role, binding, cluster)
+	resources = append(resources, scriptSecret, script, role, binding, podMonitor, cluster)
 	for _, resource := range resources {
 		stampPostgresLabels(resource, claim)
 		labels := resource.GetLabels()

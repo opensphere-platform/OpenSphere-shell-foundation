@@ -9,7 +9,7 @@ let hostContextInstalled = false;
 let activeContext;
 
 const FOUNDATION_MANUALS = [
-  ['postgresql-operations-ko', 'OpenSphere PostgreSQL 19 플러그인 설치 및 운영 안내서', 'postgresql-operations.ko.md', '/pfss/postgres', ['postgresql', 'cloudnativepg', 'data']],
+  ['postgresql-operations-ko', 'OpenSphere PostgreSQL 멀티 인스턴스 설치 및 운영 안내서', 'postgresql-operations.ko.md', '/pfss/postgres', ['postgresql', 'stackgres', 'sgcluster', 'data']],
   ['percona-psmdb-operations-ko', 'OpenSphere Percona PSMDB 플러그인 설치 및 운영 안내서', 'percona-psmdb-operations.ko.md', '/pfss/psmdb', ['mongodb', 'percona', 'data']],
   ['valkey-operations-ko', 'OpenSphere Valkey 플러그인 설치 및 운영 안내서', 'valkey-operations.ko.md', '/pfss/valkey', ['valkey', 'cache', 'data']],
   ['opensearch-operations-ko', 'OpenSphere OpenSearch 플러그인 설치 및 운영 안내서', 'opensearch-operations.ko.md', '/pfss/opensearch', ['opensearch', 'search', 'vector', 'data']],

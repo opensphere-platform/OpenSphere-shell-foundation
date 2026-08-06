@@ -16,7 +16,7 @@ import { State } from '../cnpg.types';
       <clr-alert-item><span class="alert-text">{{ hint || '항목이 없습니다.' }}<ng-container *ngIf="sub"> — {{ sub }}</ng-container></span></clr-alert-item>
     </clr-alert>
     <clr-alert *ngIf="state === 'noperm'" clrAlertType="warning" [clrAlertClosable]="false">
-      <clr-alert-item><span class="alert-text">조회 권한 없음 — rbac-foundation-read.yaml(provisioning·CNPG read) 적용 필요.</span></clr-alert-item>
+      <clr-alert-item><span class="alert-text">조회 권한 없음 — rbac-foundation-read.yaml(PostgreSQL provider·provisioning read) 적용 필요.</span></clr-alert-item>
     </clr-alert>
     <clr-alert *ngIf="state === 'nocrd'" clrAlertType="warning" [clrAlertClosable]="false">
       <clr-alert-item><span class="alert-text">해당 리소스 타입이 클러스터에 없습니다(CRD 미설치).</span></clr-alert-item>

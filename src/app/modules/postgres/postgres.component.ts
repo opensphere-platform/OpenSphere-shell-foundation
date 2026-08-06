@@ -36,7 +36,7 @@ const TABS: { id: Tab; label: string }[] = [
       </label>
       <button class="btn btn-sm" (click)="svc.refresh()" [disabled]="svc.busy()">{{ svc.busy() ? '동기화…' : '새로고침' }}</button>
     </div>
-    <p class="os-sub">공용 관계형 DB capability · CloudNativePG · {{ svc.name }} · ns {{ svc.ns }}<span *ngIf="svc.lastSync()"> · {{ svc.lastSync() }}</span></p>
+    <p class="os-sub">StackGres 기반 관계형 DB capability · {{ svc.name }} · ns {{ svc.ns }}<span *ngIf="svc.lastSync()"> · {{ svc.lastSync() }}</span></p>
 
     <ul class="nav" role="tablist">
       <li class="nav-item" *ngFor="let t of tabs">

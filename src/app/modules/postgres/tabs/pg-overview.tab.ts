@@ -153,7 +153,7 @@ export class PgOverviewTab {
   @Output() jump = new EventEmitter<string>();
 
   primaryShort(): string { const p = this.svc.primary(); return p ? p.replace(this.svc.name + '-', '#') : '—'; }
-  providerLabel(): string { return this.svc.provider() === 'stackgres' ? 'StackGres' : 'CloudNativePG'; }
+  providerLabel(): string { return 'StackGres'; }
 
   readonly instanceLabels = computed(() => this.svc.instances().map((item) => item.name.replace(`${this.svc.name}-`, '#')));
   readonly instanceSeries = computed<PgChartSeries[]>(() => [{ label: 'Ready', data: this.svc.instances().map((item) => item.ready ? 100 : 0), color: '#003b5c' }]);

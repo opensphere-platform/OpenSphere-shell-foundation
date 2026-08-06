@@ -1,4 +1,4 @@
-# PostgreSQL object administration reads one fixed CNPG application Secret only.
+# PostgreSQL object administration reads the fixed Foundation StackGres binding only.
 # The generic Kubernetes proxy still blocks every Secret path. The backend uses
 # the verified Console administrator identity, so this privilege is granted to
 # the fixed projected administrator group rather than the Foundation workload SA.
@@ -13,7 +13,7 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
-    resourceNames: ["foundation-data-pg-app"]
+    resourceNames: ["pgc-foundation-data-pg-binding"]
     verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

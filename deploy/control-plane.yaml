@@ -37,8 +37,6 @@ spec:
             - --collector-image=ghcr.io/opensphere-platform/mirror/opentelemetry-collector-contrib@sha256:a2a52e43c1a80aa94120ad78c2db68780eb90e6d11c8db5b3ce2f6a0cc6b5029
             # image-source: ghcr-mirror(ok) origin=quay.io/keycloak/keycloak:26.0
             - --keycloak-image=ghcr.io/opensphere-platform/mirror/keycloak@sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858
-            # image-source: OpenSphere curated GHCR mirror, origin=ghcr.io/cloudnative-pg/postgresql:19beta2-standard-trixie
-            - --pg-image=ghcr.io/opensphere-platform/mirror/postgresql@sha256:c8eb2787d14137421a26a771bf933221f901d8787f6a4bb2fe3e511520c01d44
             - --psmdb-image=ghcr.io/opensphere-platform/mirror/percona-server-mongodb@sha256:53f89c001997627554e6afc0feb5906209ba109f4f98c62f2ca8456c214af60c
             - --valkey-image=ghcr.io/opensphere-platform/mirror/valkey@sha256:c9b77919daeba2c02ad954d0c844cc4e7142069d177b89c5fd771f405daf9e02
             - --valkey-exporter-image=ghcr.io/opensphere-platform/mirror/redis-exporter@sha256:bbc0b673a89296eab36d6c6c2bde8571ee868dc4059306be482c03d7b05aa662

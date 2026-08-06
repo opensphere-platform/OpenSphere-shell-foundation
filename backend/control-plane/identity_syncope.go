@@ -90,7 +90,7 @@ func buildSyncopeBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstruct
 			}
 			annotations["foundation.opensphere.io/profile"] = o.profile
 			annotations["foundation.opensphere.io/monitoring"] = boolStr(o.monitoring)
-			annotations["foundation.opensphere.io/database"] = "CloudNativePG/foundation-data-pg/syncope"
+			annotations["foundation.opensphere.io/database"] = "StackGres/pgc-foundation-identity-syncope-pg/syncope"
 			annotations["foundation.opensphere.io/tls-mode"] = "TLS"
 			obj.SetAnnotations(annotations)
 		}
@@ -111,18 +111,12 @@ func (r *modelReconciler) syncopeReady(ctx context.Context, fm *unstructured.Uns
 }
 
 func (r *modelReconciler) syncopeDatabaseReady(ctx context.Context) bool {
-	cluster := gvkObj(cnpgClusterGVK)
-	if err := r.direct.Get(ctx, types.NamespacedName{Namespace: r.cfg.managedNS, Name: "foundation-data-pg"}, cluster); err != nil {
+	claim := gvkObj(postgresClaimGVK)
+	if err := r.direct.Get(ctx, types.NamespacedName{Namespace: r.cfg.managedNS, Name: "foundation-identity-syncope-pg"}, claim); err != nil {
 		return false
 	}
-	conditions, _, _ := unstructured.NestedSlice(cluster.Object, "status", "conditions")
-	for _, raw := range conditions {
-		condition, _ := raw.(map[string]interface{})
-		if condition["type"] == "Ready" {
-			return condition["status"] == "True"
-		}
-	}
-	return false
+	phase, _, _ := unstructured.NestedString(claim.Object, "status", "phase")
+	return phase == "Ready"
 }
 
 func syncopeURL(ns string) string {

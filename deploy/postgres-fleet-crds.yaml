@@ -1,6 +1,4 @@
-# PostgreSQL Fleet northbound contracts.
-# PostgresClaim v1alpha1 remains served for existing shared-CNPG consumers;
-# v1beta1 is the storage version and provisions one isolated StackGres cluster.
+# PostgreSQL Fleet northbound contracts. Every claim provisions one isolated StackGres cluster.
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -37,7 +35,7 @@ spec:
                     name: { type: string }
                 isolation:
                   type: string
-                  enum: [Dedicated, LegacyShared]
+                  enum: [Dedicated]
                 storage:
                   type: object
                   properties:

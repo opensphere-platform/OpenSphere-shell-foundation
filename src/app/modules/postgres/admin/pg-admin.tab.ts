@@ -51,7 +51,7 @@ interface ExplorerSelection { kind: SelectionKind; title: string; schema?: strin
         <span class="pga-tool-sep"></span>
         <button class="pga-tool" type="button" title="Open Query Tool" (click)="activeTab.set('query')"><os-cicon [icon]="iCode" [size]="16"/> Query Tool</button>
         <button class="pga-tool" type="button" title="View selected table data" (click)="openDataView()" [disabled]="!canViewData()"><os-cicon [icon]="iTable" [size]="16"/> View Data</button>
-        <div class="pga-connection"><span>{{svc.catalog()?.cluster || 'foundation-data-pg'}}</span><b>Connected</b></div>
+        <div class="pga-connection"><span>{{svc.catalog()?.cluster || 'pgc-foundation-data-pg'}}</span><b>Connected</b></div>
       </div>
       <clr-alert *ngIf="svc.state()==='error'" clrAlertType="danger" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">{{svc.error()}}</span><div class="alert-actions"><button class="btn alert-action" (click)="svc.refresh()">Retry</button></div></clr-alert-item></clr-alert>
       <div class="pga-body" *ngIf="svc.catalog() as catalog">

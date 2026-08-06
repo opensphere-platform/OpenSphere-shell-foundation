@@ -27,7 +27,7 @@ export interface PgTypedAction {
 
 @Injectable({ providedIn: 'root' })
 export class PgAdminService {
-  readonly selectedCluster = signal(`cloudnativepg:${FND_NS}:foundation-data-pg`);
+  readonly selectedCluster = signal(`stackgres:${FND_NS}:pgc-foundation-data-pg`);
   readonly catalog = signal<PgAdminCatalog | null>(null);
   readonly state = signal<'idle' | 'loading' | 'ok' | 'error'>('idle');
   readonly error = signal('');

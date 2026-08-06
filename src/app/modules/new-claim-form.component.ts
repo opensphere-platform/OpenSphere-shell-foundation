@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output, signal } from '@angular/core';
-import { apiBase } from '../api-base';
+import { apiBase, hostFetch } from '../api-base';
 import { PROV_GROUP, PROV_VER } from './claims.types';
 
 // 선언형 claim 생성 폼 — /api/k8s create 시도. 403(권한)·404(CRD 미설치) 시 YAML 미리보기로 graceful 폴백(GitOps PR 우회).
@@ -57,7 +57,7 @@ export class NewClaimFormComponent {
     const obj = this.build();
     const plural = this.kind === 'pg' ? 'postgresclaims' : 'opensearchindexclaims';
     try {
-      const r = await fetch(`${apiBase()}/api/k8s/apis/${PROV_GROUP}/${PROV_VER}/namespaces/${this.ns()}/${plural}`, {
+      const r = await hostFetch(`${apiBase()}/api/k8s/apis/${PROV_GROUP}/${PROV_VER}/namespaces/${this.ns()}/${plural}`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(obj),
       });
       if (r.ok) { this.msg.set('✓ 생성됨 — 컨트롤러가 프로비저닝합니다.'); this.yaml.set(''); this.created.emit(); }

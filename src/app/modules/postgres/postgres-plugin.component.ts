@@ -4,7 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { ClarityModule } from '@clr/angular';
 import { CarbonIcon } from '../../carbon-icon';
 import { apiBase, hostFetch } from '../../api-base';
-import { CnpgOperatorService } from '../../foundation/cnpgoperator/cnpgoperator.service';
 import { FoundationRegistryService, PostgresInstallParameters } from '../../registry/foundation-registry.service';
 import { ViewRouter } from '../../view-router';
 import { CnpgService } from './cnpg.service';
@@ -21,9 +20,7 @@ import { PgAdminTab } from './admin/pg-admin.tab';
 import { PgAdminService } from './admin/pg-admin.service';
 import { PostgresFleetCluster, PostgresFleetService } from './postgres-fleet.service';
 import ArrowLeft16 from '@carbon/icons/es/arrow--left/16';
-import Download16 from '@carbon/icons/es/download/16';
 import Renew16 from '@carbon/icons/es/renew/16';
-import WarningAlt16 from '@carbon/icons/es/warning--alt/16';
 import { PluginPageHeaderComponent, PluginPageHeaderModel, PluginPageTab, PluginTabsComponent } from '../../shared/plugin-page-shell.component';
 
 type PackageTab = 'overview' | 'monitoring' | 'admin' | 'fleet' | 'operator' | 'cluster' | 'topology' | 'config' | 'databases' | 'backups' | 'events' | 'claims' | 'upgrade' | 'documentation';
@@ -41,14 +38,10 @@ interface PgForm extends PostgresInstallParameters { profile: Profile }
 
 const LOGO = 'https://logos.opl.io.kr/i/postgresql';
 const MANUAL_SOURCE_ID = 'plugin:foundation/postgresql-operations-ko';
-const VERSION_OPTIONS = [
-  { value: '19beta2-standard-trixie', label: 'PostgreSQL 19 beta2 · standard-trixie' },
-];
-
 const DEFAULT_FORM: PgForm = {
   profile: 'development',
   instances: 1,
-  imageTag: '19beta2-standard-trixie',
+  imageTag: '18',
   namespace: 'opensphere-foundation',
   storageClass: 'standard',
   storageSize: '10Gi',
@@ -153,7 +146,7 @@ const DEFAULT_FORM: PgForm = {
 
         <pg-overview part="details" (jump)="openTab($event)"></pg-overview>
 
-        <section class="pgp-description"><div><h2>Description</h2><p>PostgreSQL plugin은 선택한 Namespace의 {{ providerName(selected) }} 클러스터를 기준으로 토폴로지, 설정, 데이터베이스·역할, 백업, 이벤트와 Claim을 관리합니다. 신규 인스턴스는 전용 StackGres 수명주기로 제공하며 기존 CloudNativePG도 동일한 운영 화면에서 유지합니다.</p></div><div><h2>Documentation</h2><a [href]="manualUrl">OpenSphere PostgreSQL 19 설치·운영 안내서 (한글)</a><a href="https://stackgres.io/doc/latest/" target="_blank" rel="noreferrer">StackGres documentation</a><a href="https://www.postgresql.org/docs/current/" target="_blank" rel="noreferrer">PostgreSQL documentation</a><button class="btn btn-sm btn-link" type="button" (click)="openTab('cluster')">OpenSphere 설치 계약 보기</button></div></section>
+        <section class="pgp-description"><div><h2>Description</h2><p>PostgreSQL plugin은 선택한 Namespace의 StackGres SGCluster를 기준으로 토폴로지, 설정, 데이터베이스·역할, 백업, 이벤트와 Claim을 관리합니다. 모든 PostgreSQL 인스턴스는 동일한 StackGres 수명주기로 운영됩니다.</p></div><div><h2>Documentation</h2><a [href]="manualUrl">OpenSphere PostgreSQL 멀티 인스턴스 운영 안내서 (한글)</a><a [href]="providerDocsUrl()" target="_blank" rel="noreferrer">{{ providerDocsLabel() }}</a><a [href]="postgresDocsUrl()" target="_blank" rel="noreferrer">PostgreSQL {{documentationVersion()}} documentation</a><button class="btn btn-sm btn-link" type="button" (click)="openTab('cluster')">OpenSphere 설치 계약 보기</button></div></section>
       </ng-container>
       <clr-alert *ngIf="claimResult" [clrAlertType]="claimFailed?'danger':'success'" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">{{claimResult}}</span></clr-alert-item></clr-alert>
       </section>
@@ -161,7 +154,7 @@ const DEFAULT_FORM: PgForm = {
 
     <section *ngIf="tab() === 'fleet'" class="pgp-workspace" aria-label="PostgreSQL Fleet overview">
       <div class="pgp-section-head"><div><span class="vl-eyebrow">Secondary view</span><h2>PFSS PostgreSQL Fleet</h2><p>모든 Namespace의 PostgreSQL을 확인합니다. 운영 대상 선택은 상단 Namespace 컨텍스트를 기준으로 합니다.</p></div><button class="btn btn-sm" type="button" (click)="refreshFleet()" [disabled]="fleet.busy()">새로고침</button></div>
-      <clr-alert clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">신규 PostgresClaim은 독립 StackGres SGCluster, 볼륨, 앱 자격증명과 수명주기를 가집니다. 기존 CloudNativePG는 LegacyShared로 명확히 구분합니다.</span></clr-alert-item></clr-alert>
+      <clr-alert clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">모든 PostgresClaim은 독립 StackGres SGCluster, 볼륨, 앱 자격증명과 수명주기를 가집니다.</span></clr-alert-item></clr-alert>
       <div class="pgp-operator-grid" *ngIf="fleet.clusters().length; else noFleetClusters">
         <button type="button" class="card" *ngFor="let cluster of fleet.clusters()" (click)="selectFleetClusterAndOpen(cluster.id)" [class.pgp-selected-card]="fleet.selectedId()===cluster.id"><div class="card-header">{{cluster.displayName}} <span class="label" [ngClass]="cluster.ready?'label-success':'label-warning'">{{cluster.phase}}</span></div><div class="card-block"><dl class="os-kv"><dt>Provider</dt><dd>{{cluster.provider}}</dd><dt>Mode</dt><dd>{{cluster.mode}}</dd><dt>Namespace</dt><dd class="os-mono">{{cluster.namespace}}</dd><dt>Instances</dt><dd>{{cluster.readyInstances}} / {{cluster.instances}}</dd><dt>Storage</dt><dd>{{cluster.storage || '—'}}</dd></dl></div></button>
       </div>
@@ -176,45 +169,22 @@ const DEFAULT_FORM: PgForm = {
       <div class="modal-footer"><button class="btn btn-outline" type="button" (click)="namespaceModalOpen=false" [disabled]="creatingNamespace">취소</button><button class="btn btn-primary" type="button" (click)="createNamespace()" [disabled]="creatingNamespace||!newNamespaceName.trim()||newNamespaceReason.trim().length<8">Namespace 생성</button></div>
     </clr-modal>
 
-    <section *ngIf="tab() === 'operator' && selectedIsLegacy()" class="pgp-workspace">
-      <div class="pgp-section-head"><div><span class="vl-eyebrow">Internal dependency</span><h2>CloudNativePG Operator</h2></div><span class="label" [ngClass]="op.ready() ? 'label-success' : 'label-warning'">{{ op.phaseLabel() }}</span></div>
-      <clr-alert clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">Operator는 PostgreSQL plugin이 공유하는 내부 실행 기반입니다. 사용자에게 별도 plugin으로 등록하지 않습니다.</span></clr-alert-item></clr-alert>
-      <clr-alert *ngIf="!op.installerReady()" clrAlertType="warning" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">{{ op.installerReason() }}</span><div class="alert-actions"><button type="button" class="btn alert-action" (click)="openControlPlane()">Control Plane으로 이동</button></div></clr-alert-item></clr-alert>
-
-      <div class="pgp-operator-grid" *ngIf="op.installed()">
-        <div class="card"><div class="card-header">Deployment</div><div class="card-block"><dl class="os-kv"><dt>Ready</dt><dd>{{ op.readyN() }}/{{ op.totalN() }}</dd><dt>Namespace</dt><dd class="os-mono">cnpg-system</dd><dt>Image</dt><dd class="os-mono">{{ op.installedImage() }}</dd></dl></div></div>
-        <div class="card"><div class="card-header">Managed clusters</div><div class="card-block"><strong class="pgp-big">{{ op.clusters().length }}</strong><p>클러스터 전체에서 Operator가 관찰한 PostgreSQL Cluster</p></div></div>
-      </div>
-
-      <div *ngIf="!op.installed() && op.installState() === 'idle'" class="pgp-install-box">
-        <label class="vl-field"><span class="vl-field-l">Operator chart</span><select class="os-filter" (change)="selectOperator($event)"><option *ngFor="let v of op.versions" [value]="v.chart">{{ v.chart }} · app {{ v.app }}</option></select></label>
-        <dl class="os-kv"><dt>설치 방식</dt><dd>Crossplane provider-helm · Release/cnpg</dd><dt>대상</dt><dd class="os-mono">cnpg-system</dd><dt>Mirror</dt><dd class="os-mono">{{ op.plan().image }}</dd></dl>
-        <button class="btn btn-primary" type="button" (click)="op.install()" [disabled]="!op.canInstall()"><os-cicon [icon]="iDownload" [size]="16" /> Operator 설치</button>
-      </div>
-      <div class="vl-note vl-note--danger" *ngIf="op.installState() === 'error'"><os-cicon [icon]="iWarning" [size]="20" /><div><strong>Operator 설치 실패</strong><p>{{ op.installError() }}</p><button class="btn btn-sm" type="button" (click)="op.dismissError()">다시 시도</button></div></div>
-      <div class="vl-progress-wrap" *ngIf="op.installState() === 'installing'">
-        <div class="vl-progress-head"><span>Operator 설치 진행</span><span class="vl-progress-pct">{{ op.progress() }}%</span></div>
-        <div class="vl-progress-track"><div class="vl-progress-bar" [style.width.%]="op.progress()"></div></div>
-        <div class="vl-log"><div class="vl-log-line" *ngFor="let line of op.logs()">{{ line }}</div></div>
-      </div>
-    </section>
-
-    <section *ngIf="tab() === 'operator' && !selectedIsLegacy() && selectedContextCluster() as selected" class="pgp-workspace">
+    <section *ngIf="tab() === 'operator' && selectedContextCluster() as selected" class="pgp-workspace">
       <div class="pgp-section-head"><div><span class="vl-eyebrow">Internal dependency</span><h2>StackGres Operator</h2><p>선택한 전용 PostgreSQL의 선언과 수명주기를 조정하는 운영자입니다.</p></div><span class="label" [ngClass]="selected.ready ? 'label-success' : 'label-warning'">{{selected.ready ? 'Ready' : selected.phase}}</span></div>
       <div class="pgp-operator-grid"><article class="card"><div class="card-header">Controller</div><div class="card-block"><dl class="os-kv"><dt>Provider</dt><dd>stackgres</dd><dt>Namespace</dt><dd class="os-mono">stackgres</dd><dt>Managed resource</dt><dd class="os-mono">SGCluster/{{selected.name}}</dd></dl></div></article><article class="card"><div class="card-header">Selected target</div><div class="card-block"><dl class="os-kv"><dt>Namespace</dt><dd class="os-mono">{{selected.namespace}}</dd><dt>Mode</dt><dd>{{selected.mode}}</dd><dt>Lifecycle</dt><dd>{{selected.phase}}</dd></dl></div></article></div>
       <clr-alert clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">Operator 설치·업그레이드는 Foundation Control Plane이 관리하며, 이 화면은 선택한 SGCluster의 실제 연결 상태를 표시합니다.</span></clr-alert-item></clr-alert>
     </section>
 
-    <section *ngIf="tab() === 'cluster' && selectedIsLegacy()" class="pgp-workspace">
+    <section *ngIf="false" class="pgp-workspace">
       <div class="pgp-section-head"><div><span class="vl-eyebrow">Desired state</span><h2>PostgreSQL Cluster 구성</h2></div><span class="label" [ngClass]="clusterExists() ? 'label-success' : 'label-warning'">{{ clusterExists() ? 'Managed' : 'Not created' }}</span></div>
-      <clr-alert *ngIf="!op.ready()" clrAlertType="warning" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">Cluster를 생성하려면 CloudNativePG Operator가 먼저 Ready여야 합니다.</span><div class="alert-actions"><button class="btn alert-action" type="button" (click)="openTab('operator')">Operator로 이동</button></div></clr-alert-item></clr-alert>
+      <clr-alert *ngIf="false" clrAlertType="warning" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">Cluster plan을 먼저 선택해야 합니다.</span></clr-alert-item></clr-alert>
 
       <form class="pgp-form" (ngSubmit)="applyCluster()">
         <fieldset [disabled]="applying()">
           <legend>Topology & version</legend>
           <div class="pgp-form-grid">
             <label><span>운영 프로파일</span><select name="profile" [ngModel]="form().profile" (ngModelChange)="setProfile($event)"><option value="development">Development · 1 instance</option><option value="compact">Compact HA · 2 instances</option><option value="production">Production HA · 3 instances</option><option value="custom">Custom</option></select></label>
-            <label><span>PostgreSQL 19 image</span><select name="imageTag" [ngModel]="form().imageTag" (ngModelChange)="patchForm({ imageTag: $event })" [disabled]="clusterExists()"><option *ngFor="let v of versions" [value]="v.value">{{ v.label }}</option></select></label>
+            <label><span>PostgreSQL major</span><input name="imageTag" value="18" disabled /></label>
             <label><span>Instances</span><input name="instances" type="number" min="1" max="9" [ngModel]="form().instances" (ngModelChange)="patchForm({ instances: +$event, profile: 'custom' })" /></label>
             <label><span>Resource profile</span><select name="resourceProfile" [ngModel]="form().resourceProfile" (ngModelChange)="setResourceProfile($event)"><option value="small">Small · 250m / 512Mi</option><option value="medium">Medium · 500m / 1Gi</option><option value="large">Large · 1 / 2Gi</option></select></label>
           </div>
@@ -242,7 +212,7 @@ const DEFAULT_FORM: PgForm = {
           <div class="pgp-form-grid" *ngIf="form().backup.enabled">
             <label><span>S3 endpoint</span><input name="s3Endpoint" [ngModel]="form().backup.s3Endpoint" (ngModelChange)="patchBackup({ s3Endpoint: $event })" placeholder="https://s3.example.com" /></label>
             <label><span>Destination</span><input name="destinationPath" [ngModel]="form().backup.destinationPath" (ngModelChange)="patchBackup({ destinationPath: $event })" placeholder="s3://bucket/foundation-pg" /></label>
-            <label><span>Credentials Secret</span><input name="secretName" [ngModel]="form().backup.secretName" (ngModelChange)="patchBackup({ secretName: $event })" placeholder="cnpg-backup-credentials" /></label>
+            <label><span>Credentials Secret</span><input name="secretName" [ngModel]="form().backup.secretName" (ngModelChange)="patchBackup({ secretName: $event })" placeholder="stackgres-backup-credentials" /></label>
             <label><span>Retention</span><input name="retentionPolicy" [ngModel]="form().backup.retentionPolicy" (ngModelChange)="patchBackup({ retentionPolicy: $event })" placeholder="30d" /></label>
           </div>
         </fieldset>
@@ -261,7 +231,7 @@ const DEFAULT_FORM: PgForm = {
       </div>
     </section>
 
-    <section *ngIf="tab() === 'cluster' && !selectedIsLegacy() && selectedContextCluster() as selected" class="pgp-workspace">
+    <section *ngIf="tab() === 'cluster' && selectedContextCluster() as selected" class="pgp-workspace">
       <div class="pgp-section-head"><div><span class="vl-eyebrow">Desired state</span><h2>PostgreSQL Cluster plan</h2><p>PostgresClaim과 AddonPlan으로 선언된 전용 StackGres 클러스터 구성입니다.</p></div><span class="label" [ngClass]="selected.ready ? 'label-success' : 'label-warning'">{{selected.phase}}</span></div>
       <div class="pgp-dashboard"><article class="pgp-panel"><h2>Plan</h2><dl class="os-kv"><dt>Name</dt><dd>{{selected.plan || '—'}}</dd><dt>Instances</dt><dd>{{selected.instances}}</dd><dt>PostgreSQL</dt><dd>{{selected.postgresVersion || '—'}}</dd></dl></article><article class="pgp-panel"><h2>Storage</h2><dl class="os-kv"><dt>Capacity</dt><dd>{{selected.storage || '—'}}</dd><dt>Isolation</dt><dd>{{selected.mode}}</dd><dt>Lifecycle</dt><dd>Dedicated SGCluster</dd></dl></article><article class="pgp-panel"><h2>Binding</h2><dl class="os-kv"><dt>Secret</dt><dd class="os-mono">{{selected.bindingSecret || '—'}}</dd><dt>Namespace</dt><dd class="os-mono">{{selected.namespace}}</dd><dt>Resource</dt><dd class="os-mono">{{selected.name}}</dd></dl></article></div>
       <clr-alert clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">변경은 PostgresClaim plan 갱신을 통해 적용합니다. 현재 화면은 실행 중인 선언을 읽기 전용으로 보여줍니다.</span></clr-alert-item></clr-alert>
@@ -277,21 +247,20 @@ const DEFAULT_FORM: PgForm = {
 
     <section *ngIf="tab() === 'upgrade' && selectedContextCluster() as selected" class="pgp-workspace">
       <div class="pgp-section-head"><div><span class="vl-eyebrow">Controlled lifecycle · {{selected.provider}}</span><h2>PostgreSQL upgrade & rollback</h2></div><span class="label label-info">PostgreSQL {{selected.postgresVersion || '—'}}</span></div>
-      <clr-alert clrAlertType="warning" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">버전 변경은 {{selected.provider === 'stackgres' ? 'PostgresClaim plan과 StackGres 수명주기' : 'CloudNativePG rolling update'}}를 통해 수행합니다. 적용 전 백업·복구 지점과 공급자 호환성 증거를 확인해야 합니다.</span></clr-alert-item></clr-alert>
+      <clr-alert clrAlertType="warning" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">버전 변경은 PostgresClaim plan과 StackGres 수명주기를 통해 수행합니다. 적용 전 백업·복구 지점과 StackGres 호환성 증거를 확인해야 합니다.</span></clr-alert-item></clr-alert>
       <table class="table"><thead><tr><th>Provider</th><th>현재 버전</th><th>Plan</th><th>승격 조건</th></tr></thead><tbody><tr><td>{{selected.provider}}</td><td>{{selected.postgresVersion || '—'}}</td><td>{{selected.plan || selected.mode}}</td><td>provider compatibility · backup/restore · rollback 증거</td></tr></tbody></table>
       <button class="btn btn-primary" type="button" (click)="openTab('cluster')">Cluster plan에서 검토</button>
     </section>
 
     <section *ngIf="tab() === 'documentation'" class="pgp-workspace">
       <div class="pgp-section-head"><div><span class="vl-eyebrow">Console Manual Registry</span><h2>Documentation</h2></div><span class="label label-success">자동 등록</span></div>
-      <p>PostgreSQL 19 한글 설치·운영 안내서는 Foundation package 활성화 시 Console Manual Registry와 통합 검색에 자동 등록됩니다.</p>
+      <p>선택한 StackGres · PostgreSQL {{documentationVersion()}} 운영 안내서는 Foundation package 활성화 시 Console Manual Registry와 통합 검색에 자동 등록됩니다.</p>
       <dl class="os-kv"><dt>문서 ID</dt><dd class="os-mono">{{manualSourceId}}</dd><dt>화면 경로</dt><dd class="os-mono">/pfss/postgres</dd><dt>정본 수준</dt><dd>Tier 2 · 제품/운영 안내서</dd></dl>
-      <a class="btn btn-sm btn-primary" [href]="manualUrl">한글 안내서 열기</a><a class="btn btn-sm" href="https://www.postgresql.org/docs/19/" target="_blank" rel="noreferrer">PostgreSQL 19 공식 문서</a><a class="btn btn-sm" href="https://cloudnative-pg.io/documentation/current/" target="_blank" rel="noreferrer">CloudNativePG 공식 문서</a>
+      <a class="btn btn-sm btn-primary" [href]="manualUrl">한글 안내서 열기</a><a class="btn btn-sm" [href]="postgresDocsUrl()" target="_blank" rel="noreferrer">PostgreSQL {{documentationVersion()}} 공식 문서</a><a class="btn btn-sm" [href]="providerDocsUrl()" target="_blank" rel="noreferrer">{{providerDocsLabel()}}</a>
     </section>
   `,
 })
 export class PostgresPluginComponent implements OnInit, OnDestroy {
-  readonly op = inject(CnpgOperatorService);
   readonly pg = inject(CnpgService);
   readonly reg = inject(FoundationRegistryService);
   readonly vr = inject(ViewRouter);
@@ -300,11 +269,8 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
   readonly LOGO = LOGO;
   readonly manualSourceId = MANUAL_SOURCE_ID;
   readonly manualUrl = `/manual?doc=${encodeURIComponent(MANUAL_SOURCE_ID)}`;
-  readonly versions = VERSION_OPTIONS;
   readonly iBack = ArrowLeft16;
-  readonly iDownload = Download16;
   readonly iRenew = Renew16;
-  readonly iWarning = WarningAlt16;
 
   readonly form = signal<PgForm>(structuredClone(DEFAULT_FORM));
   readonly storageClasses = signal<StorageClassRow[]>([]);
@@ -346,7 +312,7 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
   readonly namespaceClusters = computed(() => this.fleet.clusters().filter((cluster) => cluster.namespace === this.selectedNamespace()));
   readonly selectedContextCluster = computed(() => this.namespaceClusters().find((cluster) => cluster.id === this.fleet.selectedId()) || this.namespaceClusters()[0] || null);
   readonly hasSelectedCluster = computed(() => !!this.selectedContextCluster());
-  readonly selectedIsLegacy = computed(() => this.selectedContextCluster()?.provider === 'cloudnativepg');
+  readonly documentationVersion = computed(() => this.compactPostgresVersion(this.selectedContextCluster()?.postgresVersion || '') || 'current');
   readonly validationError = computed(() => {
     const f = this.form();
     if (f.instances < 1 || f.instances > 9) return '인스턴스 수는 1~9여야 합니다.';
@@ -356,15 +322,13 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
     if (f.backup.enabled && (!f.backup.s3Endpoint || !f.backup.destinationPath || !f.backup.secretName)) return 'S3 백업을 사용하려면 endpoint, destination, Secret이 모두 필요합니다.';
     return '';
   });
-  readonly canApply = computed(() => this.op.ready() && !this.applying() && !this.validationError());
+  readonly canApply = computed(() => !this.applying() && !this.validationError());
 
   ngOnInit(): void {
-    this.op.start();
     void this.refreshFleet();
     void this.loadStorageClasses();
   }
   ngOnDestroy(): void {
-    this.op.stop();
     if (this.installTimer) clearInterval(this.installTimer);
   }
 
@@ -425,7 +389,6 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
     } catch (error: any) { this.claimFailed = true; this.claimResult = error?.message || String(error); }
     finally { this.creatingClaim = false; }
   }
-  selectOperator(e: Event): void { this.op.selectChart((e.target as HTMLSelectElement).value); }
   patchForm(patch: Partial<PgForm>): void { this.form.update((f) => ({ ...f, ...patch })); }
   patchBackup(patch: Partial<PgForm['backup']>): void { this.form.update((f) => ({ ...f, backup: { ...f.backup, ...patch } })); }
 
@@ -501,7 +464,13 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
   clusterAvailability(cluster: PostgresFleetCluster): number {
     return cluster.instances ? Math.round((cluster.readyInstances / cluster.instances) * 100) : 0;
   }
-  providerName(cluster: PostgresFleetCluster): string { return cluster.provider === 'stackgres' ? 'StackGres' : 'CloudNativePG'; }
+  providerName(_cluster: PostgresFleetCluster): string { return 'StackGres'; }
+  postgresDocsUrl(): string {
+    const version = this.documentationVersion();
+    return /^\d+$/.test(version) ? `https://www.postgresql.org/docs/${version}/` : 'https://www.postgresql.org/docs/current/';
+  }
+  providerDocsUrl(): string { return 'https://stackgres.io/doc/latest/'; }
+  providerDocsLabel(): string { return 'StackGres 공식 문서'; }
   availability(): number {
     return this.pg.totalN() ? Math.round((this.pg.readyN() / this.pg.totalN()) * 100) : 0;
   }
@@ -518,7 +487,7 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
   }
 
   async refreshAll(): Promise<void> {
-    await Promise.allSettled([this.op.refresh(), this.pg.refresh(), this.fleet.refresh(), this.reg.refreshModels(), this.loadStorageClasses()]);
+    await Promise.allSettled([this.pg.refresh(), this.fleet.refresh(), this.reg.refreshModels(), this.loadStorageClasses()]);
   }
 
   private syncNamespaceContext(): void {

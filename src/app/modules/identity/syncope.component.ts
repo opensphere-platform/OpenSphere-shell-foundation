@@ -14,7 +14,7 @@ import { SyncopeMetricsService, SyncopeService } from './syncope.service';
 const DEFAULT_FORM: SyncopeInstallParameters = {
   version: '4.0.7', profile: 'production', replicas: 2,
   cpuRequest: '250m', memoryRequest: '768Mi', cpuLimit: '1', memoryLimit: '2Gi',
-  monitoring: true, databaseMode: 'cloudnativepg-shared', tls: true,
+  monitoring: true, databaseMode: 'stackgres-dedicated', tls: true,
 };
 
 @Component({
@@ -28,30 +28,30 @@ const DEFAULT_FORM: SyncopeInstallParameters = {
     <ng-container *ngIf="tab()==='overview'">
       <section class="sy-steps">
         <button class="sy-step done" (click)="openTab('operator')"><b>1</b><span>Control Plane<small>선언형 IGA bundle</small></span></button>
-        <button class="sy-step" [class.done]="exists()" (click)="openTab('cluster')"><b>2</b><span>Core + DB<small>2 replicas · shared PG</small></span></button>
+        <button class="sy-step" [class.done]="exists()" (click)="openTab('cluster')"><b>2</b><span>Core + DB<small>2 replicas · dedicated StackGres</small></span></button>
         <button class="sy-step" [class.done]="svc.productionReady()" (click)="openTab('config')"><b>3</b><span>Production gates<small>TLS · audit · monitoring</small></span></button>
       </section>
       <div class="sy-grid">
         <article><h2>IGA authority</h2><p>Workforce identity의 프로비저닝 단일 권위입니다.</p><dl><dt>Role</dt><dd>IGA source of truth</dd><dt>SCIM</dt><dd class="mono">/syncope/rest/scim/v2</dd><dt>Direct admin</dt><dd class="ok">Disabled after bootstrap</dd><dt>Downstream</dt><dd>Keycloak · Samba-AD</dd></dl></article>
-        <article><h2>Runtime</h2><p>실제 StatefulSet과 공유 DB 상태입니다.</p><dl><dt>Core</dt><dd [class.ok]="svc.ready()">{{svc.readyN()}} / {{svc.totalN()}} Ready</dd><dt>Database</dt><dd>{{svc.database()}}</dd><dt>API</dt><dd class="mono">TLS :8443</dd><dt>Version</dt><dd>4.0.7 security-fixed</dd></dl></article>
+        <article><h2>Runtime</h2><p>실제 StatefulSet과 전용 StackGres DB 상태입니다.</p><dl><dt>Core</dt><dd [class.ok]="svc.ready()">{{svc.readyN()}} / {{svc.totalN()}} Ready</dd><dt>Database</dt><dd>{{svc.database()}}</dd><dt>API</dt><dd class="mono">TLS :8443</dd><dt>Version</dt><dd>4.0.7 security-fixed</dd></dl></article>
         <article><h2>Production gates</h2><p>일반 data module 외 IGA 고유 판정입니다.</p><dl><dt>HA cache propagation</dt><dd class="ok">OpenJPA TCP</dd><dt>Credential defaults</dt><dd class="ok">Rejected</dd><dt>Durable audit</dt><dd class="ok">AuditEvent / PG</dd><dt>Network boundary</dt><dd class="ok">Namespace allowlist</dd></dl></article>
       </div>
-      <clr-alert [clrAlertType]="svc.productionReady()?'success':'warning'" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">{{svc.productionReady()?'2개 Core, 공유 PostgreSQL, TLS, HA cache propagation, durable audit와 Prometheus target이 운영 프로필로 선언되었습니다.':'Syncope Production Ready gate를 준비하고 있습니다. 설치 탭의 사전조건과 Events를 확인하세요.'}}</span></clr-alert-item></clr-alert>
+      <clr-alert [clrAlertType]="svc.productionReady()?'success':'warning'" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">{{svc.productionReady()?'2개 Core, 전용 StackGres PostgreSQL, TLS, HA cache propagation, durable audit와 Prometheus target이 운영 프로필로 선언되었습니다.':'Syncope Production Ready gate를 준비하고 있습니다. 설치 탭의 사전조건과 Events를 확인하세요.'}}</span></clr-alert-item></clr-alert>
     </ng-container>
 
     <section class="sy-work" *ngIf="tab()==='operator'">
-      <h2>Foundation Control Plane</h2><p>FoundationModel/identity의 <span class="mono">engines.syncope</span> 선언을 StatefulSet, CNPG Database/DatabaseRole, Certificate, ServiceMonitor와 NetworkPolicy로 적용합니다.</p>
+      <h2>Foundation Control Plane</h2><p>FoundationModel/identity의 <span class="mono">engines.syncope</span> 선언을 PostgresClaim, StatefulSet, Certificate, ServiceMonitor와 NetworkPolicy로 적용합니다.</p>
       <dl><dt>Desired-state owner</dt><dd class="mono">FoundationModel/identity</dd><dt>Workload</dt><dd class="mono">StatefulSet/foundation-identity-syncope</dd><dt>Image</dt><dd class="mono">ghcr.io/opensphere-platform/mirror/syncope:4.0.7</dd><dt>Credential installer</dt><dd class="mono">scripts/Initialize-SyncopeSecrets.ps1</dd></dl>
     </section>
 
     <section class="sy-work" *ngIf="tab()==='cluster'">
       <div class="sy-head"><div><span class="vl-eyebrow">Production installation</span><h2>Apache Syncope Core</h2></div><span class="label label-info">explicit opt-in</span></div>
-      <clr-alert clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">선행조건: CloudNativePG <b>foundation-data-pg</b>가 Ready이고 exact-name Syncope Secrets가 플랫폼 installer로 생성되어야 합니다. Secret 값은 브라우저 폼이나 FoundationModel에 저장하지 않습니다.</span></clr-alert-item></clr-alert>
+      <clr-alert clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">전용 PostgresClaim이 StackGres SGCluster와 binding Secret을 자동 생성합니다. Secret 값은 브라우저 폼이나 FoundationModel에 저장하지 않습니다.</span></clr-alert-item></clr-alert>
       <form class="sy-form" (ngSubmit)="apply()">
         <label>Version<input name="version" [ngModel]="form().version" disabled /></label>
         <label>Profile<input name="profile" [ngModel]="form().profile" disabled /></label>
         <label>Core replicas<input name="replicas" type="number" min="2" max="5" [ngModel]="form().replicas" (ngModelChange)="patch({replicas:+$event})" /></label>
-        <label>Database<input name="database" value="CloudNativePG shared / syncope" disabled /></label>
+        <label>Database<input name="database" value="StackGres dedicated / syncope" disabled /></label>
         <label>CPU request<input name="cpuRequest" [ngModel]="form().cpuRequest" (ngModelChange)="patch({cpuRequest:$event})" /></label>
         <label>Memory request<input name="memoryRequest" [ngModel]="form().memoryRequest" (ngModelChange)="patch({memoryRequest:$event})" /></label>
         <label>CPU limit<input name="cpuLimit" [ngModel]="form().cpuLimit" (ngModelChange)="patch({cpuLimit:$event})" /></label>
@@ -74,7 +74,7 @@ const DEFAULT_FORM: SyncopeInstallParameters = {
     <section class="sy-work" *ngIf="tab()==='topology'"><h2>Topology</h2><dl><dt>StatefulSet</dt><dd>{{svc.readyN()}} / {{svc.totalN()}} Ready</dd><dt>Service</dt><dd class="mono">foundation-identity-syncope:8443</dd><dt>Database</dt><dd>{{svc.database()}}</dd><dt>Image</dt><dd class="mono">{{svc.image() || '—'}}</dd><dt>Restarts</dt><dd>{{svc.restarts()}}</dd></dl></section>
     <section class="sy-work" *ngIf="tab()==='config'"><h2>Security & configuration</h2><div class="sy-gates"><article><b>Default credentials</b><p>Apache 기본 admin, anonymous, JWS 값을 허용하지 않습니다.</p></article><article><b>Encrypted transport</b><p>Core API와 PostgreSQL 연결은 TLS입니다.</p></article><article><b>HA coherence</b><p>두 Core가 OpenJPA TCP remote commit으로 캐시 무효화를 전파합니다.</p></article><article><b>Authority boundary</b><p>사용자 쓰기는 Syncope 중심 워크플로를 통하며 Keycloak/Samba는 downstream입니다.</p></article></div></section>
     <section class="sy-work" *ngIf="tab()==='domain'"><h2>Users & Groups</h2><p>현재 inventory는 Syncope PostgreSQL에서 읽은 실측 집계입니다. 사용자·그룹 변경은 임의 Core REST 호출이 아니라 승인된 IdentityProvisioningClaim과 IGA workflow로 처리합니다.</p><dl><dt>Users</dt><dd>{{number(metrics.latestUsers(),0)}}</dd><dt>Groups</dt><dd>{{number(metrics.latestGroups(),0)}}</dd><dt>External resources</dt><dd>{{number(metrics.latestResources(),0)}}</dd></dl></section>
-    <section class="sy-work" *ngIf="tab()==='backups'"><h2>Backup & restore</h2><p>Syncope 상태는 CloudNativePG의 <b>syncope</b> database와 동일 PITR 정책으로 보호합니다. 설정 Secret과 Connector 설정도 별도 복구 증거에 포함해야 합니다.</p></section>
+    <section class="sy-work" *ngIf="tab()==='backups'"><h2>Backup & restore</h2><p>Syncope 상태는 전용 StackGres <b>syncope</b> database의 backup/PITR plan으로 보호합니다. 설정 Secret과 Connector 설정도 별도 복구 증거에 포함해야 합니다.</p></section>
     <section class="sy-work" *ngIf="tab()==='events'"><h2>Events</h2><table class="table"><thead><tr><th>Type</th><th>Reason</th><th>Message</th><th>Time</th></tr></thead><tbody><tr *ngFor="let event of svc.events()"><td>{{event.type}}</td><td>{{event.reason}}</td><td>{{event.message}}</td><td>{{event.lastTimestamp || event.eventTime}}</td></tr><tr *ngIf="!svc.events().length"><td colspan="4">관련 이벤트 없음</td></tr></tbody></table></section>
     <section class="sy-work" *ngIf="tab()==='claims'"><h2>Claims</h2><p>소비자는 IdentityProvisioningClaim으로 SCIM scope와 destination을 요청합니다. Core 관리자 endpoint나 DB credential은 Binding으로 배포하지 않습니다.</p></section>
     <section class="sy-work" *ngIf="tab()==='upgrade'"><h2>Upgrade & rollback</h2><p>4.0.7 미만은 2026 보안 취약점 때문에 운영 허용 목록에서 제외합니다. upgrade는 DB backup, schema compatibility, 두 Core 순차 rollout과 audit 연속성을 함께 검증합니다.</p></section>
@@ -102,7 +102,7 @@ export class SyncopeComponent implements OnInit, OnDestroy {
     if (this.applying()) return; this.applying.set(true); this.progress.set(10); this.logs.set(['FoundationModel/identity Syncope production 선언 제출']);
     const ok = await this.registry.configureIdentityEngine('syncope', this.form());
     if (!ok) { this.logs.update(value => [...value, `실패: ${this.registry.lastError()}`]); this.progress.set(100); this.applying.set(false); return; }
-    this.progress.set(35); this.logs.update(value => [...value, '선언 승인 · prerequisite Secret, CNPG database, TLS certificate와 Core reconcile 관찰']);
+    this.progress.set(35); this.logs.update(value => [...value, '선언 승인 · StackGres PostgresClaim, binding Secret, TLS certificate와 Core reconcile 관찰']);
     for (let index = 0; index < 90; index++) { await new Promise(resolve => setTimeout(resolve, 5000)); await this.svc.refresh(); if (this.exists()) this.progress.set(Math.max(65, this.progress())); if (this.svc.productionReady()) { this.progress.set(100); this.logs.update(value => [...value, 'Apache Syncope Production Ready']); this.applying.set(false); return; } }
     this.progress.set(100); this.logs.update(value => [...value, '7분 30초 내 Production Ready 미도달 · Events와 prerequisite를 확인하세요']); this.applying.set(false);
   }

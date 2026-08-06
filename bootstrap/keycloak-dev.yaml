@@ -1,17 +1,18 @@
 # Foundation 모듈: Keycloak — workspace/사원 IAM (dev). DB는 Foundation PostgreSQL 소비(백킹서비스 소비 모델).
-# Kanidm과 무관(Kanidm=콘솔관리자 별개 영역). keycloak DB는 CNPG Database CR로 선언형 발급(owner=appuser).
+# Kanidm과 무관(Kanidm=콘솔관리자 별개 영역). keycloak DB는 전용 StackGres PostgresClaim으로 발급한다.
 ---
-apiVersion: postgresql.cnpg.io/v1
-kind: Database
+apiVersion: provisioning.opensphere.io/v1beta1
+kind: PostgresClaim
 metadata:
-  name: keycloak
+  name: foundation-identity-keycloak-pg
   namespace: opensphere-foundation
   labels: { opensphere.io/foundation-module: keycloak }
 spec:
-  cluster: { name: opensphere-pg }
-  name: keycloak
-  owner: appuser          # 기존 initdb role 재사용(전용 role/password mint 불요 — Phase 3 컨트롤러 전까지)
-  ensure: present
+  database: keycloak
+  owner: keycloak
+  isolation: Dedicated
+  planRef: { name: postgresql-dev-single }
+  deletionPolicy: Delete
 ---
 apiVersion: v1
 kind: Service
@@ -44,9 +45,9 @@ spec:
           args: ["start-dev"]
           env:
             - { name: KC_DB, value: postgres }
-            - { name: KC_DB_URL, value: "jdbc:postgresql://opensphere-pg-rw.opensphere-foundation.svc:5432/keycloak" }
-            - { name: KC_DB_USERNAME, valueFrom: { secretKeyRef: { name: opensphere-pg-app, key: username } } }
-            - { name: KC_DB_PASSWORD, valueFrom: { secretKeyRef: { name: opensphere-pg-app, key: password } } }
+            - { name: KC_DB_URL, value: "jdbc:postgresql://pgc-foundation-identity-keycloak-pg.opensphere-foundation.svc:5432/keycloak" }
+            - { name: KC_DB_USERNAME, valueFrom: { secretKeyRef: { name: pgc-foundation-identity-keycloak-pg-binding, key: username } } }
+            - { name: KC_DB_PASSWORD, valueFrom: { secretKeyRef: { name: pgc-foundation-identity-keycloak-pg-binding, key: password } } }
             - { name: KC_BOOTSTRAP_ADMIN_USERNAME, value: admin }
             - { name: KC_BOOTSTRAP_ADMIN_PASSWORD, value: admin }   # dev only — prod override
             - { name: KC_HOSTNAME_STRICT, value: "false" }

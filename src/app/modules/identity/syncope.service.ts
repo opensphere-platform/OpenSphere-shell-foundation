@@ -41,9 +41,9 @@ export class SyncopeService extends WorkloadHealth {
   private async loadDatabase(): Promise<void> {
     if (!this.backoff.due('syncope-db')) return;
     try {
-      const response = await hostFetch(this.k(`apis/postgresql.cnpg.io/v1/namespaces/${this.ns}/clusters/foundation-data-pg`), { cache: 'no-store' });
+      const response = await hostFetch(this.k(`apis/provisioning.opensphere.io/v1beta1/namespaces/${this.ns}/postgresclaims/foundation-identity-syncope-pg`), { cache: 'no-store' });
       const body = response.ok ? await response.json() : null;
-      this.databaseReady.set((body?.status?.conditions ?? []).some((condition: any) => condition.type === 'Ready' && condition.status === 'True'));
+      this.databaseReady.set(body?.status?.phase === 'Ready');
       this.backoff.report('syncope-db', response.ok ? 'ok' : response.status === 404 ? 'nocrd' : 'error');
     } catch { this.databaseReady.set(false); this.backoff.report('syncope-db', 'error'); }
   }
@@ -75,7 +75,7 @@ export class SyncopeService extends WorkloadHealth {
   override readonly phase = computed(() => this.ready() ? 'Running' : this.state() === 'loading' ? '확인 중' : this.pods()[0]?.status?.phase || '미발견');
   override readonly phaseCls = computed<Phase>(() => this.ready() ? 'ok' : phaseClass(this.phase(), false));
   readonly productionReady = computed(() => this.ready() && this.databaseReady() && this.fm()?.status?.syncopeProductionReady === true);
-  readonly database = computed(() => this.fm()?.status?.syncopeDatabase || 'CloudNativePG/foundation-data-pg/syncope');
+  readonly database = computed(() => this.fm()?.status?.syncopeDatabase || 'StackGres/pgc-foundation-identity-syncope-pg/syncope');
 }
 
 @Injectable({ providedIn: 'root' })

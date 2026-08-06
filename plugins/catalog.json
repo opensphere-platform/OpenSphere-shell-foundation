@@ -11,11 +11,11 @@
       "route": "/pfss/postgres",
       "element": "osp-foundation-postgres",
       "logo": "https://logos.opl.io.kr/i/postgresql",
-      "description": "CloudNativePG 기반 PostgreSQL 19 관계형 데이터베이스를 설치·운영하고 PostgresClaim을 제공한다.",
+      "description": "StackGres 기반 PostgreSQL 18 관계형 데이터베이스 Fleet을 설치·운영하고 PostgresClaim을 제공한다.",
       "manual": "postgresql-operations.ko.md",
       "officialDocs": "https://www.postgresql.org/docs/19/",
       "installer": "foundation-model",
-      "operands": ["mirror/cloudnative-pg:edge", "mirror/postgresql:edge"]
+      "operands": ["stackgres-operator:1.19.0", "postgresql:18"]
     },
     {
       "id": "percona-psmdb",

@@ -12,7 +12,7 @@ FoundationModel/identity의 `engines.opa=enabled` 선언으로 OPA 1.18.2-static
 평가 endpoint는 `https://foundation-identity-opa.opensphere-foundation.svc:8181`입니다. cert-manager가 관리하는 OPA 전용 CA로 mTLS를 강제하며, `foundation.opensphere.io/opa-client=true` label을 가진 승인 Pod만 NetworkPolicy 평가 경로에 접근할 수 있습니다. API는 `POST /v1/data/opensphere/**`만 허용하고 Policy/Data mutation과 ad-hoc query API는 거부합니다.
 
 ## 4. 영속 decision log
-OPA는 모든 decision event에서 원문 `input`과 non-deterministic cache를 제거합니다. 두 개의 `foundation-identity-opa-control` replica가 gzip batch를 받아 결과, policy path, bundle revision, timestamp만 CloudNativePG의 `opensphere_opa_decision_log` 테이블에 저장합니다. sink는 원문 input이 남은 batch를 거부하고, 보존기간은 30일입니다.
+OPA는 모든 decision event에서 원문 `input`과 non-deterministic cache를 제거합니다. 두 개의 `foundation-identity-opa-control` replica가 gzip batch를 받아 결과, policy path, bundle revision, timestamp만 전용 StackGres PostgreSQL의 `opensphere_opa_decision_log` 테이블에 저장합니다. sink는 원문 input이 남은 batch를 거부하고, 보존기간은 30일입니다.
 
 Allow/Deny 결과는 sink가 제공하는 제한된 Prometheus outcome 차원으로 집계합니다. subject, resource, JWT, input 원문과 decision ID는 metric label로 사용하지 않습니다.
 
@@ -22,7 +22,7 @@ OPA와 control service는 각각 2 replicas, PDB `minAvailable: 1`, topology spr
 Console Monitoring은 최근 1시간, 60초 query step, 15초 화면 갱신 기준이며 Carbon Charts로 평가 처리량, p95 지연, HTTP 오류율, Go runtime과 durable Allow/Deny 비율을 표시합니다.
 
 ## 6. 복구
-정책 rollback은 검증된 Control Plane exact digest와 bundle revision으로 수행합니다. Decision log 복구는 CloudNativePG 백업 정책을 따르며, OPA 인증서는 cert-manager가 자동 회전합니다.
+정책 rollback은 검증된 Control Plane exact digest와 bundle revision으로 수행합니다. Decision log 복구는 StackGres backup plan을 따르며, OPA 인증서는 cert-manager가 자동 회전합니다.
 
 ## 7. 참고
 - https://www.openpolicyagent.org/docs/security

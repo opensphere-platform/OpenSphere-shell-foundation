@@ -26,13 +26,14 @@ for (const file of manualFiles) {
   assert.match(content, /## 1\./, `${file}에 역할/상태 섹션이 없습니다.`);
   assert.match(content, /## 6\./, `${file}에 참고 섹션이 없습니다.`);
 }
-assert.match(manual, /^# OpenSphere PostgreSQL 19 플러그인 설치 및 운영 안내서/m);
-assert.match(manual, /PostgreSQL 19 beta/);
+assert.match(manual, /^# OpenSphere PostgreSQL 멀티 인스턴스 설치 및 운영 안내서/m);
+assert.match(manual, /StackGres/);
+assert.doesNotMatch(manual, /CloudNativePG|cloudnative-pg/);
 assert.match(manual, /## 6\. 백업과 복구/);
-assert.match(manual, /https:\/\/www\.postgresql\.org\/docs\/19\//);
-assert.match(manual, /https:\/\/cloudnative-pg\.io\/documentation\/current\//);
+assert.match(manual, /https:\/\/www\.postgresql\.org\/docs\/current\//);
+assert.match(manual, /https:\/\/stackgres\.io\/doc\/latest\//);
 assert.match(page, /\/manual\?doc=/);
-assert.match(page, /19beta2-standard-trixie/);
-assert.match(page, /OpenSphere PostgreSQL 19 설치·운영 안내서 \(한글\)/);
+assert.match(page, /StackGres SGCluster/);
+assert.match(page, /OpenSphere PostgreSQL 멀티 인스턴스 운영 안내서 \(한글\)/);
 
 console.log(`Foundation Manual contribution contract: passed (${manualFiles.length} documents)`);

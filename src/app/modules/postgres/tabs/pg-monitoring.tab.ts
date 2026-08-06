@@ -74,7 +74,7 @@ type SeriesKey = Exclude<keyof PgMonitoringMetrics, 'labels'>;
 export class PgMonitoringTab {
   readonly svc = inject(CnpgService);
   readonly labels = computed(() => this.svc.monitoringMetrics().labels);
-  providerLabel(): string { return this.svc.provider() === 'stackgres' ? 'StackGres' : 'CloudNativePG'; }
+  providerLabel(): string { return 'StackGres'; }
   private latest(key: SeriesKey): number | null { return this.svc.metricsLatest()[key]; }
   hasAny(keys: SeriesKey[]): boolean { return keys.some((key) => this.svc.monitoringMetrics()[key].some(Number.isFinite)); }
   numberValue(key: SeriesKey): string { const value = this.latest(key); return value == null ? '—' : Math.round(value).toLocaleString(); }

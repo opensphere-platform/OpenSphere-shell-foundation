@@ -29,13 +29,13 @@ const EMPTY_METRICS: PgMonitoringMetrics = {
 
 // Foundation control-plane data bundle의 정본 이름(bundle_data.go: pgClusterName).
 // bootstrap 시절의 opensphere-pg를 추적하지 않는다. PFS plugin의 소유 리소스만 관리한다.
-const NAME = 'foundation-data-pg';
+const NAME = 'pgc-foundation-data-pg';
 
 // 단일 데이터 진입점 — 모든 fetch·15s 단일 폴러·파생 signals·6-state graceful.
 // 컴포넌트는 구독만(자체 폴링 금지). Cluster CR 미열람 시 Pods에서 phase/primary/ready 도출(부분 동작).
 @Injectable({ providedIn: 'root' })
 export class CnpgService {
-  readonly provider = signal<'cloudnativepg' | 'stackgres'>('cloudnativepg');
+  readonly provider = signal<'stackgres'>('stackgres');
   private readonly targetNamespace = signal(FND_NS);
   private readonly targetName = signal(NAME);
   get ns(): string { return this.targetNamespace(); }
@@ -75,6 +75,7 @@ export class CnpgService {
   private timer: any = null;
   private started = false;
   private backoff = new PollBackoff();
+  private targetGeneration = 0;
 
   start(): void {
     if (this.started) { return; }
@@ -91,8 +92,9 @@ export class CnpgService {
     void this.refresh();
   }
 
-  selectTarget(provider: 'cloudnativepg' | 'stackgres', namespace: string, name: string): void {
+  selectTarget(provider: 'stackgres', namespace: string, name: string): void {
     if (provider === this.provider() && namespace === this.ns && name === this.name) return;
+    this.targetGeneration++;
     this.provider.set(provider);
     this.targetNamespace.set(namespace);
     this.targetName.set(name);
@@ -114,7 +116,7 @@ export class CnpgService {
       this.loadScheduled(), this.loadDatabases(), this.loadEvents(), this.loadServices(), this.loadPvcs(),
     ]);
     await this.loadProviderConfiguration();
-    if (this.provider() === 'stackgres') await this.loadDatabases();
+    await this.loadDatabases();
     await this.loadPrometheusMetrics();
     this.busy.set(false);
     try { this.lastSync.set(new Date().toLocaleTimeString()); } catch { /* noop */ }
@@ -126,8 +128,10 @@ export class CnpgService {
   // key로 백오프 판단 — nocrd/noperm 확정 후엔 지수 백오프로 재조회 빈도만 낮춘다(state는 그대로 유지).
   private async getList(key: string, path: string, set: (v: any[]) => void, state?: (s: State) => void): Promise<void> {
     if (!this.backoff.due(key)) { return; }
+    const generation = this.targetGeneration;
     try {
       const r = await hostFetch(this.k(path));
+      if (generation !== this.targetGeneration) return;
       const s: State = r.status === 403 ? 'noperm' : r.status === 404 ? 'nocrd' : !r.ok ? 'error' : 'ok';
       this.backoff.report(key, s);
       if (s === 'noperm' || s === 'nocrd' || s === 'error') { state?.(s); return; }
@@ -139,10 +143,12 @@ export class CnpgService {
 
   async loadCluster(): Promise<void> {
     if (!this.backoff.due('cluster')) { return; }
+    const generation = this.targetGeneration;
+    const namespace = this.ns;
+    const name = this.name;
     try {
-      const resource = this.provider() === 'stackgres' ? 'apis/stackgres.io/v1' : 'apis/postgresql.cnpg.io/v1';
-      const plural = this.provider() === 'stackgres' ? 'sgclusters' : 'clusters';
-      const r = await hostFetch(this.k(`${resource}/namespaces/${this.ns}/${plural}/${this.name}`));
+      const r = await hostFetch(this.k(`apis/stackgres.io/v1/namespaces/${namespace}/sgclusters/${name}`));
+      if (generation !== this.targetGeneration) return;
       const s: State = r.status === 403 ? 'noperm' : !r.ok ? 'nocrd' : 'ok';
       this.backoff.report('cluster', s);
       this.clusterState.set(s);
@@ -151,46 +157,48 @@ export class CnpgService {
   }
   async loadPods(): Promise<void> {
     if (!this.backoff.due('pods')) { return; }
+    const generation = this.targetGeneration;
+    const namespace = this.ns;
+    const name = this.name;
     try {
-      const sel = encodeURIComponent(this.provider() === 'stackgres' ? `stackgres.io/cluster-name=${this.name}` : `cnpg.io/cluster=${this.name}`);
-      const r = await hostFetch(this.k(`api/v1/namespaces/${this.ns}/pods?labelSelector=${sel}`));
+      const sel = encodeURIComponent(`stackgres.io/cluster-name=${name}`);
+      const r = await hostFetch(this.k(`api/v1/namespaces/${namespace}/pods?labelSelector=${sel}`));
+      if (generation !== this.targetGeneration) return;
       this.backoff.report('pods', r.ok ? 'ok' : r.status === 404 ? 'nocrd' : 'error');
       this.pods.set(r.ok ? ((await r.json()).items || []) : []);
     } catch { this.backoff.report('pods', 'error'); this.pods.set([]); }
   }
   loadBackups() {
-    const path = this.provider() === 'stackgres' ? `apis/stackgres.io/v1/namespaces/${this.ns}/sgbackups` : `apis/postgresql.cnpg.io/v1/namespaces/${this.ns}/backups`;
-    return this.getList('backups', path, (v) => this.backups.set(v.filter((item) => this.provider() !== 'stackgres' || item.spec?.sgCluster === this.name)), (s) => this.backupState.set(s));
+    const path = `apis/stackgres.io/v1/namespaces/${this.ns}/sgbackups`;
+    return this.getList('backups', path, (v) => this.backups.set(v.filter((item) => item.spec?.sgCluster === this.name)), (s) => this.backupState.set(s));
   }
   loadScheduled() {
-    if (this.provider() === 'stackgres') { this.scheduled.set([]); return Promise.resolve(); }
-    return this.getList('scheduled', `apis/postgresql.cnpg.io/v1/namespaces/${this.ns}/scheduledbackups`, (v) => this.scheduled.set(v));
+    this.scheduled.set([]); return Promise.resolve();
   }
   loadDatabases() {
-    if (this.provider() === 'stackgres') {
-      const binding = this.cluster()?.spec?.configurations?.binding;
-      this.databases.set(binding?.database ? [{ metadata: { name: `${this.name}-binding` }, spec: { name: binding.database, owner: binding.username }, status: { applied: this.allReady() } }] : []);
-      this.dbState.set(this.databases().length ? 'ok' : 'empty');
-      return Promise.resolve();
-    }
-    return this.getList('databases', `apis/postgresql.cnpg.io/v1/namespaces/${this.ns}/databases`, (v) => this.databases.set(v), (s) => this.dbState.set(s));
+    const binding = this.cluster()?.spec?.configurations?.binding;
+    this.databases.set(binding?.database ? [{ metadata: { name: `${this.name}-binding` }, spec: { name: binding.database, owner: binding.username }, status: { applied: this.allReady() } }] : []);
+    this.dbState.set(this.databases().length ? 'ok' : 'empty');
+    return Promise.resolve();
   }
   loadEvents() {
     const sel = encodeURIComponent(`involvedObject.name=${this.name}`);
     return this.getList('events', `api/v1/namespaces/${this.ns}/events?fieldSelector=${sel}`, (v) => this.events.set(v), (s) => this.eventState.set(s));
   }
   loadServices() {
-    const sel = encodeURIComponent(this.provider() === 'stackgres' ? `stackgres.io/cluster-name=${this.name}` : `cnpg.io/cluster=${this.name}`);
+    const sel = encodeURIComponent(`stackgres.io/cluster-name=${this.name}`);
     return this.getList('services', `api/v1/namespaces/${this.ns}/services?labelSelector=${sel}`, (v) => this.services.set(v));
   }
 
   loadPvcs() {
-    const sel = encodeURIComponent(this.provider() === 'stackgres' ? `stackgres.io/cluster-name=${this.name}` : `cnpg.io/cluster=${this.name}`);
+    const sel = encodeURIComponent(`stackgres.io/cluster-name=${this.name}`);
     return this.getList('pvcs', `api/v1/namespaces/${this.ns}/persistentvolumeclaims?labelSelector=${sel}`, (v) => this.pvcs.set(v));
   }
 
   private async loadProviderConfiguration(): Promise<void> {
-    if (this.provider() !== 'stackgres' || !this.cluster()) return;
+    if (!this.cluster()) return;
+    const generation = this.targetGeneration;
+    const namespace = this.ns;
     const postgres = this.cluster()?.spec?.configurations?.sgPostgresConfig;
     const profile = this.cluster()?.spec?.sgInstanceProfile;
     const read = async (path: string) => {
@@ -198,14 +206,16 @@ export class CnpgService {
       return response.ok ? response.json() : null;
     };
     const [postgresConfig, profileConfig] = await Promise.all([
-      postgres ? read(`apis/stackgres.io/v1/namespaces/${this.ns}/sgpgconfigs/${postgres}`) : null,
-      profile ? read(`apis/stackgres.io/v1/namespaces/${this.ns}/sginstanceprofiles/${profile}`) : null,
+      postgres ? read(`apis/stackgres.io/v1/namespaces/${namespace}/sgpgconfigs/${postgres}`) : null,
+      profile ? read(`apis/stackgres.io/v1/namespaces/${namespace}/sginstanceprofiles/${profile}`) : null,
     ]);
+    if (generation !== this.targetGeneration) return;
     this.postgresConfig.set(postgresConfig);
     this.profileConfig.set(profileConfig);
   }
 
   private async loadPrometheusMetrics(): Promise<void> {
+    const generation = this.targetGeneration;
     if (!this.cluster()) {
       this.metricsState.set('empty');
       this.metricsHint.set('PostgreSQL Cluster가 생성되면 최근 1시간의 운영 시계열을 표시합니다.');
@@ -222,18 +232,18 @@ export class CnpgService {
     const start = end - 60 * 60;
     const pod = `${this.name}-.*`;
     const namespace = this.ns;
-    const pvc = this.provider() === 'stackgres' ? `${this.name}-data-.*` : `${this.name}-[0-9]+`;
+    const pvc = `${this.name}-data-.*`;
     const expressions: Record<Exclude<keyof PgMonitoringMetrics, 'labels'>, string> = {
-      commit: `sum(rate(cnpg_pg_stat_database_xact_commit{pod=~"${pod}"}[5m])) or sum(rate(pg_stat_database_xact_commit{pod=~"${pod}"}[5m]))`,
-      rollback: `sum(rate(cnpg_pg_stat_database_xact_rollback{pod=~"${pod}"}[5m])) or sum(rate(pg_stat_database_xact_rollback{pod=~"${pod}"}[5m]))`,
-      connections: `sum(cnpg_backends_total{pod=~"${pod}"}) or sum(pg_stat_activity_count{pod=~"${pod}"})`,
-      waiting: `sum(cnpg_backends_waiting_total{pod=~"${pod}"}) or sum(pg_stat_activity_count{pod=~"${pod}",state="idle in transaction"})`,
-      cacheHitPct: `100 * sum(rate(cnpg_pg_stat_database_blks_hit{pod=~"${pod}"}[5m])) / clamp_min(sum(rate(cnpg_pg_stat_database_blks_hit{pod=~"${pod}"}[5m])) + sum(rate(cnpg_pg_stat_database_blks_read{pod=~"${pod}"}[5m])), 1)`,
-      databaseBytes: `sum(cnpg_pg_database_size_bytes{pod=~"${pod}"}) or sum(pg_database_size_bytes{pod=~"${pod}"})`,
-      walBytesPerSecond: `sum(rate(cnpg_collector_wal_bytes{pod=~"${pod}"}[5m])) or sum(rate(pg_wal_size_bytes{pod=~"${pod}"}[5m]))`,
-      replicationLagSeconds: `max(cnpg_pg_replication_lag{pod=~"${pod}"}) or max(pg_replication_lag{pod=~"${pod}"})`,
-      deadlocksPerSecond: `sum(rate(cnpg_pg_stat_database_deadlocks{pod=~"${pod}"}[5m])) or sum(rate(pg_stat_database_deadlocks{pod=~"${pod}"}[5m]))`,
-      conflictsPerSecond: `sum(rate(cnpg_pg_stat_database_conflicts{pod=~"${pod}"}[5m])) or sum(rate(pg_stat_database_conflicts{pod=~"${pod}"}[5m]))`,
+      commit: `sum(rate(pg_stat_database_xact_commit{pod=~"${pod}"}[5m]))`,
+      rollback: `sum(rate(pg_stat_database_xact_rollback{pod=~"${pod}"}[5m]))`,
+      connections: `sum(pg_stat_activity_count{pod=~"${pod}"})`,
+      waiting: `sum(pg_stat_activity_count{pod=~"${pod}",state="idle in transaction"})`,
+      cacheHitPct: `100 * sum(rate(pg_stat_database_blks_hit{pod=~"${pod}"}[5m])) / clamp_min(sum(rate(pg_stat_database_blks_hit{pod=~"${pod}"}[5m])) + sum(rate(pg_stat_database_blks_read{pod=~"${pod}"}[5m])), 1)`,
+      databaseBytes: `sum(pg_database_size_bytes{pod=~"${pod}"})`,
+      walBytesPerSecond: `sum(rate(pg_wal_size_bytes{pod=~"${pod}"}[5m]))`,
+      replicationLagSeconds: `max(pg_replication_lag{pod=~"${pod}"})`,
+      deadlocksPerSecond: `sum(rate(pg_stat_database_deadlocks{pod=~"${pod}"}[5m]))`,
+      conflictsPerSecond: `sum(rate(pg_stat_database_conflicts{pod=~"${pod}"}[5m]))`,
       cpuCores: `sum(rate(container_cpu_usage_seconds_total{namespace="${namespace}",pod=~"${pod}"}[5m]))`,
       memoryBytes: `sum(container_memory_working_set_bytes{namespace="${namespace}",pod=~"${pod}"})`,
       pvcUsedBytes: `sum(kubelet_volume_stats_used_bytes{namespace="${namespace}",persistentvolumeclaim=~"${pvc}"})`,
@@ -242,6 +252,7 @@ export class CnpgService {
     try {
       const keys = Object.keys(expressions) as (Exclude<keyof PgMonitoringMetrics, 'labels'>)[];
       const results = await Promise.all(keys.map((key) => this.promRange(expressions[key], start, end)));
+      if (generation !== this.targetGeneration) return;
       const values = Object.fromEntries(keys.map((key, index) => [key, results[index]])) as Record<Exclude<keyof PgMonitoringMetrics, 'labels'>, [number, number][]>;
       const base = results.find((series) => series.length) || [];
       if (!base.length) {
@@ -259,9 +270,10 @@ export class CnpgService {
         cpuCores: aligned('cpuCores'), memoryBytes: aligned('memoryBytes'), pvcUsedBytes: aligned('pvcUsedBytes'), pvcCapacityBytes: aligned('pvcCapacityBytes'),
       });
       this.metricsState.set('ok');
-      this.metricsHint.set(`${this.provider() === 'stackgres' ? 'StackGres' : 'CloudNativePG'} exporter · 최근 1시간 · 60초 간격`);
+      this.metricsHint.set('StackGres exporter · 최근 1시간 · 60초 간격');
       this.metricsLastSync.set(new Date().toLocaleTimeString());
     } catch (error) {
+      if (generation !== this.targetGeneration) return;
       this.metricsState.set('error');
       this.metricsHint.set(`Prometheus 조회 실패: ${String((error as Error)?.message ?? error)}`);
       this.monitoringMetrics.set(structuredClone(EMPTY_METRICS));
@@ -290,7 +302,7 @@ export class CnpgService {
     return this.pods()
       .map((p) => {
         const ready = (p.status?.conditions || []).some((c: any) => c.type === 'Ready' && c.status === 'True');
-        const role = p.metadata?.labels?.['cnpg.io/instanceRole'] || p.metadata?.labels?.['role'] || (p.metadata?.name === primary ? 'primary' : 'replica');
+        const role = p.metadata?.labels?.['role'] || (p.metadata?.name === primary ? 'primary' : 'replica');
         const restarts = (p.status?.containerStatuses || []).reduce((a: number, c: any) => a + (c.restartCount || 0), 0);
         return {
           name: p.metadata?.name, role, ready,
@@ -312,7 +324,7 @@ export class CnpgService {
     return ins.every((i) => i.ready) ? 'Cluster in healthy state' : 'Degraded';
   });
   readonly phaseCls = computed<Phase>(() => phaseClass(this.phase(), this.allReady()));
-  readonly image = computed<string>(() => this.cluster()?.status?.image || this.cluster()?.spec?.imageName || (this.provider() === 'stackgres' ? `PostgreSQL ${this.cluster()?.status?.postgresVersion || this.cluster()?.spec?.postgres?.version || ''}` : ''));
+  readonly image = computed<string>(() => `PostgreSQL ${this.cluster()?.status?.postgresVersion || this.cluster()?.spec?.postgres?.version || ''}`);
   readonly pgMajor = computed<string>(() => {
     const m = (this.image() || '').match(/postgresql[: ](\d+)/i)
       || (this.cluster()?.status?.postgresVersion ? String(this.cluster().status.postgresVersion).match(/^(\d+)/) : null)
@@ -324,20 +336,18 @@ export class CnpgService {
   readonly storageClass = computed<string>(() => this.cluster()?.spec?.pods?.persistentVolume?.storageClass || this.cluster()?.spec?.storage?.storageClass || 'default');
   readonly params = computed<Record<string, string>>(() => this.postgresConfig()?.spec?.['postgresql.conf'] || this.cluster()?.spec?.postgresql?.parameters || {});
   readonly resources = computed<any>(() => {
-    if (this.provider() !== 'stackgres') return this.cluster()?.spec?.resources || {};
     const profile = this.profileConfig()?.spec || {};
     return { requests: profile.requests || { cpu: profile.cpu, memory: profile.memory }, limits: { cpu: profile.cpu, memory: profile.memory } };
   });
   readonly managedRoles = computed<any[]>(() => {
-    if (this.provider() !== 'stackgres') return this.cluster()?.spec?.managed?.roles || [];
     const binding = this.cluster()?.spec?.configurations?.binding;
     return binding?.username ? [{ name: binding.username, login: true, ensure: 'present', passwordSecret: binding.password }] : [];
   });
   readonly conditions = computed<any[]>(() => this.cluster()?.status?.conditions || []);
-  readonly backupConfigured = computed<boolean>(() => this.provider() === 'stackgres' ? !!this.cluster()?.spec?.configurations?.sgBackupConfig : !!this.cluster()?.spec?.backup);
-  readonly monitoringEnabled = computed<boolean>(() => this.provider() === 'stackgres' ? this.cluster()?.spec?.pods?.disableMetricsExporter !== true : this.cluster()?.spec?.monitoring?.enablePodMonitor !== false);
-  readonly writeService = computed(() => this.provider() === 'stackgres' ? `${this.name}.${this.ns}.svc:5432` : `${this.name}-rw.${this.ns}.svc:5432`);
-  readonly readService = computed(() => this.provider() === 'stackgres' ? `${this.name}-replicas.${this.ns}.svc:5432` : `${this.name}-ro.${this.ns}.svc:5432`);
+  readonly backupConfigured = computed<boolean>(() => !!this.cluster()?.spec?.configurations?.backups?.length);
+  readonly monitoringEnabled = computed<boolean>(() => this.cluster()?.spec?.pods?.disableMetricsExporter !== true);
+  readonly writeService = computed(() => `${this.name}.${this.ns}.svc:5432`);
+  readonly readService = computed(() => `${this.name}-replicas.${this.ns}.svc:5432`);
   readonly credentialSecret = computed(() => this.cluster()?.status?.binding?.name || this.cluster()?.spec?.configurations?.binding?.password?.name || `${this.name}-app`);
   readonly pvcRows = computed<PgPvcRow[]>(() => this.pvcs().map((pvc) => ({
     name: String(pvc.metadata?.name || ''), status: String(pvc.status?.phase || '—'),

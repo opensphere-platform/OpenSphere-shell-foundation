@@ -384,13 +384,13 @@ func observeIdentity(ctx context.Context, r *modelReconciler, fm *unstructured.U
 	if syncopeDBReady {
 		syncopeDBValue = "1"
 	}
-	syncopeDB := map[string]interface{}{"id": "syncope_database_ready", "unit": "bool", "value": syncopeDBValue, "healthy": syncopeDBReady, "source": "CloudNativePG Cluster Ready condition"}
+	syncopeDB := map[string]interface{}{"id": "syncope_database_ready", "unit": "bool", "value": syncopeDBValue, "healthy": syncopeDBReady, "source": "StackGres PostgresClaim Ready condition"}
 	scim := map[string]interface{}{"id": "scim_sync_lag_s", "unit": "s", "value": "n/a", "healthy": false, "source": "Syncope audit/task telemetry", "note": "SCIM connector task가 구성되기 전에는 동기화 지연을 산출하지 않음"}
 	ko := keycloakParams(fm)
 	kv := map[string]interface{}{"id": "keycloak_version", "unit": "", "value": ko.version, "healthy": true, "source": "spec.parameters.identityEngines.keycloak.version"}
 	kr := map[string]interface{}{"id": "keycloak_replicas", "unit": "count", "value": fmt.Sprintf("%d", ko.replicas), "healthy": true, "source": "spec.parameters.identityEngines.keycloak.replicas"}
 	decisionSinkReady := opaExplicitlyEnabled(fm) && r.deploymentReady(ctx, opaControlName)
-	decisionTelemetry := map[string]interface{}{"id": "opa_decision_outcomes", "unit": "count", "value": "durable", "healthy": decisionSinkReady, "source": "CloudNativePG opensphere_opa_decision_log", "note": "원문 input 제거 후 allow/deny 결과만 30일 보존"}
+	decisionTelemetry := map[string]interface{}{"id": "opa_decision_outcomes", "unit": "count", "value": "durable", "healthy": decisionSinkReady, "source": "StackGres opensphere_opa_decision_log", "note": "원문 input 제거 후 allow/deny 결과만 30일 보존"}
 	return []interface{}{kc, kv, kr, sm, syncope, syncopeDB, opa, decisionTelemetry, login, scim}, nil
 }
 
@@ -407,7 +407,7 @@ func extraIdentity(cfg *config, o *unstructured.Unstructured) {
 	setNested(o, op.profile, "status", "opaProfile")
 	setNested(o, opaProductionBundleRevision, "status", "opaBundleRevision")
 	setNested(o, "opensphere-opa-edge-bundle-v1", "status", "opaBundleSigningKeyID")
-	setNested(o, "CloudNativePG/opensphere_opa_decision_log (30d)", "status", "opaDecisionLogSink")
+	setNested(o, "StackGres/opensphere_opa_decision_log (30d)", "status", "opaDecisionLogSink")
 	setNested(o, "mTLS", "status", "opaTLSMode")
 	setNested(o, op.profile == "production" && op.replicas >= 2, "status", "opaProductionReady")
 	setNested(o, keycloakParams(o).version, "status", "keycloakVersion")
@@ -416,7 +416,7 @@ func extraIdentity(cfg *config, o *unstructured.Unstructured) {
 	setNested(o, syncopeURL(cfg.managedNS), "status", "syncopeURL")
 	setNested(o, sp.version, "status", "syncopeVersion")
 	setNested(o, sp.profile, "status", "syncopeProfile")
-	setNested(o, "CloudNativePG/foundation-data-pg/syncope", "status", "syncopeDatabase")
+	setNested(o, "StackGres/pgc-foundation-identity-syncope-pg/syncope", "status", "syncopeDatabase")
 	setNested(o, "TLS", "status", "syncopeTLSMode")
 	setNested(o, "15s scrape / 60s chart step", "status", "syncopeMonitoringInterval")
 	setNested(o, syncopeExplicitlyEnabled(o) && sp.profile == "production" && sp.replicas >= 2 && sp.monitoring, "status", "syncopeProductionReady")
@@ -434,7 +434,7 @@ type bundleSpec struct {
 	extra      func(*config, *unstructured.Unstructured) // 모델별 추가 status(없으면 nil)
 	endpoint   func(*config) string                      // P6 Binding spec.endpoint(모델별, NS 고정)
 	probe      func(*config) string                      // P6 연결 probe host:port(모델별, NS 고정)
-	// ready/gone — Deployment가 아닌 operand(예: CNPG Cluster CR)의 준비도/소멸 판정 오버라이드(nil이면 Deployment 기준). fm로 설치 NS 파악.
+	// ready/gone — Deployment가 아닌 operand(예: PostgresClaim)의 준비도/소멸 판정 오버라이드(nil이면 Deployment 기준). fm로 설치 NS 파악.
 	ready func(context.Context, *modelReconciler, *unstructured.Unstructured) bool
 	gone  func(context.Context, *modelReconciler, *unstructured.Unstructured) bool
 	// nsOf — operand 설치 네임스페이스(설치옵션 parameters.namespace). nil이면 managedNS. install/withdraw가 사용.
@@ -467,13 +467,13 @@ var bundles = map[string]bundleSpec{
 		endpoint: func(c *config) string { return issuerURL(c.managedNS) },
 		probe:    func(c *config) string { return keycloakSvcDNS(c.managedNS) + ":8080" },
 	},
-	// data — Bootstrap+Operator 구조 첫 적용. CloudNativePG(채택) Cluster CR을 hybrid-wrap. 설치 NS는 옵션(parameters.namespace).
+	// data — StackGres 단일 엔진 PostgresClaim을 선언하고 전용 SGCluster를 관측한다.
 	"data": {
 		model: "data", slice: "D-4", deployName: pgClusterName,
-		image:      func(c *config) string { return c.pgImage },
+		image:      func(c *config) string { return "stackgres-1.19.0" },
 		build:      buildDataBundle,
 		observe:    observeData,
-		ready:      dataReady, // Deployment 아님 → Cluster.status.readyInstances(설치 NS)
+		ready:      dataReady, // Deployment 아님 → PostgresClaim.status.phase(설치 NS)
 		gone:       dataGone,
 		nsOf:       dataNS,       // 설치옵션 NS
 		endpointFM: dataEndpoint, // 설치 NS의 -rw 서비스

@@ -34,7 +34,7 @@ import { PgState } from '../ui/pg-state';
 })
 export class PgTopologyTab {
   readonly svc = inject(CnpgService);
-  providerLabel(): string { return this.svc.provider() === 'stackgres' ? 'StackGres' : 'CloudNativePG'; }
+  providerLabel(): string { return 'StackGres'; }
   readonly replicaN = computed(() => this.svc.instances().filter((i) => i.role !== 'primary').length);
   readonly state = computed(() => (this.svc.instances().length ? 'ok' : (this.svc.clusterState() === 'loading' && !this.svc.pods().length ? 'loading' : 'empty')));
 }

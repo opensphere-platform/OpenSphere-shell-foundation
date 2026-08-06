@@ -5,7 +5,7 @@ const path = require('node:path');
 
 const {
   postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost, POSTGRES_ADMIN,
-  POSTGRES_LEGACY_ID, parsePostgresClusterId, postgresClusterProjection, postgresBindingDatabase,
+  POSTGRES_DEFAULT_ID, parsePostgresClusterId, postgresClusterProjection, postgresBindingDatabase,
 } = require('../server.js');
 
 function throwsMessage(fn, pattern) {
@@ -56,8 +56,8 @@ test('drop plans are RESTRICT-only and index columns are identifier-checked', ()
     'DROP SEQUENCE "public"."event_id_seq" RESTRICT');
 });
 
-test('PostgreSQL admin keeps one explicit legacy target and bounded query execution', () => {
-  assert.equal(POSTGRES_LEGACY_ID, 'cloudnativepg:opensphere-foundation:foundation-data-pg');
+test('PostgreSQL admin defaults to the canonical StackGres target and bounded query execution', () => {
+  assert.equal(POSTGRES_DEFAULT_ID, 'stackgres:opensphere-foundation:pgc-foundation-data-pg');
   assert.equal(POSTGRES_ADMIN.rowLimit, 500);
   assert.equal(POSTGRES_ADMIN.statementTimeoutMs, 10000);
 });
@@ -66,8 +66,9 @@ test('PostgreSQL fleet accepts only provider-qualified cluster identities', () =
   assert.deepEqual(parsePostgresClusterId('stackgres:tenant-a:orders'), {
     id: 'stackgres:tenant-a:orders', provider: 'stackgres', namespace: 'tenant-a', name: 'orders',
   });
-  throwsMessage(() => parsePostgresClusterId('tenant-a/orders'), /provider:namespace:name/);
-  throwsMessage(() => parsePostgresClusterId('stackgres:tenant_a:orders'), /provider:namespace:name/);
+  throwsMessage(() => parsePostgresClusterId('tenant-a/orders'), /stackgres:namespace:name/);
+  throwsMessage(() => parsePostgresClusterId('stackgres:tenant_a:orders'), /stackgres:namespace:name/);
+  throwsMessage(() => parsePostgresClusterId('other:tenant-a:orders'), /stackgres:namespace:name/);
 });
 
 test('StackGres fleet projection is dedicated and uses status binding', () => {
@@ -75,7 +76,7 @@ test('StackGres fleet projection is dedicated and uses status binding', () => {
     metadata: { name: 'orders', namespace: 'tenant-a', uid: 'u1' },
     spec: { instances: 2, postgres: { version: '18' }, pods: { persistentVolume: { size: '20Gi' } } },
     status: { binding: { name: 'orders-binding' }, conditions: [{ type: 'ClusterReady', status: 'True' }] },
-  }, 'stackgres');
+  });
   assert.equal(projected.id, 'stackgres:tenant-a:orders');
   assert.equal(projected.mode, 'Dedicated');
   assert.equal(projected.ready, true);
@@ -94,16 +95,16 @@ test('StackGres 1.19 native conditions project a ready dedicated cluster', () =>
         { type: 'Failed', status: 'False' },
       ],
     },
-  }, 'stackgres');
+  });
   assert.equal(projected.ready, true);
   assert.equal(projected.phase, 'Ready');
 });
 
 test('PostgreSQL Secret short service hosts are qualified for the target namespace', () => {
-  assert.equal(postgresServiceHost('foundation-data-pg-rw'),
-    'foundation-data-pg-rw.opensphere-foundation.svc');
-  assert.equal(postgresServiceHost('foundation-data-pg-rw.opensphere-foundation.svc'),
-    'foundation-data-pg-rw.opensphere-foundation.svc');
+  assert.equal(postgresServiceHost('pgc-foundation-data-pg'),
+    'pgc-foundation-data-pg.opensphere-foundation.svc');
+  assert.equal(postgresServiceHost('pgc-foundation-data-pg.opensphere-foundation.svc'),
+    'pgc-foundation-data-pg.opensphere-foundation.svc');
   assert.equal(postgresServiceHost(''), POSTGRES_ADMIN.service);
   assert.equal(postgresServiceHost('10.96.154.32'), '10.96.154.32');
   assert.equal(postgresServiceHost('localhost'), 'localhost');
@@ -113,9 +114,8 @@ test('StackGres service binding resolves the application database from its URI',
   const data = {
     uri: Buffer.from('postgresql://app:secret@pgc-orders/tenant%2Dorders?sslmode=require').toString('base64'),
   };
-  assert.equal(postgresBindingDatabase(data, 'stackgres'), 'tenant-orders');
-  throwsMessage(() => postgresBindingDatabase({}, 'stackgres'), /no database key or valid database URI/);
-  assert.equal(postgresBindingDatabase({}, 'cloudnativepg'), 'app');
+  assert.equal(postgresBindingDatabase(data), 'tenant-orders');
+  throwsMessage(() => postgresBindingDatabase({}), /no database key or valid database URI/);
 });
 
 test('PostgreSQL administration surface separates Data View from Query Tool and exposes a collapsible explorer', () => {
@@ -158,7 +158,7 @@ test('PostgreSQL landing surface is namespace-first and exposes fleet as a secon
   assert.match(component, /\*ngIf="!fleet\.busy\(\) && !selectedContextCluster\(\)"[\s\S]*PostgreSQL 설치/);
   assert.match(component, /Secondary view[\s\S]*PFSS PostgreSQL Fleet/);
   assert.match(component, /Objects & Query/);
-  assert.match(component, /LegacyShared/);
+  assert.doesNotMatch(component, /LegacyShared|CloudNativePG/);
   assert.match(component, /aria-label="Namespace 추가"[\s\S]*\(click\)="openNamespaceModal\(\)"[^>]*>추가<\/button>/);
   assert.match(component, /aria-label="PostgreSQL 컨텍스트 새로고침"/);
   assert.match(component, /\[icon\]="iRenew"/);
@@ -178,7 +178,8 @@ test('PostgreSQL landing surface is namespace-first and exposes fleet as a secon
   assert.match(fleet, /provisioning\.opensphere\.io\/v1beta1/);
   assert.match(fleet, /PostgresClaim/);
   assert.match(fleet, /api\/foundation\/postgres\/namespaces/);
-  assert.match(fleet, /cluster\.provider === 'stackgres'/);
+  assert.match(fleet, /provider: 'stackgres'/);
+  assert.doesNotMatch(fleet, /cloudnative|LegacyShared/i);
   assert.match(server, /postgresFleetNamespaces/);
   assert.match(server, /postgres-namespace-create/);
   assert.match(server, /Namespace creation must use \/api\/foundation\/postgres\/namespaces/);
@@ -212,8 +213,8 @@ test('PostgreSQL keeps the complete provider-neutral operations menu', () => {
   assert.match(component, /\{ id: 'admin', label: 'Database Objects'.*secondary: true/);
   assert.doesNotMatch(component, /legacyOnly/);
   assert.match(component, /tab\(\) === 'monitoring'/);
-  assert.match(component, /tab\(\) === 'operator' && !selectedIsLegacy\(\)/);
-  assert.match(component, /tab\(\) === 'cluster' && !selectedIsLegacy\(\)/);
+  assert.match(component, /tab\(\) === 'operator' && selectedContextCluster\(\)/);
+  assert.match(component, /tab\(\) === 'cluster' && selectedContextCluster\(\)/);
   assert.match(component, /<pg-topology \*ngIf="tab\(\) === 'topology' && hasSelectedCluster\(\)"/);
   assert.match(component, /<pg-config \*ngIf="tab\(\) === 'config' && hasSelectedCluster\(\)"/);
   assert.match(component, /<pg-backups \*ngIf="tab\(\) === 'backups' && hasSelectedCluster\(\)"/);
@@ -238,10 +239,31 @@ test('PostgreSQL restores the detailed Overview and Prometheus monitoring worksp
   assert.ok(monitoringPosition > -1 && monitoringPosition < dashboardPosition);
   assert.ok(dashboardPosition < detailsPosition && detailsPosition < descriptionPosition);
   for (const marker of ['OPERATIONS · PROMETHEUS', '활성 연결', 'WAL 생성량', '복제 지연', 'CPU 사용량', '메모리 사용량']) assert.match(monitoring, new RegExp(marker));
-  assert.match(service, /selectTarget\(provider: 'cloudnativepg' \| 'stackgres'/);
+  assert.match(service, /selectTarget\(provider: 'stackgres'/);
+  assert.doesNotMatch(service, /postgresql\.cnpg\.io|cnpg\.io\/cluster|cnpg_/);
   assert.match(service, /stackgres\.io\/cluster-name/);
   assert.match(service, /sgpgconfigs/);
   assert.match(service, /sginstanceprofiles/);
+  assert.match(service, /targetGeneration/);
+  assert.match(service, /generation !== this\.targetGeneration/);
+});
+
+test('PostgreSQL Claims use the authenticated host API path', () => {
+  const list = fs.readFileSync(path.join(__dirname, '../src/app/modules/claims-list.component.ts'), 'utf8');
+  const form = fs.readFileSync(path.join(__dirname, '../src/app/modules/new-claim-form.component.ts'), 'utf8');
+  assert.match(list, /hostFetch\(`/);
+  assert.match(form, /hostFetch\(`/);
+  assert.doesNotMatch(list, /await fetch\(`/);
+  assert.doesNotMatch(form, /await fetch\(`/);
+});
+
+test('PostgreSQL documentation follows the selected StackGres runtime and major version', () => {
+  const component = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/postgres-plugin.component.ts'), 'utf8');
+  assert.match(component, /documentationVersion/);
+  assert.match(component, /providerDocsUrl/);
+  assert.match(component, /StackGres 공식 문서/);
+  assert.match(component, /PostgreSQL \{\{documentationVersion\(\)\}\}/);
+  assert.doesNotMatch(component, /PostgreSQL 19 한글 설치·운영 안내서/);
 });
 
 test('PostgreSQL Cluster plan offers an explicit compact two-instance profile', () => {

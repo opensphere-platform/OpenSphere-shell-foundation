@@ -67,9 +67,9 @@ const PSMDB_CONNECTION_SECRET = `${PSMDB_NAME}-databaseadmin-conn-str`;
 const PSMDB_TLS_SECRET = `${PSMDB_NAME}-ssl`;
 const POSTGRES_ADMIN = Object.freeze({
   namespace: FND_NS,
-  cluster: 'foundation-data-pg',
-  secret: 'foundation-data-pg-app',
-  service: `foundation-data-pg-rw.${FND_NS}.svc`,
+  cluster: 'pgc-foundation-data-pg',
+  secret: 'pgc-foundation-data-pg-binding',
+  service: `pgc-foundation-data-pg.${FND_NS}.svc`,
   port: 5432,
   statementTimeoutMs: 10000,
   rowLimit: 500,
@@ -83,7 +83,7 @@ const PG_COLUMN_TYPES = Object.freeze(new Set([
 const PG_DEFAULTS = Object.freeze(new Set(['', 'now()', 'gen_random_uuid()', 'true', 'false']));
 const pgPools = new Map();
 const pgCredentialCache = new Map();
-const POSTGRES_LEGACY_ID = 'cloudnativepg:' + FND_NS + ':' + POSTGRES_ADMIN.cluster;
+const POSTGRES_DEFAULT_ID = 'stackgres:' + FND_NS + ':' + POSTGRES_ADMIN.cluster;
 const FOUNDATION_API = '/apis/foundation.opensphere.io/v1alpha1';
 const HIS_STATUS_SCHEMA = 'his-status.opensphere.io/v1alpha1';
 const FOUNDATION_CORE_CRDS = Object.freeze([
@@ -187,34 +187,31 @@ function postgresServiceHost(value, namespace = POSTGRES_ADMIN.namespace) {
   return host + '.' + namespace + '.svc';
 }
 function parsePostgresClusterId(value) {
-  const id = String(value || POSTGRES_LEGACY_ID).trim();
-  const match = id.match(/^(stackgres|cloudnativepg):([a-z0-9]([-a-z0-9]*[a-z0-9])?):([a-z0-9]([-a-z0-9]*[a-z0-9])?)$/);
-  if (!match) throw { code: 400, msg: 'cluster must be provider:namespace:name' };
-  return { id, provider: match[1], namespace: match[2], name: match[4] };
+  const id = String(value || POSTGRES_DEFAULT_ID).trim();
+  const match = id.match(/^stackgres:([a-z0-9]([-a-z0-9]*[a-z0-9])?):([a-z0-9]([-a-z0-9]*[a-z0-9])?)$/);
+  if (!match) throw { code: 400, msg: 'cluster must be stackgres:namespace:name' };
+  return { id, provider: 'stackgres', namespace: match[1], name: match[3] };
 }
-function postgresClusterProjection(item, provider) {
+function postgresClusterProjection(item) {
   const namespace = item?.metadata?.namespace || '';
   const name = item?.metadata?.name || '';
-  const isStackGres = provider === 'stackgres';
   const stackGresConditions = item?.status?.conditions || [];
-  const ready = isStackGres
-    ? (stackGresConditions.some((condition) => ['ClusterReady', 'Ready'].includes(condition.type) && condition.status === 'True')
+  const ready = (stackGresConditions.some((condition) => ['ClusterReady', 'Ready'].includes(condition.type) && condition.status === 'True')
       || (stackGresConditions.some((condition) => condition.type === 'Bootstrapped' && condition.status === 'True')
         && stackGresConditions.some((condition) => condition.type === 'ComponentsUpdated' && condition.status === 'True')
         && !stackGresConditions.some((condition) => condition.type === 'Failed' && condition.status === 'True')
-        && !!item?.status?.binding?.name))
-    : Number(item?.status?.readyInstances || 0) === Number(item?.spec?.instances || 0) && Number(item?.spec?.instances || 0) > 0;
+        && !!item?.status?.binding?.name));
   return {
-    id: provider + ':' + namespace + ':' + name, provider, namespace, name,
+    id: 'stackgres:' + namespace + ':' + name, provider: 'stackgres', namespace, name,
     displayName: item?.metadata?.annotations?.['opensphere.io/display-name'] || name,
-    mode: isStackGres ? 'Dedicated' : 'LegacyShared',
+    mode: 'Dedicated',
     phase: ready ? 'Ready' : (item?.status?.phase || 'Provisioning'),
     ready, instances: Number(item?.spec?.instances || 0),
     readyInstances: Number(item?.status?.readyInstances || item?.status?.instances || 0),
     postgresVersion: String(item?.spec?.postgres?.version || item?.spec?.imageCatalogRef?.major || item?.spec?.imageName || ''),
     storage: item?.spec?.pods?.persistentVolume?.size || item?.spec?.storage?.size || '',
-    plan: item?.metadata?.labels?.['catalog.opensphere.io/plan'] || (isStackGres ? '' : 'legacy-shared'),
-    bindingSecret: item?.status?.binding?.name || (isStackGres ? name + '-binding' : POSTGRES_ADMIN.secret),
+    plan: item?.metadata?.labels?.['catalog.opensphere.io/plan'] || '',
+    bindingSecret: item?.status?.binding?.name || name + '-binding',
     uid: item?.metadata?.uid || '', createdAt: item?.metadata?.creationTimestamp || null,
   };
 }
@@ -222,18 +219,11 @@ async function postgresFleetClusters(req, res) {
   if (req.method !== 'GET') return jsonRes(res, 405, { error: 'method not allowed' });
   try {
     const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
-    const [sg, cnpg] = await Promise.all([
-      k8sJson('GET', '/apis/stackgres.io/v1/sgclusters', undefined, actor),
-      k8sJson('GET', '/apis/postgresql.cnpg.io/v1/clusters', undefined, actor),
-    ]);
-    const fatal = [sg, cnpg].find((result) => !result.ok && result.status !== 404);
-    if (fatal) throw { code: fatal.status, msg: 'PostgreSQL fleet unavailable: ' + k8sFailure(fatal) };
-    const clusters = [
-      ...((sg.ok ? sg.json?.items : []) || []).map((item) => postgresClusterProjection(item, 'stackgres')),
-      ...((cnpg.ok ? cnpg.json?.items : []) || [])
-        .filter((item) => item?.metadata?.namespace === POSTGRES_ADMIN.namespace && item?.metadata?.name === POSTGRES_ADMIN.cluster)
-        .map((item) => postgresClusterProjection(item, 'cloudnativepg')),
-    ].sort((a, b) => Number(b.ready) - Number(a.ready) || a.displayName.localeCompare(b.displayName));
+    const sg = await k8sJson('GET', '/apis/stackgres.io/v1/sgclusters', undefined, actor);
+    if (!sg.ok && sg.status !== 404) throw { code: sg.status, msg: 'StackGres PostgreSQL fleet unavailable: ' + k8sFailure(sg) };
+    const clusters = ((sg.ok ? sg.json?.items : []) || [])
+      .map((item) => postgresClusterProjection(item))
+      .sort((a, b) => Number(b.ready) - Number(a.ready) || a.displayName.localeCompare(b.displayName));
     return jsonRes(res, 200, { schema: 'foundation.postgres.fleet/v1beta1', clusters, refreshedAt: new Date().toISOString() });
   } catch (e) {
     return jsonRes(res, typeof e.code === 'number' ? e.code : 502, { error: e.msg || e.message || String(e) });
@@ -292,16 +282,10 @@ async function postgresFleetNamespaces(req, res) {
 }
 async function postgresCredentials(clusterId, actor) {
   const target = parsePostgresClusterId(clusterId);
-  let secretName = POSTGRES_ADMIN.secret;
-  let clusterUID = target.id;
-  if (target.provider === 'stackgres') {
-    const cluster = await k8sJson('GET', '/apis/stackgres.io/v1/namespaces/' + target.namespace + '/sgclusters/' + target.name, undefined, actor);
-    if (!cluster.ok) throw { code: cluster.status, msg: 'StackGres cluster unavailable: ' + k8sFailure(cluster) };
-    secretName = cluster.json?.status?.binding?.name || target.name + '-binding';
-    clusterUID = cluster.json?.metadata?.uid || target.id;
-  } else if (target.id !== POSTGRES_LEGACY_ID) {
-    throw { code: 409, msg: 'Only the registered LegacyShared CNPG cluster can use the compatibility admin binding' };
-  }
+  const cluster = await k8sJson('GET', '/apis/stackgres.io/v1/namespaces/' + target.namespace + '/sgclusters/' + target.name, undefined, actor);
+  if (!cluster.ok) throw { code: cluster.status, msg: 'StackGres cluster unavailable: ' + k8sFailure(cluster) };
+  const secretName = cluster.json?.status?.binding?.name || target.name + '-binding';
+  const clusterUID = cluster.json?.metadata?.uid || target.id;
   const result = await k8sJson('GET', '/api/v1/namespaces/' + target.namespace + '/secrets/' + secretName, undefined, actor);
   if (!result.ok) throw { code: result.status, msg: 'PostgreSQL connection Secret unavailable: ' + k8sFailure(result) };
   const resourceVersion = result.json?.metadata?.resourceVersion || '';
@@ -309,7 +293,7 @@ async function postgresCredentials(clusterId, actor) {
   if (pgCredentialCache.has(cacheKey)) return pgCredentialCache.get(cacheKey);
   const data = result.json?.data || {};
   const bindingHost = decodeSecretValue(data, 'host');
-  if (target.provider === 'stackgres' && !bindingHost) {
+  if (!bindingHost) {
     throw { code: 503, msg: 'StackGres binding Secret ' + target.namespace + '/' + secretName + ' has no host' };
   }
   const value = {
@@ -326,7 +310,7 @@ async function postgresCredentials(clusterId, actor) {
   return value;
 }
 
-function postgresBindingDatabase(data, provider = 'cloudnativepg') {
+function postgresBindingDatabase(data) {
   const explicit = decodeSecretValue(data, 'database') || decodeSecretValue(data, 'dbname');
   if (explicit) return pgName(explicit, 'database');
   const bindingUri = decodeSecretValue(data, 'uri');
@@ -336,13 +320,10 @@ function postgresBindingDatabase(data, provider = 'cloudnativepg') {
       const database = decodeURIComponent(pathname);
       if (database && !database.includes('/')) return pgName(database, 'database');
     } catch {
-      // Fall through to the provider-specific compatibility boundary below.
+      // Fall through to the required StackGres binding validation below.
     }
   }
-  if (provider === 'stackgres') {
-    throw { code: 503, msg: 'StackGres binding Secret has no database key or valid database URI' };
-  }
-  return 'app';
+  throw { code: 503, msg: 'StackGres binding Secret has no database key or valid database URI' };
 }
 async function postgresPool(clusterId, database, actor) {
   const credentials = await postgresCredentials(clusterId, actor);
@@ -367,7 +348,7 @@ async function postgresAdminCatalog(req, res, url) {
   if (req.method !== 'GET') return jsonRes(res, 405, { error: 'method not allowed' });
   try {
     const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
-    const clusterId = url.searchParams.get('cluster') || POSTGRES_LEGACY_ID;
+    const clusterId = url.searchParams.get('cluster') || POSTGRES_DEFAULT_ID;
     const requestedDatabase = url.searchParams.get('database') || '';
     const basePool = await postgresPool(clusterId, undefined, actor);
     const databases = await pgRows(basePool, `
@@ -469,7 +450,7 @@ async function postgresAdminQuery(req, res) {
     const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
     const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
     requireClosedOwnerBody(body, ['cluster', 'database', 'sql']);
-    const clusterId = body.cluster || POSTGRES_LEGACY_ID;
+    const clusterId = body.cluster || POSTGRES_DEFAULT_ID;
     const database = pgName(body.database, 'database');
     const sql = postgresReadOnlySql(body.sql);
     const pool = await postgresPool(clusterId, database, actor);
@@ -554,7 +535,7 @@ async function postgresAdminAction(req, res) {
     actor = await foundationOwnerActor(req);
     const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
     requireClosedOwnerBody(body, ['cluster', 'action', 'database', 'schema', 'name', 'table', 'columns', 'indexColumns', 'unique', 'reason']);
-    const clusterId = body.cluster || POSTGRES_LEGACY_ID;
+    const clusterId = body.cluster || POSTGRES_DEFAULT_ID;
     const reason = requireOwnerReason(body.reason);
     const plan = postgresActionPlan(body);
     await publishFoundationAudit(actor, 'postgres-object-management', `${plan.database}/${plan.target}`, 'attempt', `${reason}; action=${body.action}`);
@@ -2097,6 +2078,6 @@ if (require.main === module) {
     parsePostgresClusterId, postgresClusterProjection,
     foundationBootstrapState,
     HIS_STATUS_SCHEMA, FOUNDATION_CORE_CRDS,
-    FOUNDATION_ENGINE_MODEL, FOUNDATION_CLAIM_MODELS, POSTGRES_ADMIN, POSTGRES_LEGACY_ID,
+    FOUNDATION_ENGINE_MODEL, FOUNDATION_CLAIM_MODELS, POSTGRES_ADMIN, POSTGRES_DEFAULT_ID,
   };
 }

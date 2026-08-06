@@ -25,16 +25,22 @@ func TestBuildSyncopeBundlePinsSafeVersionAndProductionFloor(t *testing.T) {
 	}
 	var statefulSet *unstructured.Unstructured
 	var serviceMonitor *unstructured.Unstructured
+	var postgresClaim *unstructured.Unstructured
 	for _, object := range objects {
 		switch object.GetKind() {
 		case "StatefulSet":
 			statefulSet = object
 		case "ServiceMonitor":
 			serviceMonitor = object
+		case "PostgresClaim":
+			postgresClaim = object
 		}
 	}
-	if statefulSet == nil || serviceMonitor == nil {
-		t.Fatalf("production resources missing: StatefulSet=%v ServiceMonitor=%v", statefulSet != nil, serviceMonitor != nil)
+	if statefulSet == nil || serviceMonitor == nil || postgresClaim == nil {
+		t.Fatalf("production resources missing: StatefulSet=%v ServiceMonitor=%v PostgresClaim=%v", statefulSet != nil, serviceMonitor != nil, postgresClaim != nil)
+	}
+	if postgresClaim.GetName() != "foundation-identity-syncope-pg" || postgresClaim.GetLabels()["catalog.opensphere.io/provider"] != "stackgres" {
+		t.Fatalf("unexpected Syncope PostgresClaim: %s labels=%v", postgresClaim.GetName(), postgresClaim.GetLabels())
 	}
 	replicas, _, _ := unstructured.NestedInt64(statefulSet.Object, "spec", "replicas")
 	if replicas != 2 {

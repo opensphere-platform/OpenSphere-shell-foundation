@@ -32,7 +32,7 @@ rules:
   # cluster-watched because each consumer namespace may own dedicated clusters.
   - apiGroups: ["provisioning.opensphere.io"]
     resources: [postgresclaims]
-    verbs: [get, list, watch, update, patch]
+    verbs: [get, list, watch, create, update, patch, delete, deletecollection]
   - apiGroups: ["provisioning.opensphere.io"]
     resources: [postgresclaims/status]
     verbs: [get, update, patch]
@@ -83,9 +83,6 @@ rules:
   - apiGroups: ["policy"]
     resources: [poddisruptionbudgets]
     verbs: [get, list, watch, create, patch, delete, deletecollection]
-  - apiGroups: ["postgresql.cnpg.io"]
-    resources: [clusters, poolers, databases, databaseroles]
-    verbs: [get, list, watch, create, patch, delete, deletecollection]
   # PostgreSQL Fleet southbound access remains namespace-scoped. Every object
   # also carries provisioning.opensphere.io/postgres-claim for exact cleanup.
   - apiGroups: ["stackgres.io"]
@@ -102,7 +99,7 @@ rules:
     verbs: [get, list, watch, create, patch, delete, deletecollection]
   # 승인된 Valkey 관측 계약: 이 namespace의 ServiceMonitor만 선언·회수한다.
   - apiGroups: ["monitoring.coreos.com"]
-    resources: [servicemonitors, prometheusrules]
+    resources: [servicemonitors, podmonitors, prometheusrules]
     verbs: [get, list, watch, create, patch, delete, deletecollection]
   # Samba plugin operand의 기존 LDAPS Certificate를 같은 identity SSA에서
   # 재적용한다. Issuer와 생성 Secret은 cert-manager 소유이므로 권한을 주지 않는다.
@@ -119,7 +116,6 @@ rules:
     resourceNames:
       - foundation-data-valkey-auth
       - rustfs-credentials
-      - foundation-identity-syncope-db-auth
       - foundation-identity-syncope-runtime
     verbs: [get]
 ---

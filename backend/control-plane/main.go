@@ -37,8 +37,7 @@ type config struct {
 	keycloakPgImage     string // 이전 배포 계약 호환용. Keycloak plugin 소유 전환 후 신규 bundle에서는 미사용.
 	sambaImage          string // (deprecated 2026-07-06) samba operand는 plugin이 소유 — 미사용, arg 호환 위해 잔존
 	sambaPluginSvc      string // samba operand 선언 제공 plugin svc(self-contained) — GET /operand/manifests
-	pgImage             string
-	pgbouncerImage      string // 이전 PostgreSQL 배포 계약 호환용. CNPG Pooler가 image lifecycle을 소유.
+	pgbouncerImage      string // 이전 PostgreSQL 배포 계약 호환용. 현재 StackGres가 pooling lifecycle을 소유.
 	psmdbImage          string
 	valkeyImage         string
 	valkeyExporterImage string
@@ -84,7 +83,6 @@ func main() {
 	flag.StringVar(&cfg.keycloakPgImage, "keycloak-pg-image", "", "(compatibility) 이전 Keycloak PostgreSQL image 인자를 수용합니다")
 	flag.StringVar(&cfg.sambaImage, "samba-image", "ghcr.io/opensphere-platform/mirror/samba-domain:20260701025204", "(deprecated) samba operand는 plugin이 소유·렌더 — 이 플래그는 미사용(arg 호환)")
 	flag.StringVar(&cfg.sambaPluginSvc, "samba-plugin-svc", "directory.opensphere-console.svc:8080", "directory plugin이 제공하는 Samba operand 선언 서비스(self-contained, GET /operand/manifests)")
-	flag.StringVar(&cfg.pgImage, "pg-image", "ghcr.io/opensphere-platform/mirror/postgresql:19beta2-standard-trixie", "data PostgreSQL 19 beta operand 이미지(CloudNativePG Cluster) — image-source: OpenSphere curated GHCR mirror")
 	flag.StringVar(&cfg.pgbouncerImage, "pgbouncer-image", "", "(compatibility) 이전 PgBouncer image 인자를 수용합니다")
 	flag.StringVar(&cfg.psmdbImage, "psmdb-image", "ghcr.io/opensphere-platform/mirror/percona-server-mongodb:8.0", "data PSMDB operand image(GHCR mirror)")
 	flag.StringVar(&cfg.valkeyImage, "valkey-image", "ghcr.io/opensphere-platform/mirror/valkey:9.1.0-alpine", "data Valkey operand image(GHCR mirror)")

@@ -280,10 +280,7 @@ func bundleKinds() []schema.GroupVersionKind {
 		{Group: "monitoring.coreos.com", Version: "v1", Kind: "PrometheusRule"},
 		{Group: "cert-manager.io", Version: "v1", Kind: "Issuer"},
 		{Group: "cert-manager.io", Version: "v1", Kind: "Certificate"},
-		{Group: "postgresql.cnpg.io", Version: "v1", Kind: "Database"},
-		{Group: "postgresql.cnpg.io", Version: "v1", Kind: "DatabaseRole"},
-		cnpgClusterGVK, // data hybrid-wrap: CloudNativePG Cluster CR(라벨 회수)
-		cnpgPoolerGVK,  // data: PgBouncer Pooler CR(라벨 회수)
-		psmdbGVK,       // data: PerconaServerMongoDB CR(라벨 회수)
+		postgresClaimGVK, // PostgreSQL은 StackGres 전용 PostgresClaim을 통해 회수한다.
+		psmdbGVK,         // data: PerconaServerMongoDB CR(라벨 회수)
 	}
 }

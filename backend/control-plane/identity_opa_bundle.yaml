@@ -1,6 +1,19 @@
 # OPA production policy decision point. A signed, revisioned bundle is served by
 # a two-replica mTLS control service and decision outcomes are durably projected
-# into CloudNativePG without retaining policy input.
+# into a dedicated StackGres PostgreSQL cluster without retaining policy input.
+---
+apiVersion: provisioning.opensphere.io/v1beta1
+kind: PostgresClaim
+metadata:
+  name: foundation-identity-opa-pg
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: opa, catalog.opensphere.io/provider: stackgres }
+spec:
+  database: opa
+  owner: opa
+  isolation: Dedicated
+  planRef: { name: postgresql-dev-single }
+  deletionPolicy: Delete
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -220,7 +233,7 @@ spec:
             - --decision-retention-days=30
           env:
             - name: DATABASE_URL
-              valueFrom: { secretKeyRef: { name: foundation-data-pg-app, key: uri } }
+              valueFrom: { secretKeyRef: { name: pgc-foundation-identity-opa-pg-binding, key: uri } }
           ports:
             - { name: control, containerPort: 8443 }
             - { name: metrics, containerPort: 8080 }

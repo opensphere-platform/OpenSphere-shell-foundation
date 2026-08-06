@@ -2,8 +2,8 @@ import { Injectable, computed, signal } from '@angular/core';
 import { apiBase, hostFetch, writeHeaders } from '../../api-base';
 
 export interface PostgresFleetCluster {
-  id: string; provider: 'stackgres' | 'cloudnativepg'; namespace: string; name: string;
-  displayName: string; mode: 'Dedicated' | 'LegacyShared'; phase: string; ready: boolean;
+  id: string; provider: 'stackgres'; namespace: string; name: string;
+  displayName: string; mode: 'Dedicated'; phase: string; ready: boolean;
   instances: number; readyInstances: number; postgresVersion: string; storage: string;
   plan: string; bindingSecret: string; uid: string; createdAt: string | null;
 }
@@ -41,7 +41,7 @@ export class PostgresFleetService {
       const clusterRows = (fleetBody.clusters || []) as PostgresFleetCluster[];
       this.clusters.set(clusterRows);
       if (!clusterRows.some((cluster) => cluster.id === this.selectedId()) && clusterRows[0]) {
-        this.selectedId.set(clusterRows.find((cluster) => cluster.provider === 'stackgres')?.id || clusterRows[0].id);
+        this.selectedId.set(clusterRows[0].id);
       }
       this.plans.set(plans.ok ? ((await plans.json()).items || []).filter((item: any) => item.spec?.capabilityRef === 'postgresql') : []);
       this.claims.set(claims.ok ? ((await claims.json()).items || []) : []);

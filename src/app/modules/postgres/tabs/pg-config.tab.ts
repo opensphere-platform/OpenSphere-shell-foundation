@@ -40,7 +40,7 @@ import { PgState } from '../ui/pg-state';
 })
 export class PgConfigTab {
   readonly svc = inject(CnpgService);
-  providerLabel(): string { return this.svc.provider() === 'stackgres' ? 'StackGres' : 'CloudNativePG'; }
+  providerLabel(): string { return 'StackGres'; }
   readonly res = computed(() => this.svc.resources());
   readonly paramCount = computed(() => Object.keys(this.svc.params()).length);
   readonly state = computed(() => (this.paramCount() ? 'ok' : (this.svc.clusterState() === 'ok' ? 'empty' : this.svc.clusterState())));

@@ -10,14 +10,6 @@
       ]
     },
     {
-      "name": "cloudnative-pg",
-      "edgeVersion": "1.30.0",
-      "versions": [
-        { "version": "1.30.0", "source": "ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0" },
-        { "version": "1.28.1", "source": "ghcr.io/cloudnative-pg/cloudnative-pg:1.28.1" }
-      ]
-    },
-    {
       "name": "keycloak",
       "edgeVersion": "26.0",
       "versions": [
@@ -51,13 +43,6 @@
       "edgeVersion": "1.22.0",
       "versions": [
         { "version": "1.22.0", "source": "docker.io/percona/percona-server-mongodb-operator:1.22.0" }
-      ]
-    },
-    {
-      "name": "postgresql",
-      "edgeVersion": "19beta2-standard-trixie",
-      "versions": [
-        { "version": "19beta2-standard-trixie", "source": "ghcr.io/cloudnative-pg/postgresql:19beta2-standard-trixie" }
       ]
     },
     {

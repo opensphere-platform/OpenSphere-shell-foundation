@@ -1,6 +1,5 @@
-// bundle_data.go — data operand(PostgreSQL via CloudNativePG) hybrid-wrap 정의·관측.
-// Operator 구조: 채택 operator=CloudNativePG, 우리 control-plane은 CNPG Cluster/Pooler/Database CR만 선언형 SSA로 적용(INV-1).
-// 설치 레벨 옵션(B): FoundationModel.spec.parameters(인스턴스/이미지/스토리지/WAL/리소스/튜닝/풀러/확장/superuser/monitoring)를 CNPG로 매핑.
+// bundle_data.go — StackGres 단일 엔진 PostgreSQL capability 정의·관측.
+// FoundationModel은 PostgresClaim만 선언하고 PostgresClaim reconciler가 전용 SGCluster와 binding을 제공한다.
 package main
 
 import (
@@ -11,22 +10,15 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
-	pgClusterName = "foundation-data-pg"
-	pgPoolerName  = "foundation-data-pg-pooler"
-	pgDefaultRepo = "ghcr.io/opensphere-platform/mirror/postgresql"
+	pgClaimName   = "foundation-data-pg"
+	pgClusterName = "pgc-" + pgClaimName
 )
 
-var (
-	cnpgClusterGVK = schema.GroupVersionKind{Group: "postgresql.cnpg.io", Version: "v1", Kind: "Cluster"}
-	cnpgPoolerGVK  = schema.GroupVersionKind{Group: "postgresql.cnpg.io", Version: "v1", Kind: "Pooler"}
-)
-
-func pgRWSvcDNS(ns string) string { return pgClusterName + "-rw." + ns + ".svc" }
+func pgRWSvcDNS(ns string) string { return pgClusterName + "." + ns + ".svc" }
 
 // pgNS — 설치 네임스페이스(설치옵션 parameters.namespace, 없으면 managedNS). PG operand이 배치될 NS.
 func pgNS(fm *unstructured.Unstructured, cfg *config) string {
@@ -48,8 +40,8 @@ func dataProbe(cfg *config, fm *unstructured.Unstructured) string {
 // pgOpts — FoundationModel.spec.parameters에서 파싱한 설치 레벨 옵션(기본값 포함, 위조 없이 선언 그대로).
 type pgOpts struct {
 	instances                          int64
-	image                              string
 	storageClass, storageSize, walSize string
+	plan                               string
 	resources                          map[string]interface{} // nil=CNPG 기본
 	pgParams                           map[string]interface{}
 	poolerEnabled                      bool
@@ -136,7 +128,7 @@ func resourceProfile(name string, p map[string]interface{}) map[string]interface
 func dataParams(fm *unstructured.Unstructured, cfg *config) pgOpts {
 	// storageClass: 리터럴 하드코딩 대신 HostRequirements(§1.2)로 선언 — 기본값=cfg.defaultStorageClass,
 	// 모델별 override=spec.parameters.hostRequirements.storageClass. [[basic-foundation-connector-gap]]
-	o := pgOpts{instances: 1, image: cfg.pgImage, storageClass: readHostRequirements(fm, cfg).StorageClass, storageSize: "1Gi", poolerMode: "transaction", poolerInstances: 1, superuser: false, monitoring: false}
+	o := pgOpts{instances: 1, storageClass: readHostRequirements(fm, cfg).StorageClass, storageSize: "10Gi", poolerMode: "transaction", poolerInstances: 1, superuser: false, monitoring: true}
 	o.pgParams = map[string]interface{}{"max_connections": "100"}
 	p, _, _ := unstructured.NestedMap(fm.Object, "spec", "parameters")
 	if p == nil {
@@ -147,11 +139,6 @@ func dataParams(fm *unstructured.Unstructured, cfg *config) pgOpts {
 		o.instances = n
 	} else if t, _ := p["topology"].(string); t == "ha" {
 		o.instances = 3
-	}
-	if tag := pStr(p, "imageTag", ""); tag != "" {
-		o.image = pgDefaultRepo + ":" + tag
-	} else if v := pStr(p, "version", ""); v != "" {
-		o.image = pgDefaultRepo + ":" + v
 	}
 	o.storageClass = pStr(p, "storageClass", o.storageClass)
 	o.storageSize = pStr(p, "storageSize", o.storageSize)
@@ -169,6 +156,17 @@ func dataParams(fm *unstructured.Unstructured, cfg *config) pgOpts {
 	o.superuser = pBool(p, "enableSuperuserAccess", false)
 	o.monitoring = pBool(p, "monitoring", false)
 	o.backup = dataBackupParams(p)
+	o.plan = pStr(p, "postgresPlan", "")
+	if o.plan == "" {
+		switch {
+		case o.instances >= 3:
+			o.plan = "postgresql-prod-ha-pitr"
+		case o.instances == 2:
+			o.plan = "postgresql-compact-2"
+		default:
+			o.plan = "postgresql-dev-single"
+		}
+	}
 	if e, ok := p["extensions"].([]interface{}); ok {
 		for _, x := range e {
 			if s, ok := x.(string); ok && s != "" {
@@ -179,7 +177,7 @@ func dataParams(fm *unstructured.Unstructured, cfg *config) pgOpts {
 	return o
 }
 
-// buildDataBundle — 옵션을 CNPG Cluster(+Pooler +Database) CR로 렌더. 선언형 객체(SSA 대상), helm/템플릿 아님.
+// buildDataBundle — PostgreSQL은 StackGres 전용 PostgresClaim으로만 선언한다.
 func buildDataBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructured.Unstructured, error) {
 	o := dataParams(fm, cfg)
 	owner := fm.GetName()
@@ -187,79 +185,20 @@ func buildDataBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructure
 	objs := []*unstructured.Unstructured{}
 
 	if engineEnabled(fm, "postgres") {
-		storage := map[string]interface{}{"size": o.storageSize, "storageClass": o.storageClass}
-		spec := map[string]interface{}{
-			"instances":             o.instances,
-			"imageName":             o.image,
-			"storage":               storage,
-			"enableSuperuserAccess": o.superuser,
-			"bootstrap":             map[string]interface{}{"initdb": map[string]interface{}{"database": "appdb", "owner": "appuser"}},
-			"postgresql":            map[string]interface{}{"parameters": o.pgParams},
-			"monitoring":            map[string]interface{}{"enablePodMonitor": o.monitoring},
+		claim := object(postgresClaimGVK, ns, pgClaimName)
+		claim.Object["spec"] = map[string]interface{}{
+			"database":       "appdb",
+			"owner":          "appuser",
+			"isolation":      "Dedicated",
+			"planRef":        map[string]interface{}{"name": o.plan},
+			"storage":        map[string]interface{}{"size": o.storageSize, "storageClass": o.storageClass},
+			"deletionPolicy": "Delete",
 		}
-		if o.walSize != "" {
-			spec["walStorage"] = map[string]interface{}{"size": o.walSize, "storageClass": o.storageClass}
-		}
-		if o.resources != nil {
-			spec["resources"] = o.resources
-		}
-		if o.backup.enabled {
-			// CNPG barmanObjectStore — S3 대상은 명시 선언(spec.parameters.backup)에서만 온다.
-			// Backbone RustFS 재사용 여부(§8 D-02)를 이 컨트롤러가 대신 결정하지 않는다 — 자격증명은
-			// 기존 Secret(secretName)을 참조만 하고 생성하지 않는다(크리덴셜 발급은 범위 밖).
-			spec["backup"] = map[string]interface{}{
-				"retentionPolicy": o.backup.retentionPolicy,
-				"barmanObjectStore": map[string]interface{}{
-					"destinationPath": o.backup.destinationPath,
-					"endpointURL":     o.backup.endpointURL,
-					"s3Credentials": map[string]interface{}{
-						"accessKeyId":     map[string]interface{}{"name": o.backup.secretName, "key": "ACCESS_KEY_ID"},
-						"secretAccessKey": map[string]interface{}{"name": o.backup.secretName, "key": "ACCESS_SECRET_KEY"},
-					},
-				},
-			}
-		}
-		cluster := &unstructured.Unstructured{Object: map[string]interface{}{
-			"apiVersion": "postgresql.cnpg.io/v1", "kind": "Cluster",
-			"metadata": map[string]interface{}{"name": pgClusterName, "namespace": ns},
-			"spec":     spec,
-		}}
-		stampLabels(cluster, "data", owner)
-		objs = append(objs, cluster)
-
-		// 풀러(PgBouncer) — 선언형 Pooler CR(enable 시).
-		if o.poolerEnabled {
-			pooler := &unstructured.Unstructured{Object: map[string]interface{}{
-				"apiVersion": "postgresql.cnpg.io/v1", "kind": "Pooler",
-				"metadata": map[string]interface{}{"name": pgPoolerName, "namespace": ns},
-				"spec": map[string]interface{}{
-					"cluster":   map[string]interface{}{"name": pgClusterName},
-					"instances": o.poolerInstances,
-					"type":      "rw",
-					"pgbouncer": map[string]interface{}{"poolMode": o.poolerMode},
-				},
-			}}
-			stampLabels(pooler, "data", owner)
-			objs = append(objs, pooler)
-		}
-
-		// 확장: CNPG Database CR로 appdb에 선언형 부여(CREATE EXTENSION을 execInPod 대신 CR로 — INV-1).
-		if len(o.exts) > 0 {
-			extList := make([]interface{}, 0, len(o.exts))
-			for _, e := range o.exts {
-				extList = append(extList, map[string]interface{}{"name": e, "ensure": "present"})
-			}
-			db := &unstructured.Unstructured{Object: map[string]interface{}{
-				"apiVersion": "postgresql.cnpg.io/v1", "kind": "Database",
-				"metadata": map[string]interface{}{"name": pgClusterName + "-appdb", "namespace": ns},
-				"spec": map[string]interface{}{
-					"cluster": map[string]interface{}{"name": pgClusterName},
-					"name":    "appdb", "owner": "appuser", "ensure": "present", "extensions": extList,
-				},
-			}}
-			stampLabels(db, "data", owner)
-			objs = append(objs, db)
-		}
+		stampLabels(claim, "data", owner)
+		labels := claim.GetLabels()
+		labels["catalog.opensphere.io/provider"] = "stackgres"
+		claim.SetLabels(labels)
+		objs = append(objs, claim)
 	}
 	if engineEnabled(fm, "psmdb") {
 		x, err := buildPSMDBBundle(cfg, fm)
@@ -292,26 +231,28 @@ func buildDataBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructure
 	return objs, nil
 }
 
-func (r *modelReconciler) getPGCluster(ctx context.Context, ns string) (*unstructured.Unstructured, error) {
-	c := gvkObj(cnpgClusterGVK)
-	err := r.direct.Get(ctx, types.NamespacedName{Namespace: ns, Name: pgClusterName}, c)
-	return c, err
+func (r *modelReconciler) getPGClaim(ctx context.Context, ns string) (*unstructured.Unstructured, error) {
+	claim := gvkObj(postgresClaimGVK)
+	err := r.direct.Get(ctx, types.NamespacedName{Namespace: ns, Name: pgClaimName}, claim)
+	return claim, err
 }
 
-// dataReady — CNPG Cluster status.readyInstances >= spec.instances(전 인스턴스 Ready). 설치 NS 기준.
+func (r *modelReconciler) getPGCluster(ctx context.Context, ns string) (*unstructured.Unstructured, error) {
+	cluster := gvkObj(sgClusterGVK)
+	err := r.direct.Get(ctx, types.NamespacedName{Namespace: ns, Name: pgClusterName}, cluster)
+	return cluster, err
+}
+
+// dataReady — PostgresClaim Ready는 SGCluster, bootstrap database, binding Secret 준비를 모두 포함한다.
 func dataReady(ctx context.Context, r *modelReconciler, fm *unstructured.Unstructured) bool {
 	ready := true
 	if engineEnabled(fm, "postgres") {
-		c, err := r.getPGCluster(ctx, pgNS(fm, r.cfg))
+		claim, err := r.getPGClaim(ctx, pgNS(fm, r.cfg))
 		if err != nil {
 			return false
 		}
-		inst, _, _ := unstructured.NestedInt64(c.Object, "spec", "instances")
-		rdy, _, _ := unstructured.NestedInt64(c.Object, "status", "readyInstances")
-		if inst <= 0 {
-			inst = 1
-		}
-		ready = ready && rdy >= inst
+		phase, _, _ := unstructured.NestedString(claim.Object, "status", "phase")
+		ready = ready && phase == "Ready"
 	}
 	for _, id := range []string{"psmdb", "valkey", "rustfs"} {
 		if engineEnabled(fm, id) {
@@ -324,11 +265,11 @@ func dataReady(ctx context.Context, r *modelReconciler, fm *unstructured.Unstruc
 	return ready
 }
 
-// dataGone — Cluster CR 소멸(NotFound) 확인(회수 완료 판정). 설치 NS 기준.
+// dataGone — PostgresClaim 소멸(NotFound) 확인(회수 완료 판정). 설치 NS 기준.
 func dataGone(ctx context.Context, r *modelReconciler, fm *unstructured.Unstructured) bool {
 	pgGone := true
 	if engineEnabled(fm, "postgres") {
-		_, err := r.getPGCluster(ctx, pgNS(fm, r.cfg))
+		_, err := r.getPGClaim(ctx, pgNS(fm, r.cfg))
 		pgGone = apierrors.IsNotFound(err)
 	}
 	otherGone := true
@@ -351,15 +292,21 @@ func observeData(ctx context.Context, r *modelReconciler, fm *unstructured.Unstr
 	phase, image := "", ""
 	if err == nil {
 		inst, _, _ = unstructured.NestedInt64(c.Object, "spec", "instances")
-		rdy, _, _ = unstructured.NestedInt64(c.Object, "status", "readyInstances")
-		phase, _, _ = unstructured.NestedString(c.Object, "status", "phase")
-		image, _, _ = unstructured.NestedString(c.Object, "spec", "imageName")
+		rdy, _, _ = unstructured.NestedInt64(c.Object, "status", "instances")
+		if rdy == 0 && stackGresReady(c) {
+			rdy = inst
+		}
+		phase = "Reconciling"
+		if stackGresReady(c) {
+			phase = "Ready"
+		}
+		image, _, _ = unstructured.NestedString(c.Object, "spec", "postgres", "version")
 	}
 	o := dataParams(fm, r.cfg)
 	mk := func(id, unit, val string, healthy bool, src string) map[string]interface{} {
 		return map[string]interface{}{"id": id, "unit": unit, "value": val, "healthy": healthy, "source": src}
 	}
-	up := mk("pg_up", "bool", "0", false, "Cluster.status.readyInstances")
+	up := mk("pg_up", "bool", "0", false, "PostgresClaim.status.phase")
 	if ready {
 		up["value"], up["healthy"] = "1", true
 	}
@@ -384,7 +331,7 @@ func observeData(ctx context.Context, r *modelReconciler, fm *unstructured.Unstr
 	if o.walSize != "" {
 		storVal += " (WAL " + o.walSize + ")"
 	}
-	resVal := "CNPG 기본"
+	resVal := "StackGres plan " + o.plan
 	if o.resources != nil {
 		rq, _ := o.resources["requests"].(map[string]interface{})
 		lm, _ := o.resources["limits"].(map[string]interface{})
@@ -407,18 +354,19 @@ func observeData(ctx context.Context, r *modelReconciler, fm *unstructured.Unstr
 		observed = append(observed,
 			up,
 			mk("pg_namespace", "", pgNS(fm, r.cfg), true, "spec.parameters.namespace"),
-			mk("pg_topology", "", topo, inst >= 1, "Cluster.spec.instances"),
-			mk("pg_instances", "count", fmt.Sprintf("%d", inst), inst >= 1, "Cluster.spec.instances"),
-			mk("pg_ready_instances", "count", fmt.Sprintf("%d", rdy), rdy >= 1, "Cluster.status.readyInstances"),
+			mk("pg_provider", "", "StackGres", true, "AddOnPlan.spec.provider"),
+			mk("pg_topology", "", topo, inst >= 1, "SGCluster.spec.instances"),
+			mk("pg_instances", "count", fmt.Sprintf("%d", inst), inst >= 1, "SGCluster.spec.instances"),
+			mk("pg_ready_instances", "count", fmt.Sprintf("%d", rdy), rdy >= 1, "PostgresClaim.status.phase"),
 			st,
-			mk("pg_version", "", imageTag(image), image != "", "Cluster.spec.imageName"),
-			mk("pg_storage", "", storVal, true, "Cluster.spec.storage"),
-			mk("pg_resources", "", resVal, true, "Cluster.spec.resources"),
-			mk("pg_tuning", "", strings.Join(tuneParts, ", "), true, "Cluster.spec.postgresql.parameters"),
-			mk("pg_pooler", "", poolVal, true, "Pooler CR"),
-			mk("pg_superuser", "bool", boolStr(o.superuser), true, "Cluster.spec.enableSuperuserAccess"),
-			mk("pg_monitoring", "bool", boolStr(o.monitoring), true, "Cluster.spec.monitoring"),
-			mk("pg_extensions", "", extVal, true, "spec.parameters.extensions→Database CR"),
+			mk("pg_version", "", image, image != "", "SGCluster.spec.postgres.version"),
+			mk("pg_storage", "", storVal, true, "PostgresClaim.spec.storage"),
+			mk("pg_resources", "", resVal, true, "PostgresClaim.spec.planRef"),
+			mk("pg_tuning", "", strings.Join(tuneParts, ", "), true, "SGPostgresConfig"),
+			mk("pg_pooler", "", poolVal, true, "SGPoolingConfig"),
+			mk("pg_superuser", "bool", boolStr(o.superuser), true, "StackGres managed access"),
+			mk("pg_monitoring", "bool", "1", true, "StackGres exporter PodMonitor"),
+			mk("pg_extensions", "", extVal, true, "SGScript bootstrap"),
 			mk("bind_ready_ratio", "ratio", ratioVal, healthyRatio, "readyInstances/spec.instances"),
 			rtt,
 		)
