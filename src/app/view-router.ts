@@ -29,6 +29,10 @@ export class ViewRouter {
         ? (parts[1] === 'foundation' ? [] : parts.slice(1))
         : (legacyIndex >= 0 ? parts.slice(legacyIndex + 1) : []);
       const [m = '', t = '', d = ''] = route;
+      if (!pfss && legacyIndex >= 0) {
+        const canonicalPath = route.length ? `/pfss/${route.join('/')}` : '/pfss/foundation';
+        history.replaceState(history.state, '', canonicalPath + location.search + location.hash);
+      }
       this.module.set(m || 'overview');
       this.tab.set(t || 'overview');
       this.detail.set(d || 'overview');
