@@ -133,6 +133,10 @@ test('PostgreSQL administration surface separates Data View from Query Tool and 
   assert.match(source, /Servers[\s\S]*Databases[\s\S]*Schemas/);
   assert.match(source, /aria-expanded/);
   assert.match(source, /groupKey\(db\.name,schema\.name,group\.label\)/);
+  assert.match(source, /groupsFor\(schema\.name\); trackBy: trackGroup/);
+  assert.match(source, /group\.items; trackBy: trackObject/);
+  assert.match(source, /trackGroup\(_index:number,group:\{label:string\}\)\{return group\.label\}/);
+  assert.match(source, /trackObject\(_index:number,object:PgAdminObject\)\{return`\$\{object\.schema\}:\$\{object\.kind\}:\$\{object\.name\}`\}/);
   assert.match(source, /\.pga-app\{[^}]*height:42rem;[^}]*overflow:hidden/);
   assert.match(source, /\.pga-body\{[^}]*min-height:0;overflow:hidden/);
   assert.match(source, /\.pga-tree\{min-height:0;overflow:auto/);
@@ -165,6 +169,8 @@ test('PostgreSQL landing surface is namespace-first and exposes fleet as a secon
   assert.match(component, /\[ngModel\]="selectedNamespace\(\)" \(ngModelChange\)="selectNamespace\(\$event\)"/);
   assert.match(component, /PostgreSQL 인스턴스/);
   assert.match(component, /aria-label="PostgreSQL 인스턴스 선택"/);
+  assert.match(component, /<option \*ngFor="let cluster of namespaceClusters\(\)" \[ngValue\]="cluster\.id">\{\{ cluster\.displayName \}\}<\/option>/);
+  assert.doesNotMatch(component, /cluster\.displayName \}\} · \{\{ cluster\.provider/);
   assert.match(component, /namespaceClusters\(\)\.length > 1/);
   assert.match(component, /이 Namespace에는 PostgreSQL이 없습니다/);
   assert.match(component, /\*ngIf="!fleet\.busy\(\) && !selectedContextCluster\(\)"[\s\S]*PostgreSQL 설치/);

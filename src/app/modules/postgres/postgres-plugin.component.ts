@@ -92,7 +92,7 @@ const DEFAULT_FORM: PgForm = {
               <label>PostgreSQL 인스턴스</label>
               <select clrSelect name="postgresInstance" aria-label="PostgreSQL 인스턴스 선택"
                 [ngModel]="fleet.selectedId()" (ngModelChange)="selectFleetCluster($event)">
-                <option *ngFor="let cluster of namespaceClusters()" [ngValue]="cluster.id">{{ cluster.displayName }} · {{ cluster.provider }}</option>
+                <option *ngFor="let cluster of namespaceClusters()" [ngValue]="cluster.id">{{ cluster.displayName }}</option>
               </select>
             </clr-select-container>
             <button class="btn btn-sm btn-link pgp-header-context-refresh" type="button"
