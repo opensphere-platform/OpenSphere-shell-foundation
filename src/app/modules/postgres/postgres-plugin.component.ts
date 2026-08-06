@@ -21,6 +21,7 @@ import { PgAdminService } from './admin/pg-admin.service';
 import { PostgresFleetCluster, PostgresFleetService } from './postgres-fleet.service';
 import ArrowLeft16 from '@carbon/icons/es/arrow--left/16';
 import Download16 from '@carbon/icons/es/download/16';
+import Renew16 from '@carbon/icons/es/renew/16';
 import WarningAlt16 from '@carbon/icons/es/warning--alt/16';
 import { PluginPageHeaderComponent, PluginPageHeaderModel, PluginPageTab, PluginTabsComponent } from '../../shared/plugin-page-shell.component';
 
@@ -79,27 +80,33 @@ const DEFAULT_FORM: PgForm = {
     </a>
 
     <section class="pgp-page-frame" aria-label="PostgreSQL plugin 개요와 메뉴">
-      <osp-plugin-page-header [model]="headerModel()" headingId="postgres-plugin-title" />
-      <div class="pgp-context-bar" aria-label="PostgreSQL 운영 컨텍스트">
-        <div class="pgp-context-controls">
-          <clr-select-container class="pgp-context-field">
-            <label>Namespace</label>
-            <select clrSelect name="postgresNamespace" aria-label="Namespace 선택"
-              [ngModel]="selectedNamespace()" (ngModelChange)="selectNamespace($event)">
-              <option *ngFor="let namespace of fleet.namespaces()" [ngValue]="namespace">{{ namespace }}</option>
-            </select>
-          </clr-select-container>
-          <button class="btn btn-sm btn-link pgp-context-action" type="button" (click)="openNamespaceModal()">Namespace 추가</button>
-          <clr-select-container class="pgp-context-field" *ngIf="namespaceClusters().length > 1">
-            <label>PostgreSQL 인스턴스</label>
-            <select clrSelect name="postgresInstance" aria-label="PostgreSQL 인스턴스 선택"
-              [ngModel]="fleet.selectedId()" (ngModelChange)="selectFleetCluster($event)">
-              <option *ngFor="let cluster of namespaceClusters()" [ngValue]="cluster.id">{{ cluster.displayName }} · {{ cluster.provider }}</option>
-            </select>
-          </clr-select-container>
-          <button class="btn btn-sm pgp-context-refresh" type="button" (click)="refreshFleet()" [disabled]="fleet.busy()">새로고침</button>
+      <osp-plugin-page-header [model]="headerModel()" headingId="postgres-plugin-title">
+        <div pluginHeaderContext class="pgp-header-context" aria-label="PostgreSQL 운영 컨텍스트">
+          <div class="pgp-header-context-unit">
+            <clr-select-container class="pgp-header-context-field">
+              <label>Namespace</label>
+              <select clrSelect name="postgresNamespace" aria-label="Namespace 선택"
+                [ngModel]="selectedNamespace()" (ngModelChange)="selectNamespace($event)">
+                <option *ngFor="let namespace of fleet.namespaces()" [ngValue]="namespace">{{ namespace }}</option>
+              </select>
+            </clr-select-container>
+            <button class="btn btn-sm btn-link pgp-header-context-action" type="button"
+              aria-label="Namespace 추가" title="Namespace 추가" (click)="openNamespaceModal()">추가</button>
+          </div>
+          <div class="pgp-header-context-unit">
+            <clr-select-container class="pgp-header-context-field" *ngIf="namespaceClusters().length > 1">
+              <label>PostgreSQL 인스턴스</label>
+              <select clrSelect name="postgresInstance" aria-label="PostgreSQL 인스턴스 선택"
+                [ngModel]="fleet.selectedId()" (ngModelChange)="selectFleetCluster($event)">
+                <option *ngFor="let cluster of namespaceClusters()" [ngValue]="cluster.id">{{ cluster.displayName }} · {{ cluster.provider }}</option>
+              </select>
+            </clr-select-container>
+            <button class="btn btn-sm btn-link pgp-header-context-refresh" type="button"
+              aria-label="PostgreSQL 컨텍스트 새로고침" title="새로고침"
+              (click)="refreshFleet()" [disabled]="fleet.busy()"><os-cicon [icon]="iRenew" [size]="16" /></button>
+          </div>
         </div>
-      </div>
+      </osp-plugin-page-header>
       <osp-plugin-tabs [tabs]="tabsForUi()" [active]="tab()" ariaLabel="PostgreSQL plugin 메뉴" (selected)="openTab($event)" />
     </section>
 
@@ -276,6 +283,7 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
   readonly versions = VERSION_OPTIONS;
   readonly iBack = ArrowLeft16;
   readonly iDownload = Download16;
+  readonly iRenew = Renew16;
   readonly iWarning = WarningAlt16;
 
   readonly form = signal<PgForm>(structuredClone(DEFAULT_FORM));

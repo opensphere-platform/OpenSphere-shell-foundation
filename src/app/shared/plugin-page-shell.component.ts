@@ -94,6 +94,7 @@ export function pfsPluginTabs(domainLabel: string): PluginPageTab[] {
         <div><dt>{{ model.versionLabel || 'Version' }}</dt><dd>{{ model.version }}</dd></div>
         <div><dt>Profile</dt><dd>{{ model.profile }}</dd></div>
         <div *ngIf="model.namespace"><dt>Namespace</dt><dd class="os-mono">{{ model.namespace }}</dd></div>
+        <ng-content select="[pluginHeaderContext]" />
       </dl>
     </section>
   `,

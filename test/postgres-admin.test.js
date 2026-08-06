@@ -144,7 +144,8 @@ test('PostgreSQL landing surface is namespace-first and exposes fleet as a secon
   const rbac = fs.readFileSync(path.join(__dirname, '../deploy/postgres-fleet-console-rbac.yaml'), 'utf8');
   assert.match(component, /PFSS PostgreSQL Fleet/);
   assert.match(component, /PostgreSQL 운영 컨텍스트/);
-  assert.match(component, /<clr-select-container class="pgp-context-field">/);
+  assert.match(component, /pluginHeaderContext class="pgp-header-context"/);
+  assert.match(component, /<clr-select-container class="pgp-header-context-field">/);
   assert.match(component, /<select clrSelect name="postgresNamespace"/);
   assert.match(component, /aria-label="Namespace 선택"/);
   assert.match(component, /\[ngModel\]="selectedNamespace\(\)" \(ngModelChange\)="selectNamespace\(\$event\)"/);
@@ -156,7 +157,10 @@ test('PostgreSQL landing surface is namespace-first and exposes fleet as a secon
   assert.match(component, /Secondary view[\s\S]*PFSS PostgreSQL Fleet/);
   assert.match(component, /Database Objects & Query/);
   assert.match(component, /LegacyShared/);
-  assert.match(component, /<button[^>]+\(click\)="openNamespaceModal\(\)"[^>]*>Namespace 추가<\/button>/);
+  assert.match(component, /aria-label="Namespace 추가"[\s\S]*\(click\)="openNamespaceModal\(\)"[^>]*>추가<\/button>/);
+  assert.match(component, /aria-label="PostgreSQL 컨텍스트 새로고침"/);
+  assert.match(component, /\[icon\]="iRenew"/);
+  assert.doesNotMatch(component, /pgp-context-bar/);
   assert.doesNotMatch(component, /Current context/i);
   assert.doesNotMatch(component, /<option value="__new__">/);
   assert.doesNotMatch(component, /PostgreSQL cluster 선택/);
