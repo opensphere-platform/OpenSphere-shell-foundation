@@ -136,3 +136,19 @@ func TestStackGres119ConditionsAreReadyWithBinding(t *testing.T) {
 		t.Fatal("failed StackGres cluster was reported Ready")
 	}
 }
+
+func TestLegacySharedClaimUsesTheFixedCompatibilityTarget(t *testing.T) {
+	claim := testPostgresClaim()
+	claim.SetName("foundation-data-pg-legacy")
+	claim.SetNamespace("opensphere-foundation")
+	_ = unstructured.SetNestedField(claim.Object, "LegacyShared", "spec", "isolation")
+	setLegacyPostgresStatus(claim, claim.GetNamespace())
+	provider, _, _ := unstructured.NestedMap(claim.Object, "status", "providerRef")
+	if provider["kind"] != "Cluster" || provider["name"] != "foundation-data-pg" {
+		t.Fatalf("unexpected legacy providerRef: %#v", provider)
+	}
+	binding, _, _ := unstructured.NestedMap(claim.Object, "status", "bindingRef")
+	if binding["name"] != "foundation-data-pg-app" {
+		t.Fatalf("unexpected legacy bindingRef: %#v", binding)
+	}
+}

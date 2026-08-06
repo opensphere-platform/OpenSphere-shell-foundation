@@ -52,9 +52,11 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 	}
 	isolation, _, _ := unstructured.NestedString(claim.Object, "spec", "isolation")
 	if isolation == "LegacyShared" {
+		if claim.GetNamespace() != r.cfg.managedNS {
+			return r.reject(ctx, nn, "NamespaceNotManaged", fmt.Sprintf("LegacyShared PostgreSQL is fixed to namespace %s", r.cfg.managedNS))
+		}
 		return reconcile.Result{}, updateStatusRetry(ctx, r.direct, postgresClaimGVK, nn, func(o *unstructured.Unstructured) {
-			setNested(o, "LegacyShared", "status", "phase")
-			setPostgresCondition(o, "Ready", "True", "LegacyShared", "Existing shared CNPG service remains authoritative")
+			setLegacyPostgresStatus(o, claim.GetNamespace())
 		})
 	}
 	if claim.GetNamespace() != r.cfg.managedNS {
@@ -138,6 +140,18 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 	})
 	ctrl.LoggerFrom(ctx).Info("postgres claim reconciled", "claim", req.NamespacedName, "plan", planName, "cluster", clusterName, "phase", phase)
 	return reconcile.Result{RequeueAfter: 30 * time.Second}, nil
+}
+
+func setLegacyPostgresStatus(o *unstructured.Unstructured, namespace string) {
+	setNested(o, "LegacyShared", "status", "phase")
+	_ = unstructured.SetNestedMap(o.Object, map[string]interface{}{
+		"apiVersion": "postgresql.cnpg.io/v1", "kind": "Cluster",
+		"name": "foundation-data-pg", "namespace": namespace,
+	}, "status", "providerRef")
+	_ = unstructured.SetNestedMap(o.Object, map[string]interface{}{
+		"name": "foundation-data-pg-app", "namespace": namespace,
+	}, "status", "bindingRef")
+	setPostgresCondition(o, "Ready", "True", "LegacyShared", "Existing shared CNPG service remains authoritative")
 }
 
 func (r *postgresClaimReconciler) reject(ctx context.Context, nn types.NamespacedName, reason, message string) (reconcile.Result, error) {
