@@ -261,7 +261,7 @@ func renderPostgresResources(claim *unstructured.Unstructured, plan postgresPlan
 	pgConfig := object(schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGPostgresConfig"}, ns, clusterName+"-postgres")
 	pgConfig.Object["spec"] = map[string]interface{}{"postgresVersion": plan.Version, "postgresql.conf": map[string]interface{}{"password_encryption": "scram-sha-256", "wal_compression": "on"}}
 	pooling := object(schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGPoolingConfig"}, ns, clusterName+"-pooling")
-	pooling.Object["spec"] = map[string]interface{}{"pgBouncer": map[string]interface{}{"pgbouncer.ini": map[string]interface{}{"pool_mode": "transaction", "max_client_conn": "200"}}}
+	pooling.Object["spec"] = map[string]interface{}{"pgBouncer": map[string]interface{}{"pgbouncer.ini": map[string]interface{}{"pgbouncer": map[string]interface{}{"pool_mode": "transaction", "max_client_conn": "200"}}}}
 	scriptSecret := object(schema.GroupVersionKind{Version: "v1", Kind: "Secret"}, ns, clusterName+"-bootstrap-sql")
 	scriptSecret.Object["type"] = "Opaque"
 	escapedPassword := strings.ReplaceAll(password, "'", "''")

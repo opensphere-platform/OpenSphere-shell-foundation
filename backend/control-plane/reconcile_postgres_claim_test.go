@@ -63,6 +63,19 @@ func TestDedicatedClaimRendersOneStackGresCluster(t *testing.T) {
 	if _, found, _ := unstructured.NestedMap(cluster.Object, "spec", "configurations", "credentials", "users", "superuser"); found {
 		t.Fatal("application binding must never expose StackGres superuser credentials")
 	}
+	var pooling *unstructured.Unstructured
+	for _, resource := range resources {
+		if resource.GetKind() == "SGPoolingConfig" {
+			pooling = resource
+			break
+		}
+	}
+	if pooling == nil {
+		t.Fatal("pooling plan did not render SGPoolingConfig")
+	}
+	if got, _, _ := unstructured.NestedString(pooling.Object, "spec", "pgBouncer", "pgbouncer.ini", "pgbouncer", "pool_mode"); got != "transaction" {
+		t.Fatalf("StackGres 1.19 pgbouncer.ini section is invalid: pool_mode=%q", got)
+	}
 }
 
 func TestBootstrapSQLUsesApplicationIdentity(t *testing.T) {
