@@ -163,7 +163,7 @@ test('PostgreSQL landing surface is namespace-first and exposes fleet as a secon
   assert.match(component, /이 Namespace에는 PostgreSQL이 없습니다/);
   assert.match(component, /\*ngIf="!fleet\.busy\(\) && !selectedContextCluster\(\)"[\s\S]*PostgreSQL 설치/);
   assert.match(component, /Secondary view[\s\S]*PFSS PostgreSQL Fleet/);
-  assert.match(component, /Objects & Query/);
+  assert.match(component, /pgAdmin Tool/);
   assert.doesNotMatch(component, /LegacyShared|CloudNativePG/);
   assert.match(component, /aria-label="Namespace 추가"[\s\S]*\(click\)="openNamespaceModal\(\)"[^>]*>추가<\/button>/);
   assert.match(component, /aria-label="PostgreSQL 컨텍스트 새로고침"/);
@@ -203,6 +203,7 @@ test('PostgreSQL keeps the complete provider-neutral operations menu', () => {
     ['topology', 'Topology'],
     ['config', 'Configuration'],
     ['databases', 'Databases & Roles'],
+    ['admin', 'pgAdmin Tool'],
     ['backups', 'Backups'],
     ['events', 'Events'],
     ['claims', 'Claims'],
@@ -216,7 +217,8 @@ test('PostgreSQL keeps the complete provider-neutral operations menu', () => {
     cursor = next;
   }
   assert.match(component, /tabs\.filter\(\(t\) => !t\.secondary\)/);
-  assert.match(component, /\{ id: 'admin', label: 'Database Objects'.*secondary: true/);
+  assert.match(component, /\{ id: 'admin', label: 'pgAdmin Tool', requiresCluster: true \}/);
+  assert.doesNotMatch(component, /\{ id: 'admin'.*secondary: true/);
   assert.doesNotMatch(component, /legacyOnly/);
   assert.match(component, /tab\(\) === 'monitoring'/);
   assert.match(component, /tab\(\) === 'operator' && selectedContextCluster\(\)/);
