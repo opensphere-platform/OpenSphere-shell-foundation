@@ -158,7 +158,7 @@ assert.match(openSearchMonitoring, /UPlotLineChart/, 'OpenSearch Monitoring: uPl
 assert.match(openSearchMonitoring, /os-uplot-line-chart/, 'OpenSearch Monitoring: uPlot line chart surface 누락');
 assert.doesNotMatch(openSearchMonitoring, /CarbonLineChart|os-carbon-line-chart/, 'OpenSearch Monitoring: Carbon Charts 사용 금지');
 assert.match(uPlotLineChart, /from 'uplot'/, 'uPlot 공식 package import 누락');
-assert.match(uPlotLineChart, /\.setData\(data, true\)/, 'uPlot in-place data update 누락');
+assert.match(uPlotLineChart, /\.setData\(data, !retainedRange\)/, 'uPlot 확대 범위를 보존하는 in-place data update 누락');
 assert.doesNotMatch(openSearchMonitoring, /PgChart|pg-chart/, 'OpenSearch Monitoring: Chart.js PgChart 사용 금지');
 assert.match(opaMonitoring, /CarbonLineChart/, 'OPA Monitoring: Carbon Charts adapter 누락');
 assert.match(opaMonitoring, /os-carbon-line-chart/, 'OPA Monitoring: Carbon line chart surface 누락');
