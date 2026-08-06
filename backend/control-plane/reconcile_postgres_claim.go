@@ -23,6 +23,7 @@ var (
 	addOnPlanGVK     = schema.GroupVersionKind{Group: "catalog.opensphere.io", Version: "v1alpha1", Kind: "AddOnPlan"}
 	addOnInstallGVK  = schema.GroupVersionKind{Group: "catalog.opensphere.io", Version: "v1alpha1", Kind: "AddOnInstall"}
 	sgClusterGVK     = schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGCluster"}
+	sgScriptGVK      = schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGScript"}
 )
 
 const postgresFleetFinalizer = "provisioning.opensphere.io/postgres-cluster-protect"
@@ -116,8 +117,14 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 	ready := clusterErr == nil && stackGresReady(cluster)
 	phase := "Provisioning"
 	conditionStatus, reason, message := "False", "StackGresReconciling", "Dedicated StackGres cluster is reconciling"
+	if clusterErr == nil {
+		_, bootstrapFailed, bootstrapMessage := stackGresBootstrapStatus(cluster)
+		if bootstrapFailed {
+			phase, reason, message = "Failed", "DatabaseBootstrapFailed", bootstrapMessage
+		}
+	}
 	if ready {
-		phase, conditionStatus, reason, message = "Ready", "True", "ClusterReady", "Dedicated StackGres cluster and application binding are ready"
+		phase, conditionStatus, reason, message = "Ready", "True", "ClusterReady", "Dedicated StackGres cluster, application database, and binding are ready"
 	}
 	bindingName := clusterName + "-binding"
 	if clusterErr == nil {
@@ -196,7 +203,7 @@ func (r *postgresClaimReconciler) release(ctx context.Context, claim *unstructur
 	if policy == "Delete" {
 		for _, gvk := range []schema.GroupVersionKind{
 			sgClusterGVK,
-			{Group: "stackgres.io", Version: "v1", Kind: "SGScript"},
+			sgScriptGVK,
 			{Group: "stackgres.io", Version: "v1", Kind: "SGPoolingConfig"},
 			{Group: "stackgres.io", Version: "v1", Kind: "SGPostgresConfig"},
 			{Group: "stackgres.io", Version: "v1", Kind: "SGInstanceProfile"},
@@ -276,9 +283,18 @@ func renderPostgresResources(claim *unstructured.Unstructured, plan postgresPlan
 	pooling.Object["spec"] = map[string]interface{}{"pgBouncer": map[string]interface{}{"pgbouncer.ini": map[string]interface{}{"pool_mode": "transaction", "max_client_conn": "200"}}}
 	scriptSecret := object(schema.GroupVersionKind{Version: "v1", Kind: "Secret"}, ns, clusterName+"-bootstrap-sql")
 	scriptSecret.Object["type"] = "Opaque"
-	scriptSecret.Object["stringData"] = map[string]interface{}{"bootstrap.sql": fmt.Sprintf("CREATE ROLE %s LOGIN PASSWORD '%s';\nCREATE DATABASE %s OWNER %s;\n", quotePostgresIdentifier(owner), strings.ReplaceAll(password, "'", "''"), quotePostgresIdentifier(database), quotePostgresIdentifier(owner))}
-	script := object(schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGScript"}, ns, clusterName+"-bootstrap")
-	script.Object["spec"] = map[string]interface{}{"managedVersions": false, "scripts": []interface{}{map[string]interface{}{"id": int64(1), "version": int64(1), "name": "create-application-database", "scriptFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": scriptSecret.GetName(), "key": "bootstrap.sql"}}}}}
+	escapedPassword := strings.ReplaceAll(password, "'", "''")
+	roleSQL := fmt.Sprintf("DO $opensphere$\nBEGIN\n  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN\n    ALTER ROLE %s LOGIN PASSWORD '%s';\n  ELSE\n    CREATE ROLE %s LOGIN PASSWORD '%s';\n  END IF;\nEND\n$opensphere$;\n", strings.ReplaceAll(owner, "'", "''"), quotePostgresIdentifier(owner), escapedPassword, quotePostgresIdentifier(owner), escapedPassword)
+	databaseSQL := fmt.Sprintf("CREATE DATABASE %s OWNER %s;\n", quotePostgresIdentifier(database), quotePostgresIdentifier(owner))
+	scriptSecret.Object["stringData"] = map[string]interface{}{"role.sql": roleSQL, "database.sql": databaseSQL}
+	script := object(sgScriptGVK, ns, clusterName+"-bootstrap")
+	script.Object["spec"] = map[string]interface{}{
+		"managedVersions": false,
+		"scripts": []interface{}{
+			map[string]interface{}{"id": int64(1), "version": int64(2), "name": "reconcile-application-role", "retryOnError": true, "scriptFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": scriptSecret.GetName(), "key": "role.sql"}}},
+			map[string]interface{}{"id": int64(2), "version": int64(1), "name": "create-application-database", "retryOnError": true, "scriptFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": scriptSecret.GetName(), "key": "database.sql"}}},
+		},
+	}
 	cluster := object(sgClusterGVK, ns, clusterName)
 	configurations := map[string]interface{}{
 		"sgPostgresConfig": pgConfig.GetName(),
@@ -371,11 +387,11 @@ func randomPassword(size int) (string, error) {
 
 func stackGresReady(cluster *unstructured.Unstructured) bool {
 	conditions, _, _ := unstructured.NestedSlice(cluster.Object, "status", "conditions")
-	bootstrapped, componentsUpdated, failed := false, false, false
+	coreReady, bootstrapped, componentsUpdated, failed := false, false, false, false
 	for _, item := range conditions {
 		condition, _ := item.(map[string]interface{})
 		if (condition["type"] == "ClusterReady" || condition["type"] == "Ready") && condition["status"] == "True" {
-			return true
+			coreReady = true
 		}
 		if condition["type"] == "Bootstrapped" && condition["status"] == "True" {
 			bootstrapped = true
@@ -388,7 +404,38 @@ func stackGresReady(cluster *unstructured.Unstructured) bool {
 		}
 	}
 	bindingName, _, _ := unstructured.NestedString(cluster.Object, "status", "binding", "name")
-	return bootstrapped && componentsUpdated && !failed && bindingName != ""
+	bootstrapReady, bootstrapFailed, _ := stackGresBootstrapStatus(cluster)
+	coreReady = coreReady || (bootstrapped && componentsUpdated)
+	return coreReady && !failed && bindingName != "" && bootstrapReady && !bootstrapFailed
+}
+
+func stackGresBootstrapStatus(cluster *unstructured.Unstructured) (ready, failed bool, message string) {
+	entries, _, _ := unstructured.NestedSlice(cluster.Object, "status", "managedSql", "scripts")
+	for _, item := range entries {
+		entry, ok := item.(map[string]interface{})
+		if !ok || fmt.Sprint(entry["id"]) != "1" {
+			continue
+		}
+		if completedAt, _ := entry["completedAt"].(string); completedAt != "" {
+			return true, false, ""
+		}
+		if failedAt, _ := entry["failedAt"].(string); failedAt != "" {
+			failureMessage := "StackGres application database bootstrap failed"
+			if scripts, ok := entry["scripts"].([]interface{}); ok {
+				for _, scriptItem := range scripts {
+					if script, ok := scriptItem.(map[string]interface{}); ok {
+						if detail, _ := script["failure"].(string); detail != "" {
+							failureMessage += ": " + detail
+							break
+						}
+					}
+				}
+			}
+			return false, true, failureMessage
+		}
+		return false, false, "StackGres application database bootstrap is pending"
+	}
+	return false, false, "StackGres application database bootstrap is pending"
 }
 
 func setPostgresCondition(o *unstructured.Unstructured, conditionType, status, reason, message string) {

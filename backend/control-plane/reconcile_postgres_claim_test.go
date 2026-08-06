@@ -74,11 +74,12 @@ func TestBootstrapSQLUsesApplicationIdentity(t *testing.T) {
 		if resource.GetName() != "pgc-orders-bootstrap-sql" {
 			continue
 		}
-		sql, _, _ := unstructured.NestedString(resource.Object, "stringData", "bootstrap.sql")
-		if !strings.Contains(sql, "CREATE ROLE \"orders_app\"") || !strings.Contains(sql, "CREATE DATABASE \"orders\" OWNER \"orders_app\"") {
-			t.Fatalf("unexpected bootstrap SQL: %s", sql)
+		roleSQL, _, _ := unstructured.NestedString(resource.Object, "stringData", "role.sql")
+		databaseSQL, _, _ := unstructured.NestedString(resource.Object, "stringData", "database.sql")
+		if !strings.Contains(roleSQL, "CREATE ROLE \"orders_app\"") || !strings.Contains(databaseSQL, "CREATE DATABASE \"orders\" OWNER \"orders_app\"") {
+			t.Fatalf("unexpected bootstrap SQL: role=%s database=%s", roleSQL, databaseSQL)
 		}
-		if strings.Contains(sql, "SUPERUSER") {
+		if strings.Contains(roleSQL, "SUPERUSER") || strings.Contains(databaseSQL, "SUPERUSER") {
 			t.Fatal("bootstrap application role must not be superuser")
 		}
 		return
@@ -127,6 +128,9 @@ func TestStackGres119ConditionsAreReadyWithBinding(t *testing.T) {
 			map[string]interface{}{"type": "ComponentsUpdated", "status": "True"},
 			map[string]interface{}{"type": "Failed", "status": "False"},
 		},
+		"managedSql": map[string]interface{}{"scripts": []interface{}{
+			map[string]interface{}{"id": int64(1), "completedAt": "2026-08-06T00:00:00Z"},
+		}},
 	}
 	if !stackGresReady(cluster) {
 		t.Fatal("StackGres 1.19 ready conditions were not recognized")
@@ -135,6 +139,55 @@ func TestStackGres119ConditionsAreReadyWithBinding(t *testing.T) {
 	if stackGresReady(cluster) {
 		t.Fatal("failed StackGres cluster was reported Ready")
 	}
+}
+
+func TestStackGresBootstrapFailureIsNotReady(t *testing.T) {
+	cluster := gvkObj(sgClusterGVK)
+	cluster.Object["status"] = map[string]interface{}{
+		"binding": map[string]interface{}{"name": "orders-binding"},
+		"conditions": []interface{}{
+			map[string]interface{}{"type": "Bootstrapped", "status": "True"},
+			map[string]interface{}{"type": "ComponentsUpdated", "status": "True"},
+			map[string]interface{}{"type": "Failed", "status": "False"},
+		},
+		"managedSql": map[string]interface{}{"scripts": []interface{}{
+			map[string]interface{}{
+				"id": int64(1), "failedAt": "2026-08-06T00:00:00Z",
+				"scripts": []interface{}{map[string]interface{}{"id": int64(2), "failure": "database bootstrap failed"}},
+			},
+		}},
+	}
+	if stackGresReady(cluster) {
+		t.Fatal("failed application database bootstrap was reported Ready")
+	}
+	ready, failed, message := stackGresBootstrapStatus(cluster)
+	if ready || !failed || !strings.Contains(message, "database bootstrap failed") {
+		t.Fatalf("unexpected bootstrap status: ready=%v failed=%v message=%q", ready, failed, message)
+	}
+}
+
+func TestBootstrapStatementsAreSeparateAutoCommitEntries(t *testing.T) {
+	resources := renderPostgresResources(testPostgresClaim(), postgresPlan{
+		Name: "postgresql-dev-single", Version: "18", Profile: "development",
+		CPU: "500m", Memory: "1Gi", Size: "10Gi", Instances: 1,
+	}, "SecretValue")
+	for _, resource := range resources {
+		if resource.GetKind() != "SGScript" {
+			continue
+		}
+		scripts, _, _ := unstructured.NestedSlice(resource.Object, "spec", "scripts")
+		if len(scripts) != 2 {
+			t.Fatalf("bootstrap script entries=%d, want 2", len(scripts))
+		}
+		for _, item := range scripts {
+			entry := item.(map[string]interface{})
+			if _, wrapped := entry["wrapInTransaction"]; wrapped {
+				t.Fatal("CREATE DATABASE bootstrap must not be wrapped in a transaction")
+			}
+		}
+		return
+	}
+	t.Fatal("SGScript not rendered")
 }
 
 func TestLegacySharedClaimUsesTheFixedCompatibilityTarget(t *testing.T) {
