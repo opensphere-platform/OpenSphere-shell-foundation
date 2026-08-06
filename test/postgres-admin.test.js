@@ -5,7 +5,7 @@ const path = require('node:path');
 
 const {
   postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost, POSTGRES_ADMIN,
-  POSTGRES_LEGACY_ID, parsePostgresClusterId, postgresClusterProjection,
+  POSTGRES_LEGACY_ID, parsePostgresClusterId, postgresClusterProjection, postgresBindingDatabase,
 } = require('../server.js');
 
 function throwsMessage(fn, pattern) {
@@ -107,6 +107,15 @@ test('PostgreSQL Secret short service hosts are qualified for the target namespa
   assert.equal(postgresServiceHost(''), POSTGRES_ADMIN.service);
   assert.equal(postgresServiceHost('10.96.154.32'), '10.96.154.32');
   assert.equal(postgresServiceHost('localhost'), 'localhost');
+});
+
+test('StackGres service binding resolves the application database from its URI', () => {
+  const data = {
+    uri: Buffer.from('postgresql://app:secret@pgc-orders/tenant%2Dorders?sslmode=require').toString('base64'),
+  };
+  assert.equal(postgresBindingDatabase(data, 'stackgres'), 'tenant-orders');
+  throwsMessage(() => postgresBindingDatabase({}, 'stackgres'), /no database key or valid database URI/);
+  assert.equal(postgresBindingDatabase({}, 'cloudnativepg'), 'app');
 });
 
 test('PostgreSQL administration surface separates Data View from Query Tool and exposes a collapsible explorer', () => {

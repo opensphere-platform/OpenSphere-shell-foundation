@@ -265,7 +265,7 @@ async function postgresCredentials(clusterId, actor) {
     clusterId: target.id, clusterUID, resourceVersion, secretName, namespace: target.namespace,
     host: postgresServiceHost(bindingHost, target.namespace),
     port: Number(decodeSecretValue(data, 'port') || POSTGRES_ADMIN.port),
-    database: decodeSecretValue(data, 'database') || decodeSecretValue(data, 'dbname') || 'app',
+    database: postgresBindingDatabase(data, target.provider),
     user: decodeSecretValue(data, 'username') || 'app',
     password: decodeSecretValue(data, 'password'),
   };
@@ -273,6 +273,25 @@ async function postgresCredentials(clusterId, actor) {
   if (pgCredentialCache.size >= 256) pgCredentialCache.delete(pgCredentialCache.keys().next().value);
   pgCredentialCache.set(cacheKey, value);
   return value;
+}
+
+function postgresBindingDatabase(data, provider = 'cloudnativepg') {
+  const explicit = decodeSecretValue(data, 'database') || decodeSecretValue(data, 'dbname');
+  if (explicit) return pgName(explicit, 'database');
+  const bindingUri = decodeSecretValue(data, 'uri');
+  if (bindingUri) {
+    try {
+      const pathname = new URL(bindingUri).pathname.replace(/^\/+/, '');
+      const database = decodeURIComponent(pathname);
+      if (database && !database.includes('/')) return pgName(database, 'database');
+    } catch {
+      // Fall through to the provider-specific compatibility boundary below.
+    }
+  }
+  if (provider === 'stackgres') {
+    throw { code: 503, msg: 'StackGres binding Secret has no database key or valid database URI' };
+  }
+  return 'app';
 }
 async function postgresPool(clusterId, database, actor) {
   const credentials = await postgresCredentials(clusterId, actor);
@@ -2019,7 +2038,7 @@ if (require.main === module) {
     foundationBootstrapPlanView, sambaBootstrapSecretEvidence, sambaReadinessProjection,
     validateHisStatusContract,
     parseResp, encodeRespCommand, parseInfo, sanitizeAclLine, requireValkeyDb, requireValkeyKey,
-    postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost,
+    postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost, postgresBindingDatabase,
     parsePostgresClusterId, postgresClusterProjection,
     foundationBootstrapState,
     HIS_STATUS_SCHEMA, FOUNDATION_CORE_CRDS,
