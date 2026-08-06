@@ -261,6 +261,8 @@ test('PostgreSQL restores the detailed Overview and Prometheus monitoring worksp
   for (const marker of ['OPERATIONS · PROMETHEUS', '활성 연결', 'WAL 생성량', '복제 지연', 'CPU 사용량', '메모리 사용량']) assert.match(monitoring, new RegExp(marker));
   assert.match(monitoring, /\.pg-monitoring-head \{[^}]*height: auto;[^}]*min-height: 4\.5rem;/);
   assert.match(monitoring, /\.pg-monitoring-metrics \{[^}]*grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
+  assert.match(monitoring, /\.pg-monitoring \{ container-type: inline-size;/);
+  assert.match(monitoring, /@container \(max-width: 75rem\) \{ \.pg-monitoring-metrics \{ grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(service, /selectTarget\(provider: 'stackgres'/);
   assert.doesNotMatch(service, /postgresql\.cnpg\.io|cnpg\.io\/cluster|cnpg_/);
   assert.match(service, /stackgres\.io\/cluster-name/);

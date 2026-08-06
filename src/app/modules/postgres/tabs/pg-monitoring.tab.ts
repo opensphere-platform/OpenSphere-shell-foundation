@@ -49,7 +49,7 @@ type SeriesKey = Exclude<keyof PgMonitoringMetrics, 'labels'>;
     </section>
   `,
   styles: [`
-    .pg-monitoring { margin-top: 1rem; }
+    .pg-monitoring { container-type: inline-size; margin-top: 1rem; }
     .pg-monitoring-head { display: flex; height: auto; min-height: 4.5rem; justify-content: space-between; gap: 1rem; align-items: center; padding: .75rem 1rem; color: #fff; background: #102a43; }
     .pg-monitoring-title { min-width: 0; }
     .pg-monitoring-head span { display: block; color: #78a9ff; font-size: .6rem; font-weight: 700; line-height: 1.25; letter-spacing: .08em; }
@@ -68,10 +68,12 @@ type SeriesKey = Exclude<keyof PgMonitoringMetrics, 'labels'>;
     .pg-monitoring-empty strong { color: #394b54; } .pg-monitoring-empty p { margin: .25rem 0 0; font-size: .66rem; }
     .pg-monitoring-source { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin-top: .8rem; padding: .65rem .8rem; border-left: 3px solid #0f62fe; color: #5b6971; background: #f5f9ff; font-size: .62rem; }
     .pg-monitoring-source b { color: #1b2a32; }
-    @media (max-width: 1350px) { .pg-monitoring-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-    @media (max-width: 1050px) { .pg-monitoring-grid { grid-template-columns: 1fr; } .pg-monitoring-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-    @media (max-width: 720px) { .pg-monitoring-head { align-items: start; flex-direction: column; } .pg-monitoring-sync { min-width: 0; width: 100%; text-align: left; } .pg-monitoring-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 420px) { .pg-monitoring-metrics { grid-template-columns: 1fr; } }
+    @container (max-width: 75rem) { .pg-monitoring-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    @container (max-width: 60rem) { .pg-monitoring-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @container (max-width: 42rem) { .pg-monitoring-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @container (max-width: 24rem) { .pg-monitoring-metrics { grid-template-columns: 1fr; } }
+    @media (max-width: 1050px) { .pg-monitoring-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 720px) { .pg-monitoring-head { align-items: start; flex-direction: column; } .pg-monitoring-sync { min-width: 0; width: 100%; text-align: left; } }
   `],
 })
 export class PgMonitoringTab {
