@@ -1,0 +1,101 @@
+apiVersion: catalog.opensphere.io/v1alpha1
+kind: AddOnCapability
+metadata:
+  name: postgresql
+  labels: { app.kubernetes.io/part-of: platform-foundation-service-stack }
+spec:
+  displayName: PostgreSQL
+  category: database
+  claimKind: PostgresClaim
+  description: Isolated PostgreSQL clusters exposed through the PFSS service catalog.
+---
+apiVersion: catalog.opensphere.io/v1alpha1
+kind: AddOnOffering
+metadata:
+  name: postgresql-stackgres
+  labels: { app.kubernetes.io/part-of: platform-foundation-service-stack }
+spec:
+  capabilityRef: postgresql
+  provider: stackgres
+  operatorVersion: 1.19.0
+  license: AGPL-3.0-only
+  source: https://gitlab.com/ongresinc/stackgres
+  lifecycle: Preview
+---
+apiVersion: catalog.opensphere.io/v1alpha1
+kind: AddOnPlan
+metadata: { name: postgresql-dev-single }
+spec:
+  capabilityRef: postgresql
+  offeringRef: postgresql-stackgres
+  provider: stackgres
+  lifecycle: Available
+  postgresVersion: "18"
+  instances: 1
+  profile: development
+  resources: { cpu: 500m, memory: 1Gi }
+  storage: { size: 10Gi, storageClass: ceph-rbd }
+  pooling: false
+  backup: { enabled: false }
+  constraints: { productionHA: false }
+---
+apiVersion: catalog.opensphere.io/v1alpha1
+kind: AddOnPlan
+metadata: { name: postgresql-compact-2 }
+spec:
+  capabilityRef: postgresql
+  offeringRef: postgresql-stackgres
+  provider: stackgres
+  lifecycle: Available
+  postgresVersion: "18"
+  instances: 2
+  profile: testing
+  resources: { cpu: "1", memory: 2Gi }
+  storage: { size: 20Gi, storageClass: ceph-rbd }
+  pooling: true
+  backup: { enabled: false }
+  constraints:
+    productionHA: false
+    warning: Two instances do not provide quorum-safe production HA.
+---
+apiVersion: catalog.opensphere.io/v1alpha1
+kind: AddOnPlan
+metadata: { name: postgresql-prod-ha-pitr }
+spec:
+  capabilityRef: postgresql
+  offeringRef: postgresql-stackgres
+  provider: stackgres
+  lifecycle: Available
+  postgresVersion: "18"
+  instances: 3
+  profile: production
+  resources: { cpu: "2", memory: 4Gi }
+  storage: { size: 100Gi, storageClass: ceph-rbd }
+  pooling: true
+  backup:
+    enabled: true
+    retention: 7
+    cronSchedule: "0 0 * * *"
+    objectStorageRef: foundation-postgres-backups
+  constraints: { productionHA: true, pitrRequired: true }
+---
+apiVersion: catalog.opensphere.io/v1alpha1
+kind: AddOnPlan
+metadata: { name: postgresql-critical-dr }
+spec:
+  capabilityRef: postgresql
+  offeringRef: postgresql-stackgres
+  provider: stackgres
+  lifecycle: Preview
+  postgresVersion: "18"
+  instances: 3
+  profile: production
+  resources: { cpu: "4", memory: 8Gi }
+  storage: { size: 250Gi, storageClass: ceph-rbd }
+  pooling: true
+  backup:
+    enabled: true
+    retention: 30
+    cronSchedule: "0 */6 * * *"
+    objectStorageRef: foundation-postgres-dr
+  constraints: { productionHA: true, pitrRequired: true, crossClusterDRRequired: true }

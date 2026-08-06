@@ -82,7 +82,8 @@ const PG_COLUMN_TYPES = Object.freeze(new Set([
 ]));
 const PG_DEFAULTS = Object.freeze(new Set(['', 'now()', 'gen_random_uuid()', 'true', 'false']));
 const pgPools = new Map();
-let pgCredentialCache = null;
+const pgCredentialCache = new Map();
+const POSTGRES_LEGACY_ID = 'cloudnativepg:' + FND_NS + ':' + POSTGRES_ADMIN.cluster;
 const FOUNDATION_API = '/apis/foundation.opensphere.io/v1alpha1';
 const HIS_STATUS_SCHEMA = 'his-status.opensphere.io/v1alpha1';
 const FOUNDATION_CORE_CRDS = Object.freeze([
@@ -179,32 +180,92 @@ function decodeSecretValue(data, key) {
   const encoded = data?.[key];
   return encoded ? Buffer.from(encoded, 'base64').toString('utf8') : '';
 }
-function postgresServiceHost(value) {
+function postgresServiceHost(value, namespace = POSTGRES_ADMIN.namespace) {
   const host = String(value || '').trim();
   if (!host) return POSTGRES_ADMIN.service;
   if (host === 'localhost' || host.includes('.') || host.includes(':')) return host;
-  return `${host}.${POSTGRES_ADMIN.namespace}.svc`;
+  return host + '.' + namespace + '.svc';
 }
-async function postgresCredentials(actor) {
-  if (pgCredentialCache && pgCredentialCache.expiresAt > Date.now()) return pgCredentialCache.value;
-  const result = await k8sJson('GET', `/api/v1/namespaces/${POSTGRES_ADMIN.namespace}/secrets/${POSTGRES_ADMIN.secret}`, undefined, actor);
-  if (!result.ok) throw { code: result.status, msg: `PostgreSQL connection Secret unavailable: ${k8sFailure(result)}` };
+function parsePostgresClusterId(value) {
+  const id = String(value || POSTGRES_LEGACY_ID).trim();
+  const match = id.match(/^(stackgres|cloudnativepg):([a-z0-9]([-a-z0-9]*[a-z0-9])?):([a-z0-9]([-a-z0-9]*[a-z0-9])?)$/);
+  if (!match) throw { code: 400, msg: 'cluster must be provider:namespace:name' };
+  return { id, provider: match[1], namespace: match[2], name: match[4] };
+}
+function postgresClusterProjection(item, provider) {
+  const namespace = item?.metadata?.namespace || '';
+  const name = item?.metadata?.name || '';
+  const isStackGres = provider === 'stackgres';
+  const ready = isStackGres
+    ? (item?.status?.conditions || []).some((condition) => ['ClusterReady', 'Ready'].includes(condition.type) && condition.status === 'True')
+    : Number(item?.status?.readyInstances || 0) === Number(item?.spec?.instances || 0) && Number(item?.spec?.instances || 0) > 0;
+  return {
+    id: provider + ':' + namespace + ':' + name, provider, namespace, name,
+    displayName: item?.metadata?.annotations?.['opensphere.io/display-name'] || name,
+    mode: isStackGres ? 'Dedicated' : 'LegacyShared',
+    phase: ready ? 'Ready' : (item?.status?.phase || 'Provisioning'),
+    ready, instances: Number(item?.spec?.instances || 0),
+    readyInstances: Number(item?.status?.readyInstances || item?.status?.instances || 0),
+    postgresVersion: String(item?.spec?.postgres?.version || item?.spec?.imageCatalogRef?.major || item?.spec?.imageName || ''),
+    storage: item?.spec?.pods?.persistentVolume?.size || item?.spec?.storage?.size || '',
+    plan: item?.metadata?.labels?.['catalog.opensphere.io/plan'] || (isStackGres ? '' : 'legacy-shared'),
+    bindingSecret: item?.status?.binding?.name || (isStackGres ? name + '-binding' : POSTGRES_ADMIN.secret),
+    uid: item?.metadata?.uid || '', createdAt: item?.metadata?.creationTimestamp || null,
+  };
+}
+async function postgresFleetClusters(req, res) {
+  if (req.method !== 'GET') return jsonRes(res, 405, { error: 'method not allowed' });
+  try {
+    const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
+    const [sg, cnpg] = await Promise.all([
+      k8sJson('GET', '/apis/stackgres.io/v1/sgclusters', undefined, actor),
+      k8sJson('GET', '/apis/postgresql.cnpg.io/v1/clusters', undefined, actor),
+    ]);
+    const fatal = [sg, cnpg].find((result) => !result.ok && result.status !== 404);
+    if (fatal) throw { code: fatal.status, msg: 'PostgreSQL fleet unavailable: ' + k8sFailure(fatal) };
+    const clusters = [
+      ...((sg.ok ? sg.json?.items : []) || []).map((item) => postgresClusterProjection(item, 'stackgres')),
+      ...((cnpg.ok ? cnpg.json?.items : []) || []).map((item) => postgresClusterProjection(item, 'cloudnativepg')),
+    ].sort((a, b) => Number(b.ready) - Number(a.ready) || a.displayName.localeCompare(b.displayName));
+    return jsonRes(res, 200, { schema: 'foundation.postgres.fleet/v1beta1', clusters, refreshedAt: new Date().toISOString() });
+  } catch (e) {
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 502, { error: e.msg || e.message || String(e) });
+  }
+}
+async function postgresCredentials(clusterId, actor) {
+  const target = parsePostgresClusterId(clusterId);
+  let secretName = POSTGRES_ADMIN.secret;
+  let clusterUID = target.id;
+  if (target.provider === 'stackgres') {
+    const cluster = await k8sJson('GET', '/apis/stackgres.io/v1/namespaces/' + target.namespace + '/sgclusters/' + target.name, undefined, actor);
+    if (!cluster.ok) throw { code: cluster.status, msg: 'StackGres cluster unavailable: ' + k8sFailure(cluster) };
+    secretName = cluster.json?.status?.binding?.name || target.name + '-binding';
+    clusterUID = cluster.json?.metadata?.uid || target.id;
+  } else if (target.id !== POSTGRES_LEGACY_ID) {
+    throw { code: 409, msg: 'Only the registered LegacyShared CNPG cluster can use the compatibility admin binding' };
+  }
+  const result = await k8sJson('GET', '/api/v1/namespaces/' + target.namespace + '/secrets/' + secretName, undefined, actor);
+  if (!result.ok) throw { code: result.status, msg: 'PostgreSQL connection Secret unavailable: ' + k8sFailure(result) };
+  const resourceVersion = result.json?.metadata?.resourceVersion || '';
+  const cacheKey = actor.username + '|' + target.id + '|' + resourceVersion;
+  if (pgCredentialCache.has(cacheKey)) return pgCredentialCache.get(cacheKey);
   const data = result.json?.data || {};
   const value = {
-    host: postgresServiceHost(decodeSecretValue(data, 'host')),
+    clusterId: target.id, clusterUID, resourceVersion, secretName, namespace: target.namespace,
+    host: postgresServiceHost(decodeSecretValue(data, 'host'), target.namespace),
     port: Number(decodeSecretValue(data, 'port') || POSTGRES_ADMIN.port),
-    database: decodeSecretValue(data, 'dbname') || 'app',
+    database: decodeSecretValue(data, 'database') || decodeSecretValue(data, 'dbname') || 'app',
     user: decodeSecretValue(data, 'username') || 'app',
     password: decodeSecretValue(data, 'password'),
   };
-  if (!value.password) throw { code: 503, msg: `PostgreSQL Secret ${POSTGRES_ADMIN.secret} has no password` };
-  pgCredentialCache = { value, expiresAt: Date.now() + 30000 };
+  if (!value.password) throw { code: 503, msg: 'PostgreSQL Secret ' + target.namespace + '/' + secretName + ' has no password' };
+  pgCredentialCache.set(cacheKey, value);
   return value;
 }
-async function postgresPool(database, actor) {
-  const credentials = await postgresCredentials(actor);
+async function postgresPool(clusterId, database, actor) {
+  const credentials = await postgresCredentials(clusterId, actor);
   const db = database ? pgName(database, 'database') : credentials.database;
-  const key = `${credentials.host}:${credentials.port}/${db}/${credentials.user}`;
+  const key = credentials.clusterUID + ':' + credentials.resourceVersion + '/' + db + '/' + credentials.user;
   if (!pgPools.has(key)) {
     const pool = new Pool({
       ...credentials, database: db, max: 4, idleTimeoutMillis: 30000,
@@ -224,18 +285,19 @@ async function postgresAdminCatalog(req, res, url) {
   if (req.method !== 'GET') return jsonRes(res, 405, { error: 'method not allowed' });
   try {
     const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
+    const clusterId = url.searchParams.get('cluster') || POSTGRES_LEGACY_ID;
     const requestedDatabase = url.searchParams.get('database') || '';
-    const basePool = await postgresPool(undefined, actor);
+    const basePool = await postgresPool(clusterId, undefined, actor);
     const databases = await pgRows(basePool, `
       SELECT datname AS name, pg_get_userbyid(datdba) AS owner,
              pg_encoding_to_char(encoding) AS encoding,
              datcollate AS collation, datconnlimit AS connection_limit,
              pg_database_size(datname)::bigint AS size_bytes
       FROM pg_database WHERE datallowconn AND NOT datistemplate ORDER BY datname`);
-    const credentials = await postgresCredentials(actor);
+    const credentials = await postgresCredentials(clusterId, actor);
     const selected = requestedDatabase || databases.find((item) => item.name === credentials.database)?.name || databases[0]?.name;
     if (!selected || !databases.some((item) => item.name === selected)) throw { code: 404, msg: `database not found: ${selected || requestedDatabase}` };
-    const pool = await postgresPool(selected, actor);
+    const pool = await postgresPool(clusterId, selected, actor);
     const [schemas, objects, columns, indexes, constraints, functions, extensions, roles, activity, dependencies, settings] = await Promise.all([
       pgRows(pool, `SELECT nspname AS name, pg_get_userbyid(nspowner) AS owner
         FROM pg_namespace WHERE nspname NOT LIKE 'pg_toast%' ORDER BY CASE WHEN nspname='public' THEN 0 ELSE 1 END, nspname`),
@@ -302,7 +364,7 @@ async function postgresAdminCatalog(req, res, url) {
     ]);
     return jsonRes(res, 200, {
       schema: 'foundation.postgres.database-admin/v1alpha1', actor: actor.username,
-      cluster: POSTGRES_ADMIN.cluster, selectedDatabase: selected, rowLimit: POSTGRES_ADMIN.rowLimit,
+      cluster: clusterId, selectedDatabase: selected, rowLimit: POSTGRES_ADMIN.rowLimit,
       databases, schemas, objects, columns, indexes, constraints, functions, extensions, roles, activity,
       dependencies, settings: settings[0] || {},
       refreshedAt: new Date().toISOString(),
@@ -324,10 +386,11 @@ async function postgresAdminQuery(req, res) {
   try {
     const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
     const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
-    requireClosedOwnerBody(body, ['database', 'sql']);
+    requireClosedOwnerBody(body, ['cluster', 'database', 'sql']);
+    const clusterId = body.cluster || POSTGRES_LEGACY_ID;
     const database = pgName(body.database, 'database');
     const sql = postgresReadOnlySql(body.sql);
-    const pool = await postgresPool(database, actor);
+    const pool = await postgresPool(clusterId, database, actor);
     const client = await pool.connect();
     const started = Date.now();
     try {
@@ -408,11 +471,12 @@ async function postgresAdminAction(req, res) {
   try {
     actor = await foundationOwnerActor(req);
     const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
-    requireClosedOwnerBody(body, ['action', 'database', 'schema', 'name', 'table', 'columns', 'indexColumns', 'unique', 'reason']);
+    requireClosedOwnerBody(body, ['cluster', 'action', 'database', 'schema', 'name', 'table', 'columns', 'indexColumns', 'unique', 'reason']);
+    const clusterId = body.cluster || POSTGRES_LEGACY_ID;
     const reason = requireOwnerReason(body.reason);
     const plan = postgresActionPlan(body);
     await publishFoundationAudit(actor, 'postgres-object-management', `${plan.database}/${plan.target}`, 'attempt', `${reason}; action=${body.action}`);
-    const pool = await postgresPool(plan.database, actor);
+    const pool = await postgresPool(clusterId, plan.database, actor);
     await pool.query(plan.sql);
     await publishFoundationAudit(actor, 'postgres-object-management', `${plan.database}/${plan.target}`, 'accepted', `${reason}; action=${body.action}`);
     return jsonRes(res, 200, { accepted: true, action: body.action, database: plan.database, target: plan.target, sql: plan.sql });
@@ -1851,6 +1915,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/foundation/psmdb/summary') return psmdbSummary(req, res);
     if (p === '/api/foundation/psmdb/collection') return psmdbCollection(req, res);
     if (p === '/api/foundation/psmdb/user') return psmdbUser(req, res);
+    if (p === '/api/foundation/postgres/clusters') return postgresFleetClusters(req, res);
     if (p === '/api/foundation/postgres/admin/catalog') return postgresAdminCatalog(req, res, new URL(req.url || '/', 'http://localhost'));
     if (p === '/api/foundation/postgres/admin/query') return postgresAdminQuery(req, res);
     if (p === '/api/foundation/postgres/admin/action') return postgresAdminAction(req, res);
@@ -1943,8 +2008,9 @@ if (require.main === module) {
     validateHisStatusContract,
     parseResp, encodeRespCommand, parseInfo, sanitizeAclLine, requireValkeyDb, requireValkeyKey,
     postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost,
+    parsePostgresClusterId, postgresClusterProjection,
     foundationBootstrapState,
     HIS_STATUS_SCHEMA, FOUNDATION_CORE_CRDS,
-    FOUNDATION_ENGINE_MODEL, FOUNDATION_CLAIM_MODELS, POSTGRES_ADMIN,
+    FOUNDATION_ENGINE_MODEL, FOUNDATION_CLAIM_MODELS, POSTGRES_ADMIN, POSTGRES_LEGACY_ID,
   };
 }

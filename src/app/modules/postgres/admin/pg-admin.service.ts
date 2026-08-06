@@ -1,5 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { apiBase, hostFetch, writeHeaders } from '../../../api-base';
+import { apiBase, FND_NS, hostFetch, writeHeaders } from '../../../api-base';
 
 export interface PgAdminDatabase {
   name: string; owner: string; encoding: string; collation: string; connection_limit: number; size_bytes: string;
@@ -27,6 +27,7 @@ export interface PgTypedAction {
 
 @Injectable({ providedIn: 'root' })
 export class PgAdminService {
+  readonly selectedCluster = signal(`cloudnativepg:${FND_NS}:foundation-data-pg`);
   readonly catalog = signal<PgAdminCatalog | null>(null);
   readonly state = signal<'idle' | 'loading' | 'ok' | 'error'>('idle');
   readonly error = signal('');
@@ -70,7 +71,9 @@ export class PgAdminService {
   async refresh(database = this.selectedDatabase()): Promise<void> {
     this.state.set('loading'); this.error.set('');
     try {
-      const suffix = database ? `?database=${encodeURIComponent(database)}` : '';
+      const query = new URLSearchParams({ cluster: this.selectedCluster() });
+      if (database) query.set('database', database);
+      const suffix = `?${query.toString()}`;
       const response = await hostFetch(`${this.endpoint('catalog')}${suffix}`, { cache: 'no-store' });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || `PostgreSQL catalog HTTP ${response.status}`);
@@ -92,7 +95,7 @@ export class PgAdminService {
     this.queryState.set('running'); this.queryError.set(''); this.queryResult.set(null);
     try {
       const response = await hostFetch(this.endpoint('query'), {
-        method: 'POST', headers: writeHeaders(), body: JSON.stringify({ database: this.selectedDatabase(), sql }),
+        method: 'POST', headers: writeHeaders(), body: JSON.stringify({ cluster: this.selectedCluster(), database: this.selectedDatabase(), sql }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || `PostgreSQL query HTTP ${response.status}`);
@@ -109,7 +112,7 @@ export class PgAdminService {
     this.dataState.set('loading'); this.dataError.set(''); this.dataResult.set(null); this.dataObject.set(objectKey);
     try {
       const response = await hostFetch(this.endpoint('query'), {
-        method: 'POST', headers: writeHeaders(), body: JSON.stringify({ database: this.selectedDatabase(), sql }),
+        method: 'POST', headers: writeHeaders(), body: JSON.stringify({ cluster: this.selectedCluster(), database: this.selectedDatabase(), sql }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || `PostgreSQL data view HTTP ${response.status}`);
@@ -124,7 +127,7 @@ export class PgAdminService {
     this.actionState.set('running'); this.actionResult.set('');
     try {
       const response = await hostFetch(this.endpoint('action'), {
-        method: 'POST', headers: writeHeaders(), body: JSON.stringify(action),
+        method: 'POST', headers: writeHeaders(), body: JSON.stringify({ ...action, cluster: this.selectedCluster() }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || `PostgreSQL action HTTP ${response.status}`);

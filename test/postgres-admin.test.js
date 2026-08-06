@@ -3,7 +3,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost, POSTGRES_ADMIN } = require('../server.js');
+const {
+  postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost, POSTGRES_ADMIN,
+  POSTGRES_LEGACY_ID, parsePostgresClusterId, postgresClusterProjection,
+} = require('../server.js');
 
 function throwsMessage(fn, pattern) {
   assert.throws(fn, (error) => pattern.test(String(error?.msg || error?.message || error)));
@@ -53,11 +56,30 @@ test('drop plans are RESTRICT-only and index columns are identifier-checked', ()
     'DROP SEQUENCE "public"."event_id_seq" RESTRICT');
 });
 
-test('PostgreSQL admin contract pins one cluster and bounded query execution', () => {
-  assert.equal(POSTGRES_ADMIN.cluster, 'foundation-data-pg');
-  assert.equal(POSTGRES_ADMIN.secret, 'foundation-data-pg-app');
+test('PostgreSQL admin keeps one explicit legacy target and bounded query execution', () => {
+  assert.equal(POSTGRES_LEGACY_ID, 'cloudnativepg:opensphere-foundation:foundation-data-pg');
   assert.equal(POSTGRES_ADMIN.rowLimit, 500);
   assert.equal(POSTGRES_ADMIN.statementTimeoutMs, 10000);
+});
+
+test('PostgreSQL fleet accepts only provider-qualified cluster identities', () => {
+  assert.deepEqual(parsePostgresClusterId('stackgres:tenant-a:orders'), {
+    id: 'stackgres:tenant-a:orders', provider: 'stackgres', namespace: 'tenant-a', name: 'orders',
+  });
+  throwsMessage(() => parsePostgresClusterId('tenant-a/orders'), /provider:namespace:name/);
+  throwsMessage(() => parsePostgresClusterId('stackgres:tenant_a:orders'), /provider:namespace:name/);
+});
+
+test('StackGres fleet projection is dedicated and uses status binding', () => {
+  const projected = postgresClusterProjection({
+    metadata: { name: 'orders', namespace: 'tenant-a', uid: 'u1' },
+    spec: { instances: 2, postgres: { version: '18' }, pods: { persistentVolume: { size: '20Gi' } } },
+    status: { binding: { name: 'orders-binding' }, conditions: [{ type: 'ClusterReady', status: 'True' }] },
+  }, 'stackgres');
+  assert.equal(projected.id, 'stackgres:tenant-a:orders');
+  assert.equal(projected.mode, 'Dedicated');
+  assert.equal(projected.ready, true);
+  assert.equal(projected.bindingSecret, 'orders-binding');
 });
 
 test('PostgreSQL Secret short service hosts are qualified for the target namespace', () => {
@@ -84,6 +106,18 @@ test('PostgreSQL administration surface separates Data View from Query Tool and 
   assert.match(service, /queryResult = signal<PgQueryResult \| null>/);
   assert.match(service, /async loadData\(object: PgAdminObject, limit = 100\)/);
   assert.doesNotMatch(source, /pga-lower/);
+  assert.match(service, /selectedCluster/);
+  assert.match(service, /cluster: this\.selectedCluster\(\)/);
+});
+
+test('PostgreSQL landing surface exposes a multi-cluster fleet and v1beta1 claim workflow', () => {
+  const component = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/postgres-plugin.component.ts'), 'utf8');
+  const fleet = fs.readFileSync(path.join(__dirname, '../src/app/modules/postgres/postgres-fleet.service.ts'), 'utf8');
+  assert.match(component, /PFSS PostgreSQL Fleet/);
+  assert.match(component, /Create dedicated cluster/);
+  assert.match(component, /LegacyShared/);
+  assert.match(fleet, /provisioning\.opensphere\.io\/v1beta1/);
+  assert.match(fleet, /PostgresClaim/);
 });
 
 test('PostgreSQL Cluster plan offers an explicit compact two-instance profile', () => {

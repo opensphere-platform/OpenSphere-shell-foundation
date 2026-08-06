@@ -17,6 +17,8 @@ import { PgBackupsTab } from './tabs/pg-backups.tab';
 import { PgEventsTab } from './tabs/pg-events.tab';
 import { PgClaimsTab } from './tabs/pg-claims.tab';
 import { PgAdminTab } from './admin/pg-admin.tab';
+import { PgAdminService } from './admin/pg-admin.service';
+import { PostgresFleetService } from './postgres-fleet.service';
 import ArrowLeft16 from '@carbon/icons/es/arrow--left/16';
 import Download16 from '@carbon/icons/es/download/16';
 import WarningAlt16 from '@carbon/icons/es/warning--alt/16';
@@ -82,6 +84,30 @@ const DEFAULT_FORM: PgForm = {
     </section>
 
     <ng-container *ngIf="tab() === 'overview'">
+      <section class="pgp-workspace" aria-label="PostgreSQL Fleet">
+        <div class="pgp-section-head"><div><span class="vl-eyebrow">PFSS PostgreSQL Fleet</span><h2>PostgreSQL clusters</h2></div><button class="btn btn-sm" type="button" (click)="fleet.refresh()" [disabled]="fleet.busy()">새로고침</button></div>
+        <clr-alert clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">신규 PostgresClaim은 클러스터를 공유하지 않습니다. Claim마다 독립 StackGres SGCluster, 볼륨, 앱 자격증명과 수명주기를 가집니다. 기존 CNPG는 LegacyShared로 유지됩니다.</span></clr-alert-item></clr-alert>
+        <clr-alert *ngIf="fleet.state()==='error'" clrAlertType="danger" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">{{fleet.error()}}</span></clr-alert-item></clr-alert>
+        <div class="pgp-operator-grid" *ngIf="fleet.clusters().length">
+          <button type="button" class="card" *ngFor="let cluster of fleet.clusters()" (click)="selectFleetCluster(cluster.id)" [class.pgp-selected-card]="fleet.selectedId()===cluster.id">
+            <div class="card-header">{{cluster.displayName}} <span class="label" [ngClass]="cluster.ready?'label-success':'label-warning'">{{cluster.phase}}</span></div>
+            <div class="card-block"><dl class="os-kv"><dt>Provider</dt><dd>{{cluster.provider}}</dd><dt>Mode</dt><dd>{{cluster.mode}}</dd><dt>Namespace</dt><dd class="os-mono">{{cluster.namespace}}</dd><dt>Instances</dt><dd>{{cluster.readyInstances}} / {{cluster.instances}}</dd><dt>Storage</dt><dd>{{cluster.storage || '—'}}</dd></dl></div>
+          </button>
+        </div>
+        <div class="os-actions" *ngIf="fleet.selected() as selected"><strong>Selected: {{selected.namespace}}/{{selected.name}}</strong><button class="btn btn-sm btn-primary" type="button" (click)="openSelectedAdmin()">Database Objects</button><span class="label" [ngClass]="selected.mode==='Dedicated'?'label-success':'label-warning'">{{selected.mode}}</span></div>
+
+        <form class="pgp-form" (ngSubmit)="createDedicatedCluster()">
+          <fieldset [disabled]="creatingClaim"><legend>Create dedicated cluster</legend><div class="pgp-form-grid">
+            <label><span>Claim name</span><input name="claimName" [(ngModel)]="claimName" placeholder="orders-db" /></label>
+            <label><span>Namespace</span><input name="claimNamespace" [(ngModel)]="claimNamespace" /></label>
+            <label><span>Database</span><input name="claimDatabase" [(ngModel)]="claimDatabase" /></label>
+            <label><span>Application owner</span><input name="claimOwner" [(ngModel)]="claimOwner" /></label>
+            <label><span>Plan</span><select name="claimPlan" [(ngModel)]="claimPlan"><option *ngFor="let plan of fleet.plans()" [value]="plan.metadata.name">{{plan.metadata.name}} · {{plan.spec.instances}} instances</option></select></label>
+          </div><button class="btn btn-primary" type="submit" [disabled]="!claimName||!claimDatabase||!claimOwner||!claimPlan">PostgresClaim 생성</button><span class="os-dim">PostgresClaim v1beta1 → AddOnInstall → dedicated SGCluster</span></fieldset>
+        </form>
+        <clr-alert *ngIf="claimResult" [clrAlertType]="claimFailed?'danger':'success'" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">{{claimResult}}</span></clr-alert-item></clr-alert>
+      </section>
+
       <section class="pgp-steps" aria-label="PostgreSQL plugin 설치 단계">
         <button type="button" class="pgp-step" [class.done]="op.ready()" [class.current]="!op.ready()" (click)="openTab('operator')">
           <span class="pgp-step-n">1</span><span><b>Operator 준비</b><small>{{ op.ready() ? 'CloudNativePG Running' : '설치 및 CRD 확인 필요' }}</small></span>
@@ -261,6 +287,8 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
   readonly pg = inject(CnpgService);
   readonly reg = inject(FoundationRegistryService);
   readonly vr = inject(ViewRouter);
+  readonly fleet = inject(PostgresFleetService);
+  readonly pgAdmin = inject(PgAdminService);
   readonly LOGO = LOGO;
   readonly manualSourceId = MANUAL_SOURCE_ID;
   readonly manualUrl = `/manual?doc=${encodeURIComponent(MANUAL_SOURCE_ID)}`;
@@ -276,6 +304,8 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
   readonly applyProgress = signal(0);
   readonly applyLogs = signal<string[]>([]);
   private installTimer: ReturnType<typeof setInterval> | undefined;
+  claimName = ''; claimNamespace = 'opensphere-foundation'; claimDatabase = ''; claimOwner = ''; claimPlan = 'postgresql-dev-single';
+  creatingClaim = false; claimResult = ''; claimFailed = false;
 
   readonly tabs: { id: PackageTab; label: string; requiresCluster?: boolean; badge?: boolean }[] = [
     { id: 'overview', label: 'Overview' },
@@ -310,6 +340,7 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.op.start();
+    void this.fleet.refresh();
     void this.loadStorageClasses();
   }
   ngOnDestroy(): void {
@@ -320,6 +351,22 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
   back(): void { this.vr.setModule('modules'); }
   openControlPlane(): void { this.vr.setModule('control-plane'); }
   openTab(id: string): void { this.vr.setTab(id); }
+  selectFleetCluster(id: string): void { this.fleet.select(id); this.pgAdmin.selectedCluster.set(id); this.pgAdmin.catalog.set(null); }
+  openSelectedAdmin(): void {
+    const selected = this.fleet.selected();
+    if (!selected) return;
+    this.selectFleetCluster(selected.id);
+    this.openTab('admin');
+  }
+  async createDedicatedCluster(): Promise<void> {
+    this.creatingClaim = true; this.claimResult = ''; this.claimFailed = false;
+    try {
+      await this.fleet.createClaim({ name: this.claimName.trim(), namespace: this.claimNamespace.trim(), database: this.claimDatabase.trim(), owner: this.claimOwner.trim(), plan: this.claimPlan });
+      this.claimResult = `PostgresClaim ${this.claimNamespace}/${this.claimName} 생성 요청이 승인되었습니다.`;
+      this.claimName = ''; this.claimDatabase = ''; this.claimOwner = '';
+    } catch (error: any) { this.claimFailed = true; this.claimResult = error?.message || String(error); }
+    finally { this.creatingClaim = false; }
+  }
   selectOperator(e: Event): void { this.op.selectChart((e.target as HTMLSelectElement).value); }
   patchForm(patch: Partial<PgForm>): void { this.form.update((f) => ({ ...f, ...patch })); }
   patchBackup(patch: Partial<PgForm['backup']>): void { this.form.update((f) => ({ ...f, backup: { ...f.backup, ...patch } })); }

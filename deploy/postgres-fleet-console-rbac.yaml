@@ -1,0 +1,47 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opensphere-postgres-fleet-read
+  labels: { opensphere.io/managed-by: foundation, opensphere.io/purpose: postgres-fleet }
+rules:
+  - apiGroups: ["stackgres.io"]
+    resources: [sgclusters, sgbackups, sgdbops, sgscripts, sginstanceprofiles, sgpgconfigs, sgpoolconfigs, sgobjectstorages]
+    verbs: [get, list, watch]
+  - apiGroups: ["postgresql.cnpg.io"]
+    resources: [clusters, backups, scheduledbackups, databases, databaseroles, poolers]
+    verbs: [get, list, watch]
+  - apiGroups: ["catalog.opensphere.io"]
+    resources: [addoncapabilities, addonofferings, addonplans, addoninstalls]
+    verbs: [get, list, watch]
+  - apiGroups: ["provisioning.opensphere.io"]
+    resources: [postgresclaims]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods, services, events]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opensphere-postgres-claims-manage
+  labels: { opensphere.io/managed-by: foundation, opensphere.io/purpose: postgres-fleet }
+rules:
+  - apiGroups: ["provisioning.opensphere.io"]
+    resources: [postgresclaims]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: opensphere-postgres-fleet-read }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: opensphere-postgres-fleet-read }
+subjects:
+  - { apiGroup: rbac.authorization.k8s.io, kind: Group, name: opensphere-console-admins }
+  - { apiGroup: rbac.authorization.k8s.io, kind: Group, name: opensphere-console-operators }
+  - { apiGroup: rbac.authorization.k8s.io, kind: Group, name: opensphere-console-viewers }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: opensphere-postgres-claims-manage-admins }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: opensphere-postgres-claims-manage }
+subjects:
+  - { apiGroup: rbac.authorization.k8s.io, kind: Group, name: opensphere-console-admins }

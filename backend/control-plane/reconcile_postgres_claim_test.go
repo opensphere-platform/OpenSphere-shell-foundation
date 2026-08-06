@@ -1,0 +1,119 @@
+package main
+
+import (
+	"strings"
+	"testing"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
+)
+
+func testPostgresClaim() *unstructured.Unstructured {
+	o := gvkObj(postgresClaimGVK)
+	o.SetName("orders")
+	o.SetNamespace("tenant-a")
+	o.SetUID(types.UID("claim-uid"))
+	o.Object["spec"] = map[string]interface{}{
+		"database":       "orders",
+		"owner":          "orders_app",
+		"planRef":        map[string]interface{}{"name": "postgresql-compact-2"},
+		"isolation":      "Dedicated",
+		"deletionPolicy": "Retain",
+	}
+	return o
+}
+
+func TestDedicatedClaimRendersOneStackGresCluster(t *testing.T) {
+	claim := testPostgresClaim()
+	plan := postgresPlan{
+		Name: "postgresql-compact-2", Version: "18", Profile: "testing",
+		CPU: "1", Memory: "2Gi", Size: "20Gi", StorageClass: "ceph-rbd",
+		Instances: 2, Pooling: true,
+	}
+	resources := renderPostgresResources(claim, plan, "S3curePassword")
+	count := 0
+	var cluster *unstructured.Unstructured
+	for _, resource := range resources {
+		if resource.GetKind() == "SGCluster" {
+			count++
+			cluster = resource
+		}
+		if resource.GetNamespace() != "tenant-a" {
+			t.Fatalf("%s rendered outside claim namespace: %s", resource.GetKind(), resource.GetNamespace())
+		}
+		if resource.GetLabels()["provisioning.opensphere.io/postgres-claim"] != "orders" {
+			t.Fatalf("%s lacks exact claim ownership label", resource.GetKind())
+		}
+	}
+	if count != 1 {
+		t.Fatalf("SGCluster count=%d, want 1", count)
+	}
+	if cluster.GetName() != "pgc-orders" {
+		t.Fatalf("cluster name=%s", cluster.GetName())
+	}
+	if got, _, _ := unstructured.NestedInt64(cluster.Object, "spec", "instances"); got != 2 {
+		t.Fatalf("instances=%d", got)
+	}
+	if got, _, _ := unstructured.NestedString(cluster.Object, "spec", "profile"); got != "testing" {
+		t.Fatalf("profile=%s", got)
+	}
+	if got, _, _ := unstructured.NestedString(cluster.Object, "spec", "configurations", "binding", "username"); got != "orders_app" {
+		t.Fatalf("binding username=%s", got)
+	}
+	if _, found, _ := unstructured.NestedMap(cluster.Object, "spec", "configurations", "credentials", "users", "superuser"); found {
+		t.Fatal("application binding must never expose StackGres superuser credentials")
+	}
+}
+
+func TestBootstrapSQLUsesApplicationIdentity(t *testing.T) {
+	resources := renderPostgresResources(testPostgresClaim(), postgresPlan{
+		Name: "postgresql-dev-single", Version: "18", Profile: "development",
+		CPU: "500m", Memory: "1Gi", Size: "10Gi", Instances: 1,
+	}, "SecretValue")
+	for _, resource := range resources {
+		if resource.GetName() != "pgc-orders-bootstrap-sql" {
+			continue
+		}
+		sql, _, _ := unstructured.NestedString(resource.Object, "stringData", "bootstrap.sql")
+		if !strings.Contains(sql, "CREATE ROLE \"orders_app\"") || !strings.Contains(sql, "CREATE DATABASE \"orders\" OWNER \"orders_app\"") {
+			t.Fatalf("unexpected bootstrap SQL: %s", sql)
+		}
+		if strings.Contains(sql, "SUPERUSER") {
+			t.Fatal("bootstrap application role must not be superuser")
+		}
+		return
+	}
+	t.Fatal("bootstrap SQL Secret not rendered")
+}
+
+func TestProductionPlanRequiresObjectStorage(t *testing.T) {
+	o := gvkObj(addOnPlanGVK)
+	o.SetName("broken")
+	o.Object["spec"] = map[string]interface{}{
+		"provider": "stackgres", "lifecycle": "Available", "postgresVersion": "18",
+		"instances": int64(3), "profile": "production",
+		"resources": map[string]interface{}{"cpu": "2", "memory": "4Gi"},
+		"storage":   map[string]interface{}{"size": "100Gi"},
+		"backup":    map[string]interface{}{"enabled": true},
+	}
+	if _, err := parsePostgresPlan(o); err == nil || !strings.Contains(err.Error(), "objectStorageRef") {
+		t.Fatalf("expected objectStorageRef validation, got %v", err)
+	}
+}
+
+func TestClaimRejectsUnsafeSQLIdentifier(t *testing.T) {
+	claim := testPostgresClaim()
+	_ = unstructured.SetNestedField(claim.Object, "orders; DROP DATABASE postgres", "spec", "database")
+	if err := validatePostgresClaim(claim); err == nil {
+		t.Fatal("unsafe database identifier accepted")
+	}
+}
+
+func TestRetainIsTheDefaultInstallDeletionPolicy(t *testing.T) {
+	claim := testPostgresClaim()
+	unstructured.RemoveNestedField(claim.Object, "spec", "deletionPolicy")
+	install := renderAddOnInstall(claim, postgresPlan{Name: "postgresql-dev-single"}, nil)
+	if got, _, _ := unstructured.NestedString(install.Object, "spec", "deletionPolicy"); got != "Retain" {
+		t.Fatalf("deletionPolicy=%s", got)
+	}
+}

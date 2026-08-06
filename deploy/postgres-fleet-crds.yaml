@@ -1,0 +1,214 @@
+# PostgreSQL Fleet northbound contracts.
+# PostgresClaim v1alpha1 remains served for existing shared-CNPG consumers;
+# v1beta1 is the storage version and provisions one isolated StackGres cluster.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: postgresclaims.provisioning.opensphere.io
+spec:
+  group: provisioning.opensphere.io
+  scope: Namespaced
+  names:
+    plural: postgresclaims
+    singular: postgresclaim
+    kind: PostgresClaim
+    shortNames: [pgclaim, pgc]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: false
+      schema:
+        openAPIV3Schema: &postgresClaimSchema
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [database, owner]
+              properties:
+                database: { type: string, pattern: '^[A-Za-z_][A-Za-z0-9_$-]{0,62}$' }
+                owner: { type: string, pattern: '^[A-Za-z_][A-Za-z0-9_$-]{0,62}$' }
+                version: { type: string }
+                engine: { type: string }
+                storageClass: { type: string }
+                size: { type: string, pattern: '^[0-9]+(Mi|Gi|Ti)$' }
+                planRef:
+                  type: object
+                  properties:
+                    name: { type: string }
+                isolation:
+                  type: string
+                  enum: [Dedicated, LegacyShared]
+                storage:
+                  type: object
+                  properties:
+                    size: { type: string, pattern: '^[0-9]+(Mi|Gi|Ti)$' }
+                    storageClass: { type: string }
+                deletionPolicy:
+                  type: string
+                  enum: [Retain, Delete]
+                backupPolicyRef:
+                  type: object
+                  properties:
+                    name: { type: string }
+                placementRef:
+                  type: object
+                  properties:
+                    name: { type: string }
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+      subresources: { status: {} }
+      additionalPrinterColumns:
+        - { name: Mode, type: string, jsonPath: .spec.isolation }
+        - { name: Plan, type: string, jsonPath: .spec.planRef.name }
+        - { name: Phase, type: string, jsonPath: .status.phase }
+        - { name: Cluster, type: string, jsonPath: .status.providerRef.name }
+        - { name: Age, type: date, jsonPath: .metadata.creationTimestamp }
+    - name: v1beta1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema: *postgresClaimSchema
+      subresources: { status: {} }
+      additionalPrinterColumns:
+        - { name: Mode, type: string, jsonPath: .spec.isolation }
+        - { name: Plan, type: string, jsonPath: .spec.planRef.name }
+        - { name: Phase, type: string, jsonPath: .status.phase }
+        - { name: Cluster, type: string, jsonPath: .status.providerRef.name }
+        - { name: Age, type: date, jsonPath: .metadata.creationTimestamp }
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: addoncapabilities.catalog.opensphere.io
+spec:
+  group: catalog.opensphere.io
+  scope: Cluster
+  names: { plural: addoncapabilities, singular: addoncapability, kind: AddOnCapability }
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec: { type: object, x-kubernetes-preserve-unknown-fields: true }
+            status: { type: object, x-kubernetes-preserve-unknown-fields: true }
+      subresources: { status: {} }
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: addonofferings.catalog.opensphere.io
+spec:
+  group: catalog.opensphere.io
+  scope: Cluster
+  names: { plural: addonofferings, singular: addonoffering, kind: AddOnOffering }
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec: { type: object, x-kubernetes-preserve-unknown-fields: true }
+            status: { type: object, x-kubernetes-preserve-unknown-fields: true }
+      subresources: { status: {} }
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: addonplans.catalog.opensphere.io
+spec:
+  group: catalog.opensphere.io
+  scope: Cluster
+  names: { plural: addonplans, singular: addonplan, kind: AddOnPlan }
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [capabilityRef, offeringRef, provider, instances, resources, storage]
+              properties:
+                capabilityRef: { type: string }
+                offeringRef: { type: string }
+                provider: { type: string, enum: [stackgres] }
+                lifecycle: { type: string, enum: [Preview, Available, Deprecated] }
+                postgresVersion: { type: string }
+                instances: { type: integer, minimum: 1 }
+                profile: { type: string, enum: [development, testing, production] }
+                resources:
+                  type: object
+                  required: [cpu, memory]
+                  properties:
+                    cpu: { type: string }
+                    memory: { type: string }
+                storage:
+                  type: object
+                  required: [size]
+                  properties:
+                    size: { type: string }
+                    storageClass: { type: string }
+                pooling: { type: boolean }
+                backup:
+                  type: object
+                  properties:
+                    enabled: { type: boolean }
+                    retention: { type: integer, minimum: 1 }
+                    cronSchedule: { type: string }
+                    objectStorageRef: { type: string }
+                constraints: { type: object, x-kubernetes-preserve-unknown-fields: true }
+            status: { type: object, x-kubernetes-preserve-unknown-fields: true }
+      subresources: { status: {} }
+      additionalPrinterColumns:
+        - { name: Provider, type: string, jsonPath: .spec.provider }
+        - { name: Instances, type: integer, jsonPath: .spec.instances }
+        - { name: Lifecycle, type: string, jsonPath: .spec.lifecycle }
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: addoninstalls.catalog.opensphere.io
+spec:
+  group: catalog.opensphere.io
+  scope: Namespaced
+  names: { plural: addoninstalls, singular: addoninstall, kind: AddOnInstall }
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [planRef, claimRef]
+              properties:
+                planRef: { type: string }
+                claimRef:
+                  type: object
+                  required: [apiVersion, kind, name]
+                  properties:
+                    apiVersion: { type: string }
+                    kind: { type: string }
+                    name: { type: string }
+                    uid: { type: string }
+                deletionPolicy: { type: string, enum: [Retain, Delete] }
+                renderedResources:
+                  type: array
+                  items: { type: object, x-kubernetes-preserve-unknown-fields: true }
+            status: { type: object, x-kubernetes-preserve-unknown-fields: true }
+      subresources: { status: {} }
+      additionalPrinterColumns:
+        - { name: Plan, type: string, jsonPath: .spec.planRef }
+        - { name: Phase, type: string, jsonPath: .status.phase }
+        - { name: Age, type: date, jsonPath: .metadata.creationTimestamp }

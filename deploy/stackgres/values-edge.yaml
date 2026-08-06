@@ -1,0 +1,27 @@
+# StackGres 1.19.0 operator-only control plane for PFSS.
+# OpenSphere supplies the user-facing fleet/admin UI; upstream REST/Admin UI is disabled.
+containerRegistry: ghcr.io/opensphere-platform/mirror
+imagePullPolicy: IfNotPresent
+serviceAccount:
+  create: true
+  repoCredentials: [opensphere-ghcr-pull]
+operator:
+  image:
+    name: stackgres-operator
+    tag: "1.19.0"
+    pullPolicy: IfNotPresent
+  serviceAccount:
+    repoCredentials: [opensphere-ghcr-pull]
+deploy:
+  operator: true
+  restapi: false
+  collector: false
+cert:
+  createForWebApi: false
+  createForCollector: false
+grafana:
+  autoEmbed: false
+extensions:
+  repositoryUrls: []
+  cache:
+    enabled: false

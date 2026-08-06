@@ -155,8 +155,13 @@ func main() {
 		ctrl.Log.Error(err, "identity directory 컨트롤러 등록 실패")
 		os.Exit(1)
 	}
+	if err := ctrl.NewControllerManagedBy(mgr).For(gvkObj(postgresClaimGVK)).Owns(gvkObj(addOnInstallGVK)).
+		Complete(&postgresClaimReconciler{cached: mgr.GetClient(), direct: direct, cfg: cfg}); err != nil {
+		ctrl.Log.Error(err, "postgres fleet 컨트롤러 등록 실패")
+		os.Exit(1)
+	}
 
-	ctrl.Log.Info("foundation-control-plane 시작 (reconcile — observability(D-1)·identity(D-3) 배포/회수 + claim/typed identity 연결담보)",
+	ctrl.Log.Info("foundation-control-plane 시작 (reconcile — foundation bundle + typed identity + isolated StackGres PostgreSQL fleet)",
 		"managedNS", cfg.managedNS, "collectorImage", cfg.collectorImage, "keycloakImage", cfg.keycloakImage)
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		ctrl.Log.Error(err, "manager 시작 실패")
