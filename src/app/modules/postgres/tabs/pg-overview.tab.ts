@@ -134,10 +134,11 @@ import { PgChart, PgChartSeries } from '../ui/pg-chart';
     .pg-storage { margin: 1rem 0; }
     .pg-overview-details { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; align-items: stretch; }
     .pg-overview-details > .card { min-width: 0; width: 100%; margin: 0; }
-    .pg-overview-details .card-header { min-height: 2.5rem; padding: .6rem .8rem; border-bottom: 1px solid #d7dcdf; font-size: .76rem; font-weight: 600; line-height: 1.35; }
-    .pg-overview-details .card-block { min-height: 8.75rem; padding: .65rem .8rem; }
-    .pg-overview-details .os-kv { grid-template-columns: 6.5rem minmax(0, 1fr); gap: .3rem .75rem; font-size: .68rem; line-height: 1.45; }
-    .pg-overview-details .os-kv dd { min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+    .pg-overview-details .card-header { min-height: 2.5rem; padding: .6rem .8rem; border-bottom: 1px solid #d7dcdf; font-size: .72rem; font-weight: 500; line-height: 1.35; }
+    .pg-overview-details .card-block { min-height: 8rem; padding: .65rem .8rem; }
+    .pg-overview-details .os-kv { grid-template-columns: 6.5rem minmax(0, 1fr); gap: .3rem .75rem; font-size: .66rem; line-height: 1.45; }
+    .pg-overview-details .os-kv dd { min-width: 0; overflow-wrap: anywhere; font-weight: 400; }
+    .pg-overview-details .os-mono { font-size: .65rem; font-weight: 400; line-height: 1.45; }
     .pg-overview-details .os-sub { margin: .55rem 0 0; font-size: .61rem; line-height: 1.45; }
     .pg-image-evidence { margin-top: .3rem; }
     .pg-image-evidence summary { cursor: pointer; color: #0067a0; font-size: .62rem; }
