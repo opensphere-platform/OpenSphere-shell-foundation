@@ -14,7 +14,7 @@ type SeriesKey = Exclude<keyof PgMonitoringMetrics, 'labels'>;
   template: `
     <section class="pg-monitoring" aria-labelledby="pg-monitoring-title">
       <header class="pg-monitoring-head">
-        <div><span>OPERATIONS · PROMETHEUS</span><h2 id="pg-monitoring-title">PostgreSQL Monitoring</h2><p>{{ providerLabel() }} exporter와 Kubernetes 볼륨·컨테이너 시계열을 최근 1시간 기준으로 표시합니다.</p></div>
+        <div class="pg-monitoring-title"><span>OPERATIONS · PROMETHEUS</span><h2 id="pg-monitoring-title">PostgreSQL Monitoring</h2><p>{{ providerLabel() }} exporter와 Kubernetes 볼륨·컨테이너 시계열을 최근 1시간 기준으로 표시합니다.</p></div>
         <div class="pg-monitoring-sync"><strong [class.ok]="svc.metricsState() === 'ok'">{{ statusLabel() }}</strong><small>{{ svc.metricsHint() }}</small><button class="btn btn-sm btn-outline" type="button" [disabled]="svc.busy()" (click)="svc.refresh()">{{ svc.busy() ? '갱신 중' : '새로고침' }}</button></div>
       </header>
 
@@ -49,15 +49,16 @@ type SeriesKey = Exclude<keyof PgMonitoringMetrics, 'labels'>;
     </section>
   `,
   styles: [`
-    .pg-monitoring { margin-top: .75rem; }
-    .pg-monitoring-head { display: flex; justify-content: space-between; gap: 1rem; align-items: end; padding: .9rem 1rem; color: #fff; background: #102a43; }
-    .pg-monitoring-head span { color: #78a9ff; font-size: .6rem; font-weight: 700; letter-spacing: .08em; }
-    .pg-monitoring-head h2 { margin: .15rem 0; color: #fff; font-size: 1.15rem; font-weight: 600; }
-    .pg-monitoring-head p { margin: 0; color: #d9e2ec; font-size: .7rem; }
+    .pg-monitoring { margin-top: 1rem; }
+    .pg-monitoring-head { display: flex; height: auto; min-height: 4.5rem; justify-content: space-between; gap: 1rem; align-items: center; padding: .75rem 1rem; color: #fff; background: #102a43; }
+    .pg-monitoring-title { min-width: 0; }
+    .pg-monitoring-head span { display: block; color: #78a9ff; font-size: .6rem; font-weight: 700; line-height: 1.25; letter-spacing: .08em; }
+    .pg-monitoring-head h2 { margin: .12rem 0 .18rem; color: #fff; font-size: 1.05rem; font-weight: 600; line-height: 1.3; }
+    .pg-monitoring-head p { margin: 0; color: #d9e2ec; font-size: .7rem; line-height: 1.35; }
     .pg-monitoring-sync { display: grid; grid-template-columns: 1fr auto; gap: .2rem .75rem; align-items: center; min-width: 20rem; text-align: right; }
     .pg-monitoring-sync strong { color: #ffb3a7; font-size: .68rem; } .pg-monitoring-sync strong.ok { color: #7ee2b8; }
     .pg-monitoring-sync small { color: #d9e2ec; font-size: .6rem; } .pg-monitoring-sync .btn { grid-column: 2; grid-row: 1 / span 2; margin: 0; }
-    .pg-monitoring-metrics { margin: .85rem 0; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); }
+    .pg-monitoring-metrics { margin: .85rem 0; grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: stretch; }
     .pg-monitoring-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
     .pg-monitoring-grid .card { min-width: 0; margin: 0; }
     .pg-monitoring-grid .card-header { display: flex; justify-content: space-between; min-height: 2.6rem; align-items: center; border-bottom: 1px solid #d7dcdf; font-size: .82rem; font-weight: 600; }
@@ -67,8 +68,10 @@ type SeriesKey = Exclude<keyof PgMonitoringMetrics, 'labels'>;
     .pg-monitoring-empty strong { color: #394b54; } .pg-monitoring-empty p { margin: .25rem 0 0; font-size: .66rem; }
     .pg-monitoring-source { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin-top: .8rem; padding: .65rem .8rem; border-left: 3px solid #0f62fe; color: #5b6971; background: #f5f9ff; font-size: .62rem; }
     .pg-monitoring-source b { color: #1b2a32; }
-    @media (max-width: 1050px) { .pg-monitoring-grid { grid-template-columns: 1fr; } }
-    @media (max-width: 720px) { .pg-monitoring-head { align-items: start; flex-direction: column; } .pg-monitoring-sync { min-width: 0; width: 100%; text-align: left; } }
+    @media (max-width: 1350px) { .pg-monitoring-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    @media (max-width: 1050px) { .pg-monitoring-grid { grid-template-columns: 1fr; } .pg-monitoring-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 720px) { .pg-monitoring-head { align-items: start; flex-direction: column; } .pg-monitoring-sync { min-width: 0; width: 100%; text-align: left; } .pg-monitoring-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 420px) { .pg-monitoring-metrics { grid-template-columns: 1fr; } }
   `],
 })
 export class PgMonitoringTab {
