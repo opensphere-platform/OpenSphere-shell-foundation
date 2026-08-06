@@ -145,6 +145,8 @@ test('PostgreSQL landing surface is namespace-first and exposes fleet as a secon
   assert.match(component, /PFSS PostgreSQL Fleet/);
   assert.match(component, /PostgreSQL 운영 컨텍스트/);
   assert.match(component, /aria-label="Namespace 선택"/);
+  assert.match(component, /\[selected\]="namespace === selectedNamespace\(\)"/);
+  assert.match(component, /\[selected\]="cluster\.id === fleet\.selectedId\(\)"/);
   assert.match(component, /namespaceClusters\(\)\.length > 1/);
   assert.match(component, /이 Namespace에는 PostgreSQL이 없습니다/);
   assert.match(component, /\*ngIf="!fleet\.busy\(\) && !selectedContextCluster\(\)"[\s\S]*PostgreSQL 설치/);
