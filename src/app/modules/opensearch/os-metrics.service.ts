@@ -161,7 +161,7 @@ export class OsMetricsService {
       this.series.set(mergedSeries);
       this.nodeSeries.set(nodeSeries);
       this.state.set('ok');
-      this.hint.set(`OpenSearch exporter · Prometheus · 최근 1시간 · 5분 간격 · 구성 ${nodeSeries.filter((node) => node.configured).length} · 합류 ${nodeSeries.filter((node) => node.joined).length} · metrics ${nodeSeries.filter((node) => node.metricsObserved).length}`);
+      this.hint.set(`OpenSearch exporter · Prometheus · 최근 1시간 · 고정 5분 슬롯 · 과거값 유지 · 구성 ${nodeSeries.filter((node) => node.configured).length} · 합류 ${nodeSeries.filter((node) => node.joined).length} · metrics ${nodeSeries.filter((node) => node.metricsObserved).length}`);
     } catch (error) {
       const message = String((error as Error)?.message ?? error);
       if (this.series().timestamps.length) {
