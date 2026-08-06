@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: opensphere-platform/OpenSphere-plugin-samba-ad
-          path: deps/OpenSphere-plugin-samba-ad
+          path: deps/OpenSphere-plugin-directory
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -35,7 +35,7 @@ jobs:
       - run: npm run verify:manual
       - run: npm run verify:surface
         env:
-          SAMBA_PLUGIN_ROOT: deps/OpenSphere-plugin-samba-ad
+          DIRECTORY_PLUGIN_ROOT: deps/OpenSphere-plugin-directory
       - run: npm run verify:plugin-catalog
       - run: npm run test:plugin-runtime
       - run: npm run test:server-auth
@@ -425,7 +425,7 @@ jobs:
             verify_custom_image "$id" "$image" "$digest" plugin
           done < <(jq -r '.plugins[] | [.id,("opensphere-plugin-" + .id)] | @tsv' plugins/catalog.json)
 
-          samba_repo='opensphere-plugin-samba-ad'
+          samba_repo='opensphere-plugin-directory'
           samba_digest="$(crane digest "$REGISTRY/$samba_repo:ga")"
           samba_revision="$(crane config "$REGISTRY/$samba_repo@$samba_digest" | jq -r '.config.Labels["io.opensphere.source-revision"] // "separately-governed"')"
           jq --arg repository "$samba_repo" --arg image "$REGISTRY/$samba_repo@$samba_digest" --arg revision "$samba_revision" \

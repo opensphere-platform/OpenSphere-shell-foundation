@@ -189,7 +189,7 @@ export class FoundationEnginesComponent {
       wiring: 'FoundationModel/identity가 HA Core, CNPG DB/Role, TLS, ServiceMonitor와 감사 관측을 선언형으로 관리한다.',
     },
     {
-      id: 'samba', name: 'Samba AD', provider: 'samba.org', version: 'AD DC', logo: 'samba-server', mono: 'AD', detail: true, module: 'addc',
+      id: 'samba', name: 'Directory Providers', provider: 'managed or external', version: 'AD / LDAP', logo: 'samba-server', mono: 'AD', detail: true, module: 'directory',
       category: 'identity', impl: 'real', liveKey: '',
       role: '사원 디렉터리 capability. Keycloak이 LDAP federation으로 연결한다.',
       wiring: 'Samba-AD plugin 화면에서 domain, LDAP, workload 상태를 관리한다.',

@@ -304,9 +304,9 @@ export class AppComponent implements OnInit, OnDestroy {
     return p ? p.name : id;
   }
 
-  /** Package/engine identity는 samba로 유지하되 사용자 주소 공간은 AD DC 의미의 addc를 사용한다. */
-  routeId(pluginId: string): string { return pluginId === 'samba' ? 'addc' : pluginId; }
-  private pluginId(routeId: string): string { return routeId === 'addc' ? 'samba' : routeId; }
+  /** Foundation engine identity는 samba로 유지하되 사용자 주소 공간은 공급자 중립적인 directory를 사용한다. */
+  routeId(pluginId: string): string { return pluginId === 'samba' ? 'directory' : pluginId; }
+  private pluginId(routeId: string): string { return routeId === 'directory' ? 'samba' : routeId; }
 
   /** 그룹 라벨(모듈이 어느 capability 그룹인지) — breadcrumb 3단용. */
   private groupLabel(id: string): string | null {
