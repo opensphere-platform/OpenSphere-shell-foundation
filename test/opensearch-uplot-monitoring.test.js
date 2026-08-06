@@ -44,6 +44,22 @@ test('background refresh preserves the current chart state and last-known data',
   assert.match(metrics, /마지막 정상 시계열 유지/);
 });
 
+test('Foundation delegates page scrolling to Main Shell and charts can expand in place', () => {
+  const app = read('src/app/app.component.ts');
+  const plugin = read('src/app/modules/data-engine/data-engine-plugin.component.ts');
+  const monitoring = read('src/app/modules/opensearch/tabs/os-monitoring.tab.ts');
+  assert.match(app, /\.cm-nav \{ min-height: 100%/);
+  assert.match(app, /\.os-content \{ min-width: 0; min-height: 0; overflow: visible/);
+  assert.doesNotMatch(app, /\.os-content \{[^}]*overflow: auto/);
+  assert.match(plugin, /de-work de-work--flush/);
+  assert.match(monitoring, /expandedChart = signal/);
+  assert.match(monitoring, /toggleChart\('resources'\)/);
+  assert.match(monitoring, /\[height\]="chartHeight/);
+  assert.match(monitoring, /grid-column:1\/-1/);
+  assert.match(monitoring, /\.osm-chart-card\{padding:9px 10px 4px!important\}/);
+  assert.match(monitoring, /\.osm-chart-head\{[^}]*margin-bottom:0/);
+});
+
 test('the PFSS deep link hydrates the monitoring tab on initial render', () => {
   const plugin = read('src/app/modules/data-engine/data-engine-plugin.component.ts');
   assert.match(plugin, /ngOnInit\(\):void\{this\.hydrateRouteTab\(\)/);
