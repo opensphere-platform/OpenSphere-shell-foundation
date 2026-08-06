@@ -146,13 +146,17 @@ const css = read('src/app/app.component.css');
 assert.match(css, /\.pgp-page-frame \.pfs-plugin-logo \{ border: 0; border-radius: 0;/, '장식 없는 공통 logo header 규칙 누락');
 assert.match(css, /\.pgp-page-frame \.pfs-plugin-tabs/, 'header와 tabs의 단일 frame 규칙 누락');
 
-// Monitoring 시계열은 PFSS 시각화 규칙인 Carbon Charts를 직접 사용한다.
-// PostgreSQL의 데이터·레이아웃 선례는 재사용하되 Chart.js PgChart로 회귀하지 않는다.
+// OpenSearch Monitoring은 고빈도 시계열 갱신과 동적 node topology에 맞춰 uPlot을 사용한다.
+// 다른 PFSS 화면의 Carbon Charts 계약은 유지하며 Chart.js PgChart로 회귀하지 않는다.
 const openSearchMonitoring = read('src/app/modules/opensearch/tabs/os-monitoring.tab.ts');
 const opaMonitoring = `${read('src/app/modules/identity/opa.component.ts')}\n${read('src/app/modules/identity/opa.service.ts')}`;
 const carbonLineChart = read('src/app/shared/carbon-line-chart.ts');
-assert.match(openSearchMonitoring, /CarbonLineChart/, 'OpenSearch Monitoring: Carbon Charts adapter 누락');
-assert.match(openSearchMonitoring, /os-carbon-line-chart/, 'OpenSearch Monitoring: Carbon line chart surface 누락');
+const uPlotLineChart = read('src/app/shared/uplot-line-chart.ts');
+assert.match(openSearchMonitoring, /UPlotLineChart/, 'OpenSearch Monitoring: uPlot adapter 누락');
+assert.match(openSearchMonitoring, /os-uplot-line-chart/, 'OpenSearch Monitoring: uPlot line chart surface 누락');
+assert.doesNotMatch(openSearchMonitoring, /CarbonLineChart|os-carbon-line-chart/, 'OpenSearch Monitoring: Carbon Charts 사용 금지');
+assert.match(uPlotLineChart, /from 'uplot'/, 'uPlot 공식 package import 누락');
+assert.match(uPlotLineChart, /\.setData\(data, true\)/, 'uPlot in-place data update 누락');
 assert.doesNotMatch(openSearchMonitoring, /PgChart|pg-chart/, 'OpenSearch Monitoring: Chart.js PgChart 사용 금지');
 assert.match(opaMonitoring, /CarbonLineChart/, 'OPA Monitoring: Carbon Charts adapter 누락');
 assert.match(opaMonitoring, /os-carbon-line-chart/, 'OPA Monitoring: Carbon line chart surface 누락');

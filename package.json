@@ -15,6 +15,7 @@
     "test:plugin-runtime": "node --test tools/plugin-runtime.test.mjs",
     "test:server-auth": "node --test test/server-auth.test.js",
     "test:platform-delivery": "node --test test/platform-delivery.test.js",
+    "test:opensearch-monitoring": "node --test test/opensearch-uplot-monitoring.test.js",
     "test:postgres-admin": "node --test test/postgres-admin.test.js",
     "package:plugin": "node tools/package-foundation-plugin.mjs"
   },
@@ -48,6 +49,7 @@
     "pg": "8.22.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.6.0",
+    "uplot": "^1.6.32",
     "ws": "^8.18.0",
     "zone.js": "~0.15.0"
   },
