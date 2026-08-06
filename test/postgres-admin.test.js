@@ -60,6 +60,12 @@ test('PostgreSQL admin defaults to the canonical StackGres target and bounded qu
   assert.equal(POSTGRES_DEFAULT_ID, 'stackgres:opensphere-foundation:pgc-foundation-data-pg');
   assert.equal(POSTGRES_ADMIN.rowLimit, 500);
   assert.equal(POSTGRES_ADMIN.statementTimeoutMs, 10000);
+  const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+  const poolOptions = server.match(/const pool = new Pool\(\{([\s\S]*?)\n    \}\);/)?.[1] || '';
+  assert.doesNotMatch(poolOptions, /statement_timeout\s*:/,
+    'PgBouncer must not receive statement_timeout as a startup parameter');
+  assert.match(server, /BEGIN TRANSACTION READ ONLY[\s\S]*SET LOCAL statement_timeout/,
+    'read-only queries must retain a transaction-local execution timeout');
 });
 
 test('PostgreSQL fleet accepts only provider-qualified cluster identities', () => {

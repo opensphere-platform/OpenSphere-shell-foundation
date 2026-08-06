@@ -332,7 +332,10 @@ async function postgresPool(clusterId, database, actor) {
   if (!pgPools.has(key)) {
     const pool = new Pool({
       ...credentials, database: db, max: 4, idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000, statement_timeout: POSTGRES_ADMIN.statementTimeoutMs,
+      // StackGres exposes PostgreSQL through PgBouncer.  node-postgres serializes
+      // statement_timeout as a startup parameter, but PgBouncer rejects it.
+      // Query Tool applies the same bound transaction-locally after BEGIN below.
+      connectionTimeoutMillis: 5000,
       application_name: 'opensphere-foundation-db-admin',
     });
     pool.on('error', (error) => console.warn(`[postgres-admin] idle pool error database=${db}: ${error.message}`));
