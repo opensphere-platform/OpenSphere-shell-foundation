@@ -81,12 +81,24 @@ const DEFAULT_FORM: PgForm = {
     <section class="pgp-page-frame" aria-label="PostgreSQL plugin 개요와 메뉴">
       <osp-plugin-page-header [model]="headerModel()" headingId="postgres-plugin-title" />
       <div class="pgp-context-bar" aria-label="PostgreSQL 운영 컨텍스트">
-        <div class="pgp-context-copy"><span class="vl-eyebrow">Current context</span><strong>{{ selectedNamespace() }}<ng-container *ngIf="selectedContextCluster() as cluster"> / {{ cluster.displayName }}</ng-container></strong></div>
-        <label class="pgp-context-field"><span>Namespace</span><select aria-label="Namespace 선택" [value]="selectedNamespace()" (change)="selectNamespaceFromEvent($event)"><option *ngFor="let namespace of fleet.namespaces()" [value]="namespace" [selected]="namespace === selectedNamespace()">{{ namespace }}</option><option value="__new__">+ Namespace 추가</option></select></label>
-        <label class="pgp-context-field" *ngIf="namespaceClusters().length > 1"><span>PostgreSQL cluster</span><select aria-label="PostgreSQL cluster 선택" [value]="fleet.selectedId()" (change)="selectClusterFromEvent($event)"><option *ngFor="let cluster of namespaceClusters()" [value]="cluster.id" [selected]="cluster.id === fleet.selectedId()">{{ cluster.displayName }} · {{ cluster.provider }}</option></select></label>
-        <span class="label" *ngIf="namespaceClusters().length === 1">1 cluster</span>
-        <span class="label label-warning" *ngIf="!fleet.busy() && namespaceClusters().length === 0">Not installed</span>
-        <button class="btn btn-sm" type="button" (click)="refreshFleet()" [disabled]="fleet.busy()">새로고침</button>
+        <div class="pgp-context-controls">
+          <clr-select-container class="pgp-context-field">
+            <label>Namespace</label>
+            <select clrSelect name="postgresNamespace" aria-label="Namespace 선택"
+              [ngModel]="selectedNamespace()" (ngModelChange)="selectNamespace($event)">
+              <option *ngFor="let namespace of fleet.namespaces()" [ngValue]="namespace">{{ namespace }}</option>
+            </select>
+          </clr-select-container>
+          <button class="btn btn-sm btn-link pgp-context-action" type="button" (click)="openNamespaceModal()">Namespace 추가</button>
+          <clr-select-container class="pgp-context-field" *ngIf="namespaceClusters().length > 1">
+            <label>PostgreSQL 인스턴스</label>
+            <select clrSelect name="postgresInstance" aria-label="PostgreSQL 인스턴스 선택"
+              [ngModel]="fleet.selectedId()" (ngModelChange)="selectFleetCluster($event)">
+              <option *ngFor="let cluster of namespaceClusters()" [ngValue]="cluster.id">{{ cluster.displayName }} · {{ cluster.provider }}</option>
+            </select>
+          </clr-select-container>
+          <button class="btn btn-sm pgp-context-refresh" type="button" (click)="refreshFleet()" [disabled]="fleet.busy()">새로고침</button>
+        </div>
       </div>
       <osp-plugin-tabs [tabs]="tabsForUi()" [active]="tab()" ariaLabel="PostgreSQL plugin 메뉴" (selected)="openTab($event)" />
     </section>
@@ -331,21 +343,18 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
   back(): void { this.vr.setModule('modules'); }
   openControlPlane(): void { this.vr.setModule('control-plane'); }
   openTab(id: string): void { this.vr.setTab(id); }
-  selectNamespaceFromEvent(event: Event): void {
-    const select = event.target as HTMLSelectElement;
-    if (select.value === '__new__') {
-      this.namespaceError = '';
-      this.namespaceModalOpen = true;
-      select.value = this.selectedNamespace();
-      return;
-    }
-    this.selectedNamespace.set(select.value);
+  selectNamespace(namespace: string): void {
+    if (!namespace || namespace === this.selectedNamespace()) return;
+    this.selectedNamespace.set(namespace);
     this.claimResult = '';
     this.syncNamespaceContext();
     const current = this.tabs.find((item) => item.id === this.tab());
     if ((current?.requiresCluster && !this.hasSelectedCluster()) || (current?.legacyOnly && !this.selectedIsLegacy())) this.openTab('overview');
   }
-  selectClusterFromEvent(event: Event): void { this.selectFleetCluster((event.target as HTMLSelectElement).value); }
+  openNamespaceModal(): void {
+    this.namespaceError = '';
+    this.namespaceModalOpen = true;
+  }
   selectFleetCluster(id: string): void {
     const selected = this.fleet.clusters().find((cluster) => cluster.id === id);
     if (!selected) return;
@@ -432,7 +441,7 @@ export class PostgresPluginComponent implements OnInit, OnDestroy {
       name: 'PostgreSQL', logo: LOGO, capability: 'data.sql.postgres',
       description: 'Namespace를 먼저 선택하고 전용 StackGres PostgreSQL을 설치·관리·모니터링하는 Foundation service',
       lifecycle: this.lifecycleLabel(), lifecycleClass: this.lifecyclePill(), versionLabel: 'PostgreSQL',
-      version: cluster?.postgresVersion || '—', profile: cluster?.plan || cluster?.mode || 'Not installed', namespace: this.selectedNamespace(),
+      version: cluster?.postgresVersion || '—', profile: cluster?.plan || cluster?.mode || 'Not installed',
     };
   }
   tabsForUi(): PluginPageTab[] {

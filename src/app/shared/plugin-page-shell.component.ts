@@ -14,7 +14,7 @@ export interface PluginPageHeaderModel {
   versionLabel?: string;
   version: string;
   profile: string;
-  namespace: string;
+  namespace?: string;
 }
 
 export interface PluginPageTab {
@@ -93,7 +93,7 @@ export function pfsPluginTabs(domainLabel: string): PluginPageTab[] {
         <div><dt>Lifecycle</dt><dd><span class="label" [ngClass]="model.lifecycleClass || 'label-warning'">{{ model.lifecycle }}</span></dd></div>
         <div><dt>{{ model.versionLabel || 'Version' }}</dt><dd>{{ model.version }}</dd></div>
         <div><dt>Profile</dt><dd>{{ model.profile }}</dd></div>
-        <div><dt>Namespace</dt><dd class="os-mono">{{ model.namespace }}</dd></div>
+        <div *ngIf="model.namespace"><dt>Namespace</dt><dd class="os-mono">{{ model.namespace }}</dd></div>
       </dl>
     </section>
   `,
