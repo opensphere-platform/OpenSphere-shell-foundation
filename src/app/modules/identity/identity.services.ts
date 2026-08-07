@@ -1,7 +1,7 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { apiBase, FND_NS, hostFetch } from '../../api-base';
 import { PollBackoff } from '../../shared/poll-backoff';
-import { Phase, State, phaseClass } from '../postgres/cnpg.types';
+import { Phase, State, phaseClass } from '../../shared/service-health';
 
 // Deployment 기반 워크로드 health 공통(Keycloak·Samba) — /api/k8s deployment+pods 도출. 폴러는 shell이 소유.
 // 2026-07-06(Samba-AD 편입): 워크로드 이름을 control-plane identity 번들 정본(foundation-identity-*)으로 정합.

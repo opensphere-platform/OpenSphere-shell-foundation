@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, ViewEncapsulation, computed, inject, signal } from '@angular/core';
 import { ClarityModule } from '@clr/angular';
-import { PostgresPluginComponent } from './modules/postgres/postgres-plugin.component';
 import { DataEnginePluginComponent } from './modules/data-engine/data-engine-plugin.component';
 import { PsmdbPluginComponent } from './modules/psmdb/psmdb-plugin.component';
 import { ValkeyPluginComponent } from './modules/valkey/valkey-plugin.component';
@@ -59,7 +58,7 @@ const CATALOG_MODULES = new Set([
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, ClarityModule, CarbonIcon, PostgresPluginComponent, DataEnginePluginComponent, PsmdbPluginComponent, ValkeyPluginComponent, RustFSPluginComponent, KeycloakComponent, FoundationOverviewComponent, FoundationEnginesComponent, ControlPlaneComponent, FoundationDeliveryComponent, PluginOutletComponent],
+  imports: [CommonModule, ClarityModule, CarbonIcon, DataEnginePluginComponent, PsmdbPluginComponent, ValkeyPluginComponent, RustFSPluginComponent, KeycloakComponent, FoundationOverviewComponent, FoundationEnginesComponent, ControlPlaneComponent, FoundationDeliveryComponent, PluginOutletComponent],
   encapsulation: ViewEncapsulation.ShadowDom,
   styleUrls: ['./app.component.css'],
   styles: [`
@@ -162,7 +161,6 @@ const CATALOG_MODULES = new Set([
         <app-control-plane *ngIf="vr.module() === 'control-plane'"></app-control-plane>
         <app-foundation-delivery *ngIf="vr.module() === 'delivery' && !activePlugin()"></app-foundation-delivery>
         <app-plugin-outlet *ngIf="activePlugin() as p" [plugin]="p"></app-plugin-outlet>
-        <app-postgres-plugin *ngIf="vr.module() === 'postgres' && !activePlugin()"></app-postgres-plugin>
         <app-psmdb-plugin *ngIf="vr.module() === 'psmdb' && !activePlugin()"></app-psmdb-plugin>
         <app-valkey-plugin *ngIf="vr.module() === 'valkey' && !activePlugin()"></app-valkey-plugin>
         <app-rustfs-plugin *ngIf="vr.module() === 'rustfs' && !activePlugin()"></app-rustfs-plugin>
@@ -264,11 +262,6 @@ export class AppComponent implements OnInit, OnDestroy {
   activePlugin(): HostedPlugin | undefined {
     const route = this.vr.module();
     const id = this.pluginId(route === 'delivery' ? this.vr.tab() : route);
-    // PostgreSQL is activated and governed as a child UIPluginPackage, but its
-    // operational surface is the Foundation-native Fleet/PGAdmin workspace.
-    // The generic child runtime is only a package fallback and must not replace
-    // the richer host-owned database administration UI after activation.
-    if (id === 'postgres') return undefined;
     const p = this.reg.all.find((x) => x.id === id && !!x.activation);
     if (!p) { return undefined; }
     return p.activation?.element && customElements.get(p.activation.element) ? p : undefined;
@@ -277,7 +270,7 @@ export class AppComponent implements OnInit, OnDestroy {
   inactivePlugin(): HostedPlugin | undefined {
     const route = this.vr.module();
     const id = this.pluginId(route === 'delivery' ? this.vr.tab() : route);
-    if (id !== 'samba') return undefined;
+    if (!['samba', 'postgres'].includes(id)) return undefined;
     const plugin = this.reg.all.find((item) => item.id === id && !!item.activation);
     if (!plugin?.activation?.element || customElements.get(plugin.activation.element)) return undefined;
     return plugin;

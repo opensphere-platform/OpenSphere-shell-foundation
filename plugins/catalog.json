@@ -4,20 +4,6 @@
   "version": "0.1.0",
   "plugins": [
     {
-      "id": "postgres",
-      "displayName": "PostgreSQL",
-      "sector": "data",
-      "capability": "data.sql.postgres",
-      "route": "/pfss/postgres",
-      "element": "osp-foundation-postgres",
-      "logo": "https://logos.opl.io.kr/i/postgresql",
-      "description": "StackGres 기반 PostgreSQL 18 관계형 데이터베이스 Fleet을 설치·운영하고 PostgresClaim을 제공한다.",
-      "manual": "postgresql-operations.ko.md",
-      "officialDocs": "https://www.postgresql.org/docs/19/",
-      "installer": "foundation-model",
-      "operands": ["stackgres-operator:1.19.0", "postgresql:18"]
-    },
-    {
       "id": "percona-psmdb",
       "displayName": "Percona PSMDB",
       "sector": "data",

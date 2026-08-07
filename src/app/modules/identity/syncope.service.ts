@@ -1,6 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { apiBase, FND_NS, hostFetch } from '../../api-base';
-import { Phase, State, phaseClass } from '../postgres/cnpg.types';
+import { Phase, State, phaseClass } from '../../shared/service-health';
 import { WorkloadHealth } from './identity.services';
 
 export interface SyncopeMetricSeries {

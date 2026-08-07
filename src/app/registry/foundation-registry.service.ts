@@ -1,13 +1,12 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { FOUNDATION_PLUGINS } from './plugins.registry';
 import { HostedPlugin, PluginHealth } from './hosted-plugin';
-import { CnpgService } from '../modules/postgres/cnpg.service';
 import { OsService } from '../modules/opensearch/os.service';
 import { RsService } from '../modules/rustfs/rs.service';
 import { KcService, SambaService, WorkloadHealth } from '../modules/identity/identity.services';
 import { OpaService } from '../modules/identity/opa.service';
 import { SyncopeService } from '../modules/identity/syncope.service';
-import { PILL, Phase } from '../modules/postgres/cnpg.types';
+import { PILL, Phase } from '../shared/service-health';
 import { apiBase, hostFetch, writeHeaders } from '../api-base';
 
 // FoundationModel CR(foundation.opensphere.io/v1alpha1, Cluster-scope) — 수명주기의 클러스터 정본.
@@ -121,7 +120,6 @@ export interface SyncopeInstallParameters {
 //     deploy/foundationmodels.yaml). 실패는 lastError로 노출(침묵 금지).
 @Injectable({ providedIn: 'root' })
 export class FoundationRegistryService {
-  private cnpg = inject(CnpgService);
   private os = inject(OsService);
   private rs = inject(RsService);
   private kc = inject(KcService);
@@ -327,7 +325,6 @@ export class FoundationRegistryService {
   // health 어댑터 — 두 이질 서비스를 PluginHealth로 통일. registry가 가리킨 곳에서 읽어 답한다.
   health(p: HostedPlugin): PluginHealth {
     switch (p.healthRef) {
-      case 'cnpg': return this.pgHealth();
       case 'os': return this.osHealth();
       case 'rustfs': return this.rsHealth();
       case 'data-engine': return this.declaredDataHealth(p);
@@ -358,20 +355,6 @@ export class FoundationRegistryService {
     };
   }
 
-  private pgHealth(): PluginHealth {
-    const ph = this.cnpg.phaseCls();
-    const st = this.cnpg.clusterState();
-    return {
-      phase: ph, pill: PILL[ph], state: st, ready: this.cnpg.allReady(),
-      label: this.healthLabel(ph, st),
-      metrics: [
-        { val: `${this.cnpg.readyN()}/${this.cnpg.totalN()}`, lab: 'Instances Ready' },
-        { val: shorten(this.cnpg.primary()), lab: 'Primary' },
-        { val: 'PG ' + this.cnpg.pgMajor(), lab: 'Engine' },
-        { val: this.cnpg.storage(), lab: 'Storage' },
-      ],
-    };
-  }
   private osHealth(): PluginHealth {
     const ph = this.os.statusPhase();
     const st = this.os.healthState();
@@ -427,14 +410,12 @@ export class FoundationRegistryService {
   // 폴러 라이프사이클 = shell 소유. foundation subShell 마운트/언마운트에 묶임(app.component).
   // S4: FoundationModel CR hydrate 폴러(15s)도 여기에 귀속 — health 폴러와 동일 수명.
   start(): void {
-    this.cnpg.start(); this.os.start(); this.rs.start(); this.kc.start(); this.samba.start(); this.opa.start(); this.syncope.start();
+    this.os.start(); this.rs.start(); this.kc.start(); this.samba.start(); this.opa.start(); this.syncope.start();
     void this.refreshModels();
     if (!this.fmTimer) { this.fmTimer = setInterval(() => void this.refreshModels(), 15000); }
   }
   stop(): void {
-    this.cnpg.stop(); this.os.stop(); this.rs.stop(); this.kc.stop(); this.samba.stop(); this.opa.stop(); this.syncope.stop();
+    this.os.stop(); this.rs.stop(); this.kc.stop(); this.samba.stop(); this.opa.stop(); this.syncope.stop();
     if (this.fmTimer) { clearInterval(this.fmTimer); this.fmTimer = undefined; }
   }
 }
-
-function shorten(s: string): string { return s ? s.replace('foundation-data-pg-', '#') : '—'; }

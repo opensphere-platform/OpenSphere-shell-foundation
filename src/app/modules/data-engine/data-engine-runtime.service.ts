@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { apiBase, hostFetch } from '../../api-base';
-import { State } from '../postgres/cnpg.types';
+import { State } from '../../shared/service-health';
 import { DATA_ENGINE_SPECS, DataEngineId } from './data-engine.spec';
 
 export interface DataEngineRuntime {

@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
-import { PILL, TlItem } from '../cnpg.types';
+import { PILL, TlItem } from '../service-health';
 
 // conditions·events 공용 — cls(ok/warn/bad/'')로 상태 라벨 색.
 @Component({

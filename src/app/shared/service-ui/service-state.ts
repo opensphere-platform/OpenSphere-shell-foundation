@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { ClarityModule } from '@clr/angular';
-import { State } from '../cnpg.types';
+import { State } from '../service-health';
 
 // 6-state 단일 렌더 — loading/empty/noperm/nocrd/error/ok. styles 없음(ShadowDom 전역 클래스 수령).
 // empty(info 중립)와 error(danger+재시도)를 시각 분리 — '0건=정상'을 에러처럼 보이게 하지 않는다.

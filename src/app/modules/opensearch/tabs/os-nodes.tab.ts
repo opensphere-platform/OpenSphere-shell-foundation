@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { OsService } from '../os.service';
 import { OsNodeCard } from '../ui/os-node-card';
-import { PgState } from '../../postgres/ui/pg-state';
+import { PgState } from '../../../shared/service-ui/service-state';
 
 @Component({
   selector: 'os-nodes',

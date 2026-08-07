@@ -32,4 +32,4 @@ export function phaseClass(phase: string, allReady: boolean): Phase {
   return allReady ? 'ok' : 'warn';
 }
 
-export { age } from '../claims.types';
+export { age } from '../modules/claims.types';

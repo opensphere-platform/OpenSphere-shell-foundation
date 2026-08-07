@@ -1,7 +1,7 @@
 // OpenSearch 콘솔 타입 — PG 콘솔의 generic kit(Phase/State/PILL/phaseClass/age/TlItem) 재사용 + OS 전용 유틸.
-import { Phase } from '../postgres/cnpg.types';
-export { PILL, phaseClass, age } from '../postgres/cnpg.types';
-export type { Phase, State, TlItem } from '../postgres/cnpg.types';
+import { Phase } from '../../shared/service-health';
+export { PILL, phaseClass, age } from '../../shared/service-health';
+export type { Phase, State, TlItem } from '../../shared/service-health';
 
 // 바이트 → 사람 읽는 단위.
 export function fmtBytes(n: number | string | undefined): string {

@@ -2,9 +2,9 @@ import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Output, computed, inject } from '@angular/core';
 import { OsService } from '../os.service';
 import { TlItem, fmtBytes } from '../os.types';
-import { PgMetric } from '../../postgres/ui/pg-metric';
-import { PgTimeline } from '../../postgres/ui/pg-timeline';
-import { PgState } from '../../postgres/ui/pg-state';
+import { PgMetric } from '../../../shared/service-ui/service-metric';
+import { PgTimeline } from '../../../shared/service-ui/service-timeline';
+import { PgState } from '../../../shared/service-ui/service-state';
 
 @Component({
   selector: 'os-overview',

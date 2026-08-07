@@ -1,6 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { apiBase, hostFetch, writeHeaders } from '../../api-base';
-import { State } from '../../modules/postgres/cnpg.types';
+import { State } from '../../shared/service-health';
 
 export interface OtelVersion { chart: string; app: string; note?: string }
 

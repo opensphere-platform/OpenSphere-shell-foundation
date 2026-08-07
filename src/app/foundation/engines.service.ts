@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { apiBase } from '../api-base';
-import { State } from '../modules/postgres/cnpg.types';
+import { State } from '../shared/service-health';
 
 // PFS 모듈 카탈로그의 라이브 상태.
 // 정본(CONSTITUTION-0004 §2.0.4): PFS core는 identity/data/ai-substrate/comm/observability/backup.

@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { Phase } from '../cnpg.types';
+import { Phase } from '../service-health';
 
 // metric 타일 — 값+라벨+상태 도트(+선택 클릭 점프). 값은 Cluster.status 파생만(라이브 메트릭 프록시 없음).
 @Component({

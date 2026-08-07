@@ -2,8 +2,8 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject } from '@angular/core';
 import { ClarityModule } from '@clr/angular';
 import { OsService } from '../os.service';
-import { PgState } from '../../postgres/ui/pg-state';
-import { PgKv } from '../../postgres/ui/pg-kv';
+import { PgState } from '../../../shared/service-ui/service-state';
+import { PgKv } from '../../../shared/service-ui/service-kv';
 
 @Component({
   selector: 'os-tasks',

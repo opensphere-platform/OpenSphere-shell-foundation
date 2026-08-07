@@ -2,8 +2,8 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { ClarityModule } from '@clr/angular';
 import { RsService } from './rs.service';
-import { PILL } from '../postgres/cnpg.types';
-import { PgMetric } from '../postgres/ui/pg-metric';
+import { PILL } from '../../shared/service-health';
+import { PgMetric } from '../../shared/service-ui/service-metric';
 
 // RustFS(S3 object storage) 콘솔 — 상태·용량·소비점(Clarity). 폴러 라이프사이클은 shell이 소유.
 // 버킷 관리는 RustFS 자체 콘솔(:9001)/S3 클라이언트, 선언형 BucketClaim은 후속.

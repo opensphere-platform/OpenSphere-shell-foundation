@@ -24,7 +24,6 @@ assert.match(dockerfile, /org\.opencontainers\.image\.version=\$OS_RELEASE_TAG/,
 assert.match(dockerfile, new RegExp(`io\\.opensphere\\.compatibility-version="${packageVersion.replaceAll('.', '\\.')}"`), 'OCI 호환 버전이 package.json과 다릅니다.');
 
 const surfaces = [
-  ['PostgreSQL', 'src/app/modules/postgres/postgres-plugin.component.ts'],
   ['Data engines', 'src/app/modules/data-engine/data-engine-plugin.component.ts'],
   ['Keycloak', 'src/app/modules/identity/keycloak.component.ts'],
   ['OPA', 'src/app/modules/identity/opa.component.ts'],
@@ -170,7 +169,7 @@ assert.match(css, /@import '@carbon\/charts\/styles\.css'/, 'Shadow DOM Carbon C
 
 const entry = read('ui-shell/ui-shell.plugin.js');
 const manualCount = (entry.match(/\['[^']+-operations-ko'/g) || []).length;
-assert.equal(manualCount, 21, '모든 Foundation plugin/module의 Manual 등록이 필요합니다.');
+assert.equal(manualCount, 20, 'Foundation이 직접 제공하는 module의 Manual 등록이 필요합니다.');
 
 // Foundation membership is also a namespace ownership contract. Operators and
 // delivery control planes may retain their own namespaces, but every PFS member
@@ -183,7 +182,7 @@ const otelComponent = read('src/app/foundation/otel/otel.component.ts');
 const engineService = read('src/app/foundation/engines.service.ts');
 assert.match(otelService, /const NS = 'opensphere-foundation'/, 'OpenTelemetry operand namespace가 Foundation에 수렴하지 않았습니다.');
 assert.doesNotMatch(`${otelService}\n${otelComponent}\n${engineService}`, /opensphere-otel-collector/, '폐기된 OpenTelemetry 전용 namespace 참조가 남아 있습니다.');
-for (const file of ['src/app/modules/data-engine/data-engine.spec.ts', 'src/app/modules/postgres/postgres-plugin.component.ts']) {
+for (const file of ['src/app/modules/data-engine/data-engine.spec.ts']) {
   assert.match(read(file), /opensphere-foundation/, `${file}: Foundation member namespace 누락`);
 }
 assert.match(read('src/app/api-base.ts'), /FND_NS = 'opensphere-foundation'/, 'Foundation API namespace 정본 누락');

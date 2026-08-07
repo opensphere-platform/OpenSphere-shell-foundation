@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { OsService } from '../os.service';
 import { fmtBytes, osHealthPhase, PILL } from '../os.types';
-import { PgState } from '../../postgres/ui/pg-state';
+import { PgState } from '../../../shared/service-ui/service-state';
 
 @Component({
   selector: 'os-indices',

@@ -7,7 +7,7 @@ import { apiBase, hostFetch } from '../../api-base';
 import { DataEngineInstallParameters, FoundationRegistryService } from '../../registry/foundation-registry.service';
 import { PluginPageHeaderComponent, PluginPageHeaderModel, PluginPageTab, PluginTabsComponent } from '../../shared/plugin-page-shell.component';
 import { ViewRouter } from '../../view-router';
-import { PgChart } from '../postgres/ui/pg-chart';
+import { PgChart } from '../../shared/service-ui/service-chart';
 import { DATA_ENGINE_SPECS } from '../data-engine/data-engine.spec';
 import { ValkeyKeyRow, ValkeyService } from './valkey.service';
 import ArrowLeft16 from '@carbon/icons/es/arrow--left/16';

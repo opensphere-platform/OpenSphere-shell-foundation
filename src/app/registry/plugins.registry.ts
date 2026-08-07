@@ -12,7 +12,7 @@ export const FOUNDATION_PLUGINS: HostedPlugin[] = [
     capability: 'data.sql.postgres', capabilityLabel: '관계형 DB',
     desc: 'StackGres 기반 관계형 데이터베이스 Fleet. PostgresClaim으로 전용 SGCluster와 DB를 발급.',
     consumePoint: 'PostgresClaim status.bindingRef',
-    healthRef: 'cnpg', model: 'data', view: { module: 'postgres' },
+    healthRef: 'declared', model: 'data', view: { module: 'postgres' },
     surface: PG_SURFACE,
     activation: { packageId: 'postgres', element: 'osp-foundation-postgres' },
   },

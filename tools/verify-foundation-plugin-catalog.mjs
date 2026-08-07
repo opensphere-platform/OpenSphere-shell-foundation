@@ -5,12 +5,11 @@ const root = resolve(import.meta.dirname, '..');
 const catalog = JSON.parse(readFileSync(resolve(root, 'plugins/catalog.json'), 'utf8'));
 const mirrors = JSON.parse(readFileSync(resolve(root, 'oci/mirrors.json'), 'utf8'));
 if (catalog.schemaVersion !== 1 || catalog.hostRef !== 'foundation') throw new Error('invalid Foundation plugin catalog header');
-if (!Array.isArray(catalog.plugins) || catalog.plugins.length !== 20) throw new Error(`expected 20 catalog plugins excluding separately governed samba-ad, got ${catalog.plugins?.length}`);
+if (!Array.isArray(catalog.plugins) || catalog.plugins.length !== 19) throw new Error(`expected 19 Foundation-bundled plugins; PostgreSQL and directory are separately governed, got ${catalog.plugins?.length}`);
 const ids = new Set();
 const elements = new Set();
 const referencedMirrors = new Set();
 const expectedRoutes = new Map([
-  ['postgres', '/pfss/postgres'],
   ['percona-psmdb', '/pfss/psmdb'],
   ['valkey', '/pfss/valkey'],
   ['opensearch', '/pfss/opensearch'],
@@ -59,4 +58,4 @@ for (const mirror of mirrors.images ?? []) {
 }
 const missing = [...referencedMirrors].filter((name) => !mirrorNames.has(name));
 if (missing.length) throw new Error(`Foundation plugin operands missing from mirror catalog: ${missing.join(', ')}`);
-process.stdout.write(`verified ${catalog.plugins.length} independent Foundation plugins, ${referencedMirrors.size} operand mirrors, plus separately governed samba-ad\n`);
+process.stdout.write(`verified ${catalog.plugins.length} Foundation-bundled plugins and ${referencedMirrors.size} operand mirrors; PostgreSQL and directory are separately governed\n`);
