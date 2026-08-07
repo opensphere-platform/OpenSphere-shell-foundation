@@ -24,7 +24,6 @@ assert.match(dockerfile, /org\.opencontainers\.image\.version=\$OS_RELEASE_TAG/,
 assert.match(dockerfile, new RegExp(`io\\.opensphere\\.compatibility-version="${packageVersion.replaceAll('.', '\\.')}"`), 'OCI 호환 버전이 package.json과 다릅니다.');
 
 const surfaces = [
-  ['Data engines', 'src/app/modules/data-engine/data-engine-plugin.component.ts'],
   ['Keycloak', 'src/app/modules/identity/keycloak.component.ts'],
   ['OPA', 'src/app/modules/identity/opa.component.ts'],
   ['Roadmap modules', 'src/app/foundation/roadmap-module.component.ts'],
@@ -80,7 +79,7 @@ const outlet = read('src/app/foundation/plugin-outlet.component.ts');
 assert.match(outlet, /미설치·검증 실패를 의미하지 않습니다/, 'child plugin 적재 지연을 설치·검증 실패로 오인하지 않는 안내가 없습니다.');
 assert.match(outlet, /Registry 활성화와 digest·manifest signature·permission의 실제 판정/, 'child plugin의 실제 Activated·검증 판정 확인 경로가 없습니다.');
 assert.match(outlet, /href="\/manage\/extensions"/, 'child plugin 실패 복구 경로가 없습니다.');
-for (const [, file] of surfaces.slice(1)) {
+for (const [, file] of surfaces) {
   assert.match(read(file), /pfsPluginTabs/, `${file}: 공통 11탭 helper 미사용`);
 }
 
@@ -147,18 +146,8 @@ const css = read('src/app/app.component.css');
 assert.match(css, /\.pgp-page-frame \.pfs-plugin-logo \{ border: 0; border-radius: 0;/, '장식 없는 공통 logo header 규칙 누락');
 assert.match(css, /\.pgp-page-frame \.pfs-plugin-tabs/, 'header와 tabs의 단일 frame 규칙 누락');
 
-// OpenSearch Monitoring은 고빈도 시계열 갱신과 동적 node topology에 맞춰 uPlot을 사용한다.
-// 다른 PFSS 화면의 Carbon Charts 계약은 유지하며 Chart.js PgChart로 회귀하지 않는다.
-const openSearchMonitoring = read('src/app/modules/opensearch/tabs/os-monitoring.tab.ts');
 const opaMonitoring = `${read('src/app/modules/identity/opa.component.ts')}\n${read('src/app/modules/identity/opa.service.ts')}`;
 const carbonLineChart = read('src/app/shared/carbon-line-chart.ts');
-const uPlotLineChart = read('src/app/shared/uplot-line-chart.ts');
-assert.match(openSearchMonitoring, /UPlotLineChart/, 'OpenSearch Monitoring: uPlot adapter 누락');
-assert.match(openSearchMonitoring, /os-uplot-line-chart/, 'OpenSearch Monitoring: uPlot line chart surface 누락');
-assert.doesNotMatch(openSearchMonitoring, /CarbonLineChart|os-carbon-line-chart/, 'OpenSearch Monitoring: Carbon Charts 사용 금지');
-assert.match(uPlotLineChart, /from 'uplot'/, 'uPlot 공식 package import 누락');
-assert.match(uPlotLineChart, /\.setData\(data, !retainedRange\)/, 'uPlot 확대 범위를 보존하는 in-place data update 누락');
-assert.doesNotMatch(openSearchMonitoring, /PgChart|pg-chart/, 'OpenSearch Monitoring: Chart.js PgChart 사용 금지');
 assert.match(opaMonitoring, /CarbonLineChart/, 'OPA Monitoring: Carbon Charts adapter 누락');
 assert.match(opaMonitoring, /os-carbon-line-chart/, 'OPA Monitoring: Carbon line chart surface 누락');
 assert.match(opaMonitoring, /step: '60'/, 'OPA Monitoring: PostgreSQL 기준 60초 query_range step 누락');
@@ -169,7 +158,7 @@ assert.match(css, /@import '@carbon\/charts\/styles\.css'/, 'Shadow DOM Carbon C
 
 const entry = read('ui-shell/ui-shell.plugin.js');
 const manualCount = (entry.match(/\['[^']+-operations-ko'/g) || []).length;
-assert.equal(manualCount, 20, 'Foundation이 직접 제공하는 module의 Manual 등록이 필요합니다.');
+assert.equal(manualCount, 19, 'Foundation이 직접 제공하는 module의 Manual 등록이 필요합니다.');
 
 // Foundation membership is also a namespace ownership contract. Operators and
 // delivery control planes may retain their own namespaces, but every PFS member

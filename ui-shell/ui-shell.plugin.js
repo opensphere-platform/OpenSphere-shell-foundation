@@ -11,7 +11,6 @@ let activeContext;
 const FOUNDATION_MANUALS = [
   ['percona-psmdb-operations-ko', 'OpenSphere Percona PSMDB 플러그인 설치 및 운영 안내서', 'percona-psmdb-operations.ko.md', '/pfss/psmdb', ['mongodb', 'percona', 'data']],
   ['valkey-operations-ko', 'OpenSphere Valkey 플러그인 설치 및 운영 안내서', 'valkey-operations.ko.md', '/pfss/valkey', ['valkey', 'cache', 'data']],
-  ['opensearch-operations-ko', 'OpenSphere OpenSearch 플러그인 설치 및 운영 안내서', 'opensearch-operations.ko.md', '/pfss/opensearch', ['opensearch', 'search', 'vector', 'data']],
   ['rustfs-operations-ko', 'OpenSphere RustFS 플러그인 설치 및 운영 안내서', 'rustfs-operations.ko.md', '/pfss/rustfs', ['rustfs', 's3', 'object-storage', 'data']],
   ['keycloak-operations-ko', 'OpenSphere Keycloak 플러그인 설치 및 운영 안내서', 'keycloak-operations.ko.md', '/pfss/keycloak', ['keycloak', 'oidc', 'identity']],
   ['directory-operations-ko', 'OpenSphere Directory Services 설치 및 운영 안내서', 'directory-operations.ko.md', '/pfss/directory', ['directory', 'samba', 'windows-ad', 'ldap', 'identity']],

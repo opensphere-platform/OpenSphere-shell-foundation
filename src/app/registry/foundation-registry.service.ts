@@ -1,7 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { FOUNDATION_PLUGINS } from './plugins.registry';
 import { HostedPlugin, PluginHealth } from './hosted-plugin';
-import { OsService } from '../modules/opensearch/os.service';
 import { RsService } from '../modules/rustfs/rs.service';
 import { KcService, SambaService, WorkloadHealth } from '../modules/identity/identity.services';
 import { OpaService } from '../modules/identity/opa.service';
@@ -108,7 +107,8 @@ export interface SyncopeInstallParameters {
 }
 
 // Foundation(host)의 plugin 거버넌스 — 등록(registry)·상태(health 어댑트)·수명주기(enable/disable)·모니터링 소유.
-// ⚠️ health는 fetch하지 않는다. healthRef가 가리키는 기존 폴러(CnpgService/OsService)의 computed를 소비만 한다.
+// ⚠️ host가 직접 소유하는 workload health만 기존 폴러의 computed를 소비한다.
+// 독립 child plugin의 상세 health는 해당 plugin runtime이 소유하고 host registry는 선언 상태만 투영한다.
 // 폴러 라이프사이클을 이 서비스(=shell)가 소유 → overview/admin/콘솔 어디서나 health가 라이브(콘솔이 stop하지 않음).
 //
 // 감사 시정 S4 → 2026-07-06 의미론 정정: FoundationModel CR은 **도메인(모델) 단위**(name==model — reconciler
@@ -120,7 +120,6 @@ export interface SyncopeInstallParameters {
 //     deploy/foundationmodels.yaml). 실패는 lastError로 노출(침묵 금지).
 @Injectable({ providedIn: 'root' })
 export class FoundationRegistryService {
-  private os = inject(OsService);
   private rs = inject(RsService);
   private kc = inject(KcService);
   private samba = inject(SambaService);
@@ -255,7 +254,7 @@ export class FoundationRegistryService {
   }
 
   /** 비-PG data engine 설치·운영 선언. 엔진별 옵션은 dataEngines.<id> 아래 격리해 상호 덮어쓰지 않는다. */
-  async configureDataEngine(id: 'psmdb' | 'valkey' | 'rustfs' | 'opensearch', parameters: DataEngineInstallParameters): Promise<boolean> {
+  async configureDataEngine(id: 'psmdb' | 'valkey' | 'rustfs', parameters: DataEngineInstallParameters): Promise<boolean> {
     this.lastError.set('');
     const domain = 'data';
     const specPatch = {
@@ -325,7 +324,6 @@ export class FoundationRegistryService {
   // health 어댑터 — 두 이질 서비스를 PluginHealth로 통일. registry가 가리킨 곳에서 읽어 답한다.
   health(p: HostedPlugin): PluginHealth {
     switch (p.healthRef) {
-      case 'os': return this.osHealth();
       case 'rustfs': return this.rsHealth();
       case 'data-engine': return this.declaredDataHealth(p);
       case 'keycloak': return this.wlHealth(this.kc, [{ val: 'PG', lab: 'Database' }, { val: ':8080', lab: 'HTTP' }]);
@@ -355,20 +353,6 @@ export class FoundationRegistryService {
     };
   }
 
-  private osHealth(): PluginHealth {
-    const ph = this.os.statusPhase();
-    const st = this.os.healthState();
-    return {
-      phase: ph, pill: PILL[ph], state: st, ready: ph === 'ok',
-      label: this.healthLabel(ph, st),
-      metrics: [
-        { val: this.os.nodeCount(), lab: 'Nodes' },
-        { val: this.os.shardPct() + '%', lab: 'Active Shards' },
-        { val: this.os.indexCount(), lab: 'Indices' },
-        { val: this.os.docCount(), lab: 'Docs' },
-      ],
-    };
-  }
   private rsHealth(): PluginHealth {
     const ph = this.rs.phaseCls();
     const st = this.rs.state();
@@ -410,12 +394,12 @@ export class FoundationRegistryService {
   // 폴러 라이프사이클 = shell 소유. foundation subShell 마운트/언마운트에 묶임(app.component).
   // S4: FoundationModel CR hydrate 폴러(15s)도 여기에 귀속 — health 폴러와 동일 수명.
   start(): void {
-    this.os.start(); this.rs.start(); this.kc.start(); this.samba.start(); this.opa.start(); this.syncope.start();
+    this.rs.start(); this.kc.start(); this.samba.start(); this.opa.start(); this.syncope.start();
     void this.refreshModels();
     if (!this.fmTimer) { this.fmTimer = setInterval(() => void this.refreshModels(), 15000); }
   }
   stop(): void {
-    this.os.stop(); this.rs.stop(); this.kc.stop(); this.samba.stop(); this.opa.stop(); this.syncope.stop();
+    this.rs.stop(); this.kc.stop(); this.samba.stop(); this.opa.stop(); this.syncope.stop();
     if (this.fmTimer) { clearInterval(this.fmTimer); this.fmTimer = undefined; }
   }
 }

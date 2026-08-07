@@ -16,7 +16,7 @@ assert.deepEqual(manifest.contributions.manual, {
 });
 assert.match(entry, /ctx\.extensions\.manual\.contribute/);
 assert.match(entry, /path: `plugins\/manual\/\$\{file\}`/);
-assert.equal(manualFiles.length, 20, 'Foundation이 직접 제공하는 module은 자체 한글 안내서를 가져야 합니다.');
+assert.equal(manualFiles.length, 19, 'Foundation이 직접 제공하는 module은 자체 한글 안내서를 가져야 합니다.');
 for (const file of manualFiles) {
   assert.match(entry, new RegExp(file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${file}가 runtime contribution 목록에 없습니다.`);
   const content = read(`ui-shell/manual/${file}`);

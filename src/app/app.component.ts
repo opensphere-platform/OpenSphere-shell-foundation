@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, ViewEncapsulation, computed, inject, signal } from '@angular/core';
 import { ClarityModule } from '@clr/angular';
-import { DataEnginePluginComponent } from './modules/data-engine/data-engine-plugin.component';
 import { PsmdbPluginComponent } from './modules/psmdb/psmdb-plugin.component';
 import { ValkeyPluginComponent } from './modules/valkey/valkey-plugin.component';
 import { RustFSPluginComponent } from './modules/rustfs/rustfs-plugin.component';
@@ -58,7 +57,7 @@ const CATALOG_MODULES = new Set([
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, ClarityModule, CarbonIcon, DataEnginePluginComponent, PsmdbPluginComponent, ValkeyPluginComponent, RustFSPluginComponent, KeycloakComponent, FoundationOverviewComponent, FoundationEnginesComponent, ControlPlaneComponent, FoundationDeliveryComponent, PluginOutletComponent],
+  imports: [CommonModule, ClarityModule, CarbonIcon, PsmdbPluginComponent, ValkeyPluginComponent, RustFSPluginComponent, KeycloakComponent, FoundationOverviewComponent, FoundationEnginesComponent, ControlPlaneComponent, FoundationDeliveryComponent, PluginOutletComponent],
   encapsulation: ViewEncapsulation.ShadowDom,
   styleUrls: ['./app.component.css'],
   styles: [`
@@ -164,7 +163,6 @@ const CATALOG_MODULES = new Set([
         <app-psmdb-plugin *ngIf="vr.module() === 'psmdb' && !activePlugin()"></app-psmdb-plugin>
         <app-valkey-plugin *ngIf="vr.module() === 'valkey' && !activePlugin()"></app-valkey-plugin>
         <app-rustfs-plugin *ngIf="vr.module() === 'rustfs' && !activePlugin()"></app-rustfs-plugin>
-        <app-data-engine-plugin *ngIf="vr.module() === 'opensearch' && !activePlugin()" engine="opensearch"></app-data-engine-plugin>
         <app-keycloak *ngIf="vr.module() === 'keycloak' && !activePlugin()"></app-keycloak>
         <section *ngIf="inactivePlugin() as p" class="pfs-module-management" aria-labelledby="pfs-module-management-title">
           <div class="pfs-module-management__heading">

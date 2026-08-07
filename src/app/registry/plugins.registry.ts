@@ -39,7 +39,7 @@ export const FOUNDATION_PLUGINS: HostedPlugin[] = [
     capability: 'data.search.opensearch', capabilityLabel: '검색/인덱스',
     desc: '공용 검색·인덱스 capability · OpenSearch. Help Center 종합검색의 백본.',
     consumePoint: 'opensphere-search.opensphere-foundation.svc:9200',
-    healthRef: 'os', model: 'data', view: { module: 'opensearch' },
+    healthRef: 'declared', model: 'data', view: { module: 'opensearch' },
     surface: PG_SURFACE,
     activation: { packageId: 'opensearch', element: 'osp-foundation-opensearch' },
   },

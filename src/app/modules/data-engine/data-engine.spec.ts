@@ -1,4 +1,4 @@
-export type DataEngineId = 'psmdb' | 'valkey' | 'rustfs' | 'opensearch';
+export type DataEngineId = 'psmdb' | 'valkey' | 'rustfs';
 export type WorkloadKind = 'psmdb' | 'statefulset';
 
 export interface EngineVersion {
@@ -103,25 +103,5 @@ export const DATA_ENGINE_SPECS: Record<DataEngineId, DataEngineSpec> = {
       { name: 'Console', description: '관리 UI는 기본 ClusterIP; 공개 시 OIDC ingress' },
     ],
     hostPrerequisites: ['RWO PersistentVolume', '현재 관리 계약은 단일 노드만 지원'],
-  },
-  opensearch: {
-    id: 'opensearch', name: 'OpenSearch', capability: 'data.search.opensearch', provider: 'Foundation Control Plane',
-    logo: `${LOGO}/opensearch`, docs: 'https://docs.opensearch.org/latest/', manualId: 'opensearch-operations-ko',
-    description: '검색·벡터·인덱스 capability. 노드/샤드/인덱스/템플릿/스냅샷과 소비 계약을 운영합니다.',
-    workloadKind: 'statefulset', workloadName: 'opensphere-search', namespace: 'opensphere-foundation',
-    endpoint: 'opensphere-search.opensphere-foundation.svc', port: 9200,
-    versions: [
-      { value: '3.7.0', label: 'OpenSearch 3.7.0 · stable', channel: 'stable' },
-      { value: '2.19.6', label: 'OpenSearch 2.19.6 · maintained LTS line', channel: 'stable' },
-      { value: '2.17.0', label: 'OpenSearch 2.17.0 · legacy', channel: 'candidate' },
-    ],
-    defaultVersion: '3.7.0', defaultStorage: '50Gi', defaultReplicas: 1,
-    claims: [{ name: 'OpenSearchIndexClaim', status: 'planned', description: '앱별 index/template/role 발급 계약' }],
-    policies: [
-      { name: 'Heap', description: '메모리 limit의 약 50%로 Xms/Xmx 고정' },
-      { name: 'Snapshots', description: 'S3 repository + restore drill' },
-      { name: 'Security', description: '운영 profile에서 TLS/auth 필수' },
-    ],
-    hostPrerequisites: ['vm.max_map_count ≥ 262144', 'RWO PersistentVolume', '운영 profile은 전용 data node 권장'],
   },
 };

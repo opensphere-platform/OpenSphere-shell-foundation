@@ -19,9 +19,9 @@ const EMPTY = (): DataEngineRuntime => ({ state: 'loading', resource: null, pods
 @Injectable({ providedIn: 'root' })
 export class DataEngineRuntimeService {
   readonly runtimes = signal<Record<DataEngineId, DataEngineRuntime>>({
-    psmdb: EMPTY(), valkey: EMPTY(), rustfs: EMPTY(), opensearch: EMPTY(),
+    psmdb: EMPTY(), valkey: EMPTY(), rustfs: EMPTY(),
   });
-  readonly busy = signal<Record<DataEngineId, boolean>>({ psmdb: false, valkey: false, rustfs: false, opensearch: false });
+  readonly busy = signal<Record<DataEngineId, boolean>>({ psmdb: false, valkey: false, rustfs: false });
   private timer: ReturnType<typeof setInterval> | undefined;
   private refs = 0;
 

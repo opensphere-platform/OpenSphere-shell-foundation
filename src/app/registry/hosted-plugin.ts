@@ -13,7 +13,7 @@ export interface HostedPlugin {
   capabilityLabel: string;        // '관계형 DB' 등 — 칩 표시용
   desc: string;
   consumePoint: string;           // 백킹서비스 소비 엔드포인트(이 plugin이 '제공하는 것')
-  healthRef: 'data-engine' | 'os' | 'rustfs' | 'keycloak' | 'samba' | 'opa' | 'syncope' | 'declared'; // ⬅ probe() 대체. 어느 서비스가 이 plugin의 health 진실인가
+  healthRef: 'data-engine' | 'rustfs' | 'keycloak' | 'samba' | 'opa' | 'syncope' | 'declared'; // 어느 authority가 host summary의 health를 제공하는가
   model: 'data' | 'identity' | 'ai' | 'communication' | 'observability' | 'backup' | 'delivery';
   dataEngineId?: 'psmdb' | 'valkey';
   surface: PluginSurfaceContract; // 모든 plugin은 PostgreSQL 수준 관리 표면 계약을 충족해야 등록 가능
@@ -26,8 +26,8 @@ export interface HostedPlugin {
   };
 }
 
-// 두 데이터 서비스(CnpgService/OsService)의 이질적 signal을 통일한 health 투영.
-// registry가 계산하지 않는다 — service가 답하고 registry-service가 어댑트한다.
+// Host-owned workload의 이질적 signal을 통일한 health 투영. 독립 child plugin의
+// 상세 health는 plugin runtime이 소유하며 host에는 선언 상태만 투영한다.
 export interface PluginHealth {
   phase: Phase;          // 'ok' | 'warn' | 'bad' | '' (기존 PILL 팔레트)
   pill: string;          // PILL[phase]

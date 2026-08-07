@@ -32,20 +32,6 @@
       "operands": ["mirror/valkey:edge"]
     },
     {
-      "id": "opensearch",
-      "displayName": "OpenSearch",
-      "sector": "data",
-      "capability": "data.search.opensearch",
-      "route": "/pfss/opensearch",
-      "element": "osp-foundation-opensearch",
-      "logo": "https://logos.opl.io.kr/i/opensearch",
-      "description": "검색·벡터 인덱스와 Help Center 통합검색 저장 계층을 설치·운영한다.",
-      "manual": "opensearch-operations.ko.md",
-      "officialDocs": "https://docs.opensearch.org/latest/",
-      "installer": "foundation-model",
-      "operands": ["mirror/opensearch:edge"]
-    },
-    {
       "id": "rustfs",
       "displayName": "RustFS",
       "sector": "data",
