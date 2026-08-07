@@ -34,7 +34,7 @@ spec:
           args:
             - --managed-namespace=opensphere-foundation
             # image-source: ghcr-mirror(ok) origin=otel/opentelemetry-collector-contrib:0.111.0
-            - --collector-image=ghcr.io/opensphere-platform/mirror/opentelemetry-collector-contrib@sha256:a2a52e43c1a80aa94120ad78c2db68780eb90e6d11c8db5b3ce2f6a0cc6b5029
+            - --collector-image=ghcr.io/opensphere-platform/mirror-opentelemetry-collector-contrib@sha256:a2a52e43c1a80aa94120ad78c2db68780eb90e6d11c8db5b3ce2f6a0cc6b5029
             # image-source: ghcr-mirror(ok) origin=quay.io/keycloak/keycloak:26.0
             - --keycloak-image=ghcr.io/opensphere-platform/mirror/keycloak@sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858
             - --psmdb-image=ghcr.io/opensphere-platform/mirror/percona-server-mongodb@sha256:53f89c001997627554e6afc0feb5906209ba109f4f98c62f2ca8456c214af60c
