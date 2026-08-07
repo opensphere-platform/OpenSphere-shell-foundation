@@ -35,6 +35,7 @@ type config struct {
 	collectorImage      string
 	keycloakImage       string
 	keycloakPgImage     string // 이전 배포 계약 호환용. Keycloak plugin 소유 전환 후 신규 bundle에서는 미사용.
+	pgImage             string // 이전 PostgreSQL operand 배포 계약 호환용. 현재 PostgreSQL plugin이 lifecycle을 소유.
 	sambaImage          string // (deprecated 2026-07-06) samba operand는 plugin이 소유 — 미사용, arg 호환 위해 잔존
 	sambaPluginSvc      string // samba operand 선언 제공 plugin svc(self-contained) — GET /operand/manifests
 	pgbouncerImage      string // 이전 PostgreSQL 배포 계약 호환용. 현재 StackGres가 pooling lifecycle을 소유.
@@ -81,6 +82,7 @@ func main() {
 	flag.StringVar(&cfg.collectorImage, "collector-image", "ghcr.io/opensphere-platform/mirror/opentelemetry-collector-contrib:0.111.0", "observability collector operand 이미지(GHCR 미러, origin=otel/opentelemetry-collector-contrib:0.111.0)")
 	flag.StringVar(&cfg.keycloakImage, "keycloak-image", "ghcr.io/opensphere-platform/mirror/keycloak:26.0", "identity Keycloak operand 이미지(GHCR 미러, origin=quay.io/keycloak/keycloak:26.0)")
 	flag.StringVar(&cfg.keycloakPgImage, "keycloak-pg-image", "", "(compatibility) 이전 Keycloak PostgreSQL image 인자를 수용합니다")
+	flag.StringVar(&cfg.pgImage, "pg-image", "", "(compatibility) 이전 PostgreSQL operand image 인자를 수용합니다")
 	flag.StringVar(&cfg.sambaImage, "samba-image", "ghcr.io/opensphere-platform/mirror/samba-domain:20260701025204", "(deprecated) samba operand는 plugin이 소유·렌더 — 이 플래그는 미사용(arg 호환)")
 	flag.StringVar(&cfg.sambaPluginSvc, "samba-plugin-svc", "directory.opensphere-console.svc:8080", "directory plugin이 제공하는 Samba operand 선언 서비스(self-contained, GET /operand/manifests)")
 	flag.StringVar(&cfg.pgbouncerImage, "pgbouncer-image", "", "(compatibility) 이전 PgBouncer image 인자를 수용합니다")
