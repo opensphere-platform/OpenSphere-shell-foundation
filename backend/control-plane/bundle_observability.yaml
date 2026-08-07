@@ -61,6 +61,8 @@ spec:
       labels: { app: foundation-observability-collector }
     spec:
       serviceAccountName: foundation-observability-collector
+      imagePullSecrets:
+        - name: opensphere-ghcr-pull
       securityContext: { runAsNonRoot: true }
       containers:
         - name: collector

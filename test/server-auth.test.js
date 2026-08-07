@@ -52,6 +52,11 @@ test('Foundation control plane preserves deployed CLI compatibility while adding
   }
 });
 
+test('Foundation observability operand authenticates to the governed GHCR mirror', () => {
+  const bundle = fs.readFileSync(path.join(__dirname, '..', 'backend', 'control-plane', 'bundle_observability.yaml'), 'utf8');
+  assert.match(bundle, /imagePullSecrets:\s*\n\s*- name: opensphere-ghcr-pull/);
+});
+
 test('Foundation delegates Console identity validation to the Supabase authority', async () => {
   let call;
   const actor = await verifySupabaseToken('supabase-access-token', async (url, init) => {
