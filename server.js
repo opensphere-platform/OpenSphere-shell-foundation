@@ -81,6 +81,12 @@ const PG_COLUMN_TYPES = Object.freeze(new Set([
   'timestamp', 'timestamp with time zone', 'uuid', 'varchar(255)',
 ]));
 const PG_DEFAULTS = Object.freeze(new Set(['', 'now()', 'gen_random_uuid()', 'true', 'false']));
+const POSTGRES_PROFILE_KINDS = Object.freeze({
+  instance: Object.freeze({ apiVersion: 'stackgres.io/v1', apiKind: 'SGInstanceProfile', resource: 'sginstanceprofiles' }),
+  postgres: Object.freeze({ apiVersion: 'stackgres.io/v1', apiKind: 'SGPostgresConfig', resource: 'sgpgconfigs' }),
+  pooling: Object.freeze({ apiVersion: 'stackgres.io/v1', apiKind: 'SGPoolingConfig', resource: 'sgpoolconfigs' }),
+  objectStorage: Object.freeze({ apiVersion: 'stackgres.io/v1beta1', apiKind: 'SGObjectStorage', resource: 'sgobjectstorages' }),
+});
 const pgPools = new Map();
 const pgCredentialCache = new Map();
 const POSTGRES_DEFAULT_ID = 'stackgres:' + FND_NS + ':' + POSTGRES_ADMIN.cluster;
@@ -277,6 +283,362 @@ async function postgresFleetNamespaces(req, res) {
     return jsonRes(res, created.status === 409 ? 200 : 201, { accepted: true, created: created.status !== 409, namespace: name });
   } catch (e) {
     if (actor && req.method === 'POST') await publishFoundationAudit(actor, 'postgres-namespace-create', 'Namespace', 'failed', e.msg || e.message || String(e)).catch(() => {});
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 400, { error: e.msg || e.message || String(e) });
+  }
+}
+
+function postgresProfileKind(value) {
+  const kind = String(value || '').trim();
+  if (!Object.hasOwn(POSTGRES_PROFILE_KINDS, kind)) throw { code: 400, msg: 'profile kind must be instance, postgres, pooling, or objectStorage' };
+  return { kind, ...POSTGRES_PROFILE_KINDS[kind] };
+}
+function profileObject(value, field) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw { code: 400, msg: `${field} must be an object` };
+  return value;
+}
+function profileOnlyKeys(value, allowed, field) {
+  const extra = Object.keys(profileObject(value, field)).filter((key) => !allowed.includes(key));
+  if (extra.length) throw { code: 400, msg: `${field} has unsupported fields: ${extra.join(', ')}` };
+}
+function resourceQuantity(value, field) {
+  const quantity = String(value || '').trim();
+  if (!/^[0-9]+(?:\.[0-9]+)?(?:m|Ki|Mi|Gi|Ti|Pi|Ei)?$/.test(quantity)) throw { code: 400, msg: `${field} must be a Kubernetes resource quantity` };
+  return quantity;
+}
+function sanitizeResourceLimit(value, field) {
+  profileOnlyKeys(value, ['cpu', 'memory', 'hugePages'], field);
+  const result = {};
+  if (value.cpu !== undefined) result.cpu = resourceQuantity(value.cpu, `${field}.cpu`);
+  if (value.memory !== undefined) result.memory = resourceQuantity(value.memory, `${field}.memory`);
+  if (value.hugePages !== undefined) {
+    profileOnlyKeys(value.hugePages, ['hugepages-1Gi', 'hugepages-2Mi'], `${field}.hugePages`);
+    result.hugePages = {};
+    for (const key of Object.keys(value.hugePages)) result.hugePages[key] = resourceQuantity(value.hugePages[key], `${field}.hugePages.${key}`);
+  }
+  return result;
+}
+function sanitizeNamedResourceLimits(value, field, requestsOnly = false) {
+  const input = profileObject(value, field);
+  const result = {};
+  for (const [name, item] of Object.entries(input)) {
+    requireK8sName(name, `${field} name`);
+    if (requestsOnly) {
+      profileOnlyKeys(item, ['cpu', 'memory'], `${field}.${name}`);
+      result[name] = {};
+      if (item.cpu !== undefined) result[name].cpu = resourceQuantity(item.cpu, `${field}.${name}.cpu`);
+      if (item.memory !== undefined) result[name].memory = resourceQuantity(item.memory, `${field}.${name}.memory`);
+    } else result[name] = sanitizeResourceLimit(item, `${field}.${name}`);
+  }
+  return result;
+}
+function sanitizeInstanceProfileSpec(value) {
+  profileOnlyKeys(value, ['cpu', 'memory', 'hugePages', 'requests', 'containers', 'initContainers'], 'instance profile spec');
+  const input = profileObject(value, 'instance profile spec');
+  const spec = sanitizeResourceLimit({ cpu: input.cpu, memory: input.memory, hugePages: input.hugePages }, 'instance profile spec');
+  if (input.requests !== undefined) {
+    profileOnlyKeys(input.requests, ['cpu', 'memory', 'containers', 'initContainers'], 'instance profile spec.requests');
+    spec.requests = {};
+    if (input.requests.cpu !== undefined) spec.requests.cpu = resourceQuantity(input.requests.cpu, 'instance profile spec.requests.cpu');
+    if (input.requests.memory !== undefined) spec.requests.memory = resourceQuantity(input.requests.memory, 'instance profile spec.requests.memory');
+    if (input.requests.containers !== undefined) spec.requests.containers = sanitizeNamedResourceLimits(input.requests.containers, 'instance profile spec.requests.containers', true);
+    if (input.requests.initContainers !== undefined) spec.requests.initContainers = sanitizeNamedResourceLimits(input.requests.initContainers, 'instance profile spec.requests.initContainers', true);
+  }
+  if (input.containers !== undefined) spec.containers = sanitizeNamedResourceLimits(input.containers, 'instance profile spec.containers');
+  if (input.initContainers !== undefined) spec.initContainers = sanitizeNamedResourceLimits(input.initContainers, 'instance profile spec.initContainers');
+  if (!spec.cpu && !spec.memory) throw { code: 400, msg: 'instance profile requires cpu or memory limit' };
+  return spec;
+}
+function sanitizePostgresConfigSpec(value) {
+  profileOnlyKeys(value, ['postgresVersion', 'postgresql.conf'], 'PostgreSQL configuration spec');
+  const input = profileObject(value, 'PostgreSQL configuration spec');
+  const postgresVersion = String(input.postgresVersion || '').trim();
+  if (!/^\d+(?:\.\d+)?$/.test(postgresVersion)) throw { code: 400, msg: 'postgresVersion must be a supported major or minor version' };
+  const config = profileObject(input['postgresql.conf'], 'postgresql.conf');
+  if (Object.keys(config).length > 200) throw { code: 400, msg: 'postgresql.conf supports up to 200 parameters per profile' };
+  const sanitized = {};
+  for (const [key, raw] of Object.entries(config)) {
+    if (!/^[a-z][a-z0-9_.-]{0,62}$/i.test(key)) throw { code: 400, msg: `unsupported PostgreSQL parameter: ${key}` };
+    const parameter = String(raw ?? '').trim();
+    if (!parameter || parameter.length > 1024) throw { code: 400, msg: `invalid PostgreSQL parameter value: ${key}` };
+    sanitized[key] = parameter;
+  }
+  return { postgresVersion, 'postgresql.conf': sanitized };
+}
+function sanitizeScalarTree(value, field, depth = 0) {
+  if (depth > 6 || !value || typeof value !== 'object' || Array.isArray(value)) throw { code: 400, msg: `${field} must be a nested object` };
+  const output = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (!/^[A-Za-z0-9_.-]{1,80}$/.test(key)) throw { code: 400, msg: `unsupported ${field} key: ${key}` };
+    if (item !== null && typeof item === 'object') output[key] = sanitizeScalarTree(item, `${field}.${key}`, depth + 1);
+    else if (['string', 'number', 'boolean'].includes(typeof item) && String(item).length <= 1024) output[key] = item;
+    else throw { code: 400, msg: `invalid ${field}.${key}` };
+  }
+  return output;
+}
+function sanitizePoolingConfigSpec(value) {
+  profileOnlyKeys(value, ['pgBouncer'], 'pooling configuration spec');
+  const pgBouncer = profileObject(value.pgBouncer, 'pgBouncer');
+  profileOnlyKeys(pgBouncer, ['pgbouncer.ini'], 'pgBouncer');
+  return { pgBouncer: { 'pgbouncer.ini': sanitizeScalarTree(pgBouncer['pgbouncer.ini'], 'pgbouncer.ini') } };
+}
+function sanitizeSecretKeyRef(value, field) {
+  profileOnlyKeys(value, ['name', 'key'], field);
+  const input = profileObject(value, field);
+  return { name: requireK8sName(input.name, `${field}.name`), key: String(input.key || '').trim() || (() => { throw { code: 400, msg: `${field}.key is required` }; })() };
+}
+function sanitizeS3Credentials(value, field) {
+  profileOnlyKeys(value, ['secretKeySelectors'], field);
+  const selectors = profileObject(value.secretKeySelectors, `${field}.secretKeySelectors`);
+  profileOnlyKeys(selectors, ['accessKeyId', 'secretAccessKey'], `${field}.secretKeySelectors`);
+  return { secretKeySelectors: {
+    accessKeyId: sanitizeSecretKeyRef(selectors.accessKeyId, `${field}.secretKeySelectors.accessKeyId`),
+    secretAccessKey: sanitizeSecretKeyRef(selectors.secretAccessKey, `${field}.secretKeySelectors.secretAccessKey`),
+  } };
+}
+function sanitizeObjectStorageSpec(value) {
+  profileOnlyKeys(value, ['type', 's3', 's3Compatible'], 'object storage spec');
+  const input = profileObject(value, 'object storage spec');
+  const type = String(input.type || '').trim();
+  if (!['s3', 's3Compatible'].includes(type)) throw { code: 400, msg: 'object storage type must be s3 or s3Compatible' };
+  const config = profileObject(input[type], `object storage ${type}`);
+  const allowed = type === 's3'
+    ? ['bucket', 'region', 'storageClass', 'awsCredentials']
+    : ['bucket', 'endpoint', 'region', 'storageClass', 'enablePathStyleAddressing', 'awsCredentials'];
+  profileOnlyKeys(config, allowed, `object storage ${type}`);
+  const bucket = String(config.bucket || '').trim();
+  if (!bucket || bucket.length > 255) throw { code: 400, msg: `object storage ${type}.bucket is required` };
+  const output = { bucket, awsCredentials: sanitizeS3Credentials(config.awsCredentials, `object storage ${type}.awsCredentials`) };
+  for (const field of ['region', 'storageClass']) {
+    if (config[field] !== undefined && String(config[field]).trim()) output[field] = String(config[field]).trim();
+  }
+  if (type === 's3Compatible') {
+    if (config.endpoint !== undefined && String(config.endpoint).trim()) output.endpoint = String(config.endpoint).trim();
+    if (config.enablePathStyleAddressing !== undefined) output.enablePathStyleAddressing = !!config.enablePathStyleAddressing;
+  }
+  return { type, [type]: output };
+}
+function sanitizePostgresProfileSpec(kind, spec) {
+  if (kind === 'instance') return sanitizeInstanceProfileSpec(spec);
+  if (kind === 'postgres') return sanitizePostgresConfigSpec(spec);
+  if (kind === 'pooling') return sanitizePoolingConfigSpec(spec);
+  return sanitizeObjectStorageSpec(spec);
+}
+function profileReferenceCounts(clusters) {
+  const counts = new Map();
+  for (const cluster of clusters || []) {
+    const namespace = cluster?.metadata?.namespace || '';
+    const references = [
+      ['instance', cluster?.spec?.sgInstanceProfile],
+      ['postgres', cluster?.spec?.configurations?.sgPostgresConfig],
+      ['pooling', cluster?.spec?.configurations?.sgPoolingConfig],
+      ...((cluster?.spec?.configurations?.backups || []).map((backup) => ['objectStorage', backup?.sgObjectStorage])),
+    ];
+    for (const [kind, name] of references) {
+      if (!name) continue;
+      const key = `${namespace}/${kind}/${name}`;
+      const rows = counts.get(key) || [];
+      rows.push(cluster?.metadata?.name || '');
+      counts.set(key, rows);
+    }
+  }
+  return counts;
+}
+function profileSpecDiff(before, after, path = '', changes = []) {
+  const previous = before && typeof before === 'object' ? before : {};
+  const next = after && typeof after === 'object' ? after : {};
+  for (const key of [...new Set([...Object.keys(previous), ...Object.keys(next)])].sort()) {
+    const target = path ? `${path}.${key}` : key;
+    const a = previous[key]; const b = next[key];
+    if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b)) {
+      profileSpecDiff(a, b, target, changes);
+    } else if (JSON.stringify(a) !== JSON.stringify(b)) changes.push({ path: target, before: a ?? null, after: b ?? null });
+  }
+  return changes.slice(0, 100);
+}
+async function postgresProfiles(req, res, url) {
+  const namespace = requireK8sName(url.searchParams.get('namespace') || FND_NS, 'namespace');
+  if (req.method === 'GET') {
+    try {
+      const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
+      const [clusters, ...lists] = await Promise.all([
+        k8sJson('GET', `/apis/stackgres.io/v1/namespaces/${namespace}/sgclusters`, undefined, actor),
+        ...Object.entries(POSTGRES_PROFILE_KINDS).map(([, descriptor]) => k8sJson('GET', `/apis/${descriptor.apiVersion}/namespaces/${namespace}/${descriptor.resource}`, undefined, actor)),
+      ]);
+      if (!clusters.ok) throw { code: clusters.status, msg: 'StackGres cluster inventory unavailable: ' + k8sFailure(clusters) };
+      const counts = profileReferenceCounts(clusters.json?.items || []);
+      const profiles = [];
+      for (const [[kind, descriptor], result] of Object.entries(POSTGRES_PROFILE_KINDS).map((entry, index) => [entry, lists[index]])) {
+        if (!result.ok && result.status !== 404) throw { code: result.status, msg: `${descriptor.apiKind} inventory unavailable: ${k8sFailure(result)}` };
+        for (const item of result.json?.items || []) {
+          const name = item?.metadata?.name || '';
+          const consumers = counts.get(`${namespace}/${kind}/${name}`) || [];
+          profiles.push({ kind, apiKind: descriptor.apiKind, name, namespace, spec: item?.spec || {},
+            managed: item?.metadata?.labels?.['opensphere.io/managed-by'] === 'foundation-control-plane',
+            claimOwned: !!item?.metadata?.labels?.['provisioning.opensphere.io/postgres-claim'],
+            consumers, updatedAt: item?.metadata?.generation || 0, resourceVersion: item?.metadata?.resourceVersion || '' });
+        }
+      }
+      profiles.sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
+      return jsonRes(res, 200, { schema: 'foundation.postgres.profiles/v1alpha1', namespace, profiles, refreshedAt: new Date().toISOString() });
+    } catch (e) {
+      return jsonRes(res, typeof e.code === 'number' ? e.code : 502, { error: e.msg || e.message || String(e) });
+    }
+  }
+  let actor;
+  let body;
+  try {
+    actor = await foundationOwnerActor(req);
+    body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, req.method === 'DELETE'
+      ? ['namespace', 'kind', 'name', 'reason', 'confirm']
+      : ['namespace', 'kind', 'name', 'spec', 'reason', 'dryRun']);
+    const requestedNamespace = requireK8sName(body.namespace || namespace, 'namespace');
+    if (requestedNamespace !== namespace) throw { code: 400, msg: 'namespace query and request body must match' };
+    const descriptor = postgresProfileKind(body.kind);
+    const name = requireK8sName(body.name, 'profile name');
+    const target = `${descriptor.apiKind}/${requestedNamespace}/${name}`;
+    const reason = requireOwnerReason(body.reason);
+    const path = `/apis/${descriptor.apiVersion}/namespaces/${requestedNamespace}/${descriptor.resource}/${name}`;
+    const existing = await k8sJson('GET', path, undefined, actor);
+    if (existing.ok && existing.json?.metadata?.labels?.['provisioning.opensphere.io/postgres-claim']) {
+      throw { code: 409, msg: 'claim-owned profiles are reconciled with their PostgresClaim and cannot be edited in the Profile Catalog' };
+    }
+    if (req.method === 'DELETE') {
+      requireOwnerConfirm(body.confirm, name);
+      const clusterList = await k8sJson('GET', `/apis/stackgres.io/v1/namespaces/${requestedNamespace}/sgclusters`, undefined, actor);
+      if (!clusterList.ok) throw { code: clusterList.status, msg: 'StackGres cluster inventory unavailable: ' + k8sFailure(clusterList) };
+      const consumers = profileReferenceCounts(clusterList.json?.items || []).get(`${requestedNamespace}/${descriptor.kind}/${name}`) || [];
+      if (consumers.length) throw { code: 409, msg: `profile is referenced by: ${consumers.join(', ')}` };
+      if (!existing.ok) throw { code: existing.status, msg: k8sFailure(existing) };
+      await publishFoundationAudit(actor, 'postgres-profile-delete', target, 'attempt', reason);
+      const removed = await k8sJson('DELETE', path, undefined, actor);
+      if (!removed.ok) throw { code: removed.status, msg: k8sFailure(removed) };
+      await publishFoundationAudit(actor, 'postgres-profile-delete', target, 'accepted', reason);
+      return jsonRes(res, 200, { accepted: true, deleted: true, kind: descriptor.kind, namespace: requestedNamespace, name });
+    }
+    if (!['POST', 'PUT'].includes(req.method || '')) return jsonRes(res, 405, { error: 'method not allowed' });
+    const spec = sanitizePostgresProfileSpec(descriptor.kind, body.spec);
+    const object = { apiVersion: descriptor.apiVersion, kind: descriptor.apiKind, metadata: { name, namespace: requestedNamespace,
+      labels: { 'opensphere.io/managed-by': 'foundation-control-plane', 'opensphere.io/component': 'postgres-profile-catalog' } }, spec };
+    if (body.dryRun === true) {
+      const clusterList = await k8sJson('GET', `/apis/stackgres.io/v1/namespaces/${requestedNamespace}/sgclusters`, undefined, actor);
+      if (!clusterList.ok) throw { code: clusterList.status, msg: 'StackGres cluster inventory unavailable: ' + k8sFailure(clusterList) };
+      const consumers = profileReferenceCounts(clusterList.json?.items || []).get(`${requestedNamespace}/${descriptor.kind}/${name}`) || [];
+      return jsonRes(res, 200, {
+        accepted: true, dryRun: true, operation: existing.ok ? 'update' : 'create', resource: object,
+        changes: profileSpecDiff(existing.json?.spec || {}, spec),
+        impact: { consumers, restartReviewRequired: consumers.length > 0,
+          classification: descriptor.kind === 'postgres' ? 'PostgreSQL parameter별 reload 또는 restart 검토'
+            : descriptor.kind === 'instance' ? 'Pod resource 변경 · rolling restart 검토' : 'connection pool rolling update 검토', message: consumers.length
+          ? '참조 중인 클러스터에 영향을 줄 수 있습니다. 적용 후 StackGres 상태와 재시작 요구사항을 확인하세요.'
+          : '현재 참조하는 클러스터가 없습니다.' },
+      });
+    }
+    await publishFoundationAudit(actor, 'postgres-profile-apply', target, 'attempt', reason);
+    let saved;
+    if (existing.status === 404) saved = await k8sJson('POST', `/apis/${descriptor.apiVersion}/namespaces/${requestedNamespace}/${descriptor.resource}`, object, actor);
+    else if (existing.ok) {
+      object.metadata.resourceVersion = existing.json?.metadata?.resourceVersion;
+      saved = await k8sJson('PUT', path, object, actor);
+    } else throw { code: existing.status, msg: k8sFailure(existing) };
+    if (!saved.ok) throw { code: saved.status, msg: k8sFailure(saved) };
+    await publishFoundationAudit(actor, 'postgres-profile-apply', target, 'accepted', reason);
+    return jsonRes(res, existing.ok ? 200 : 201, { accepted: true, created: existing.status === 404, kind: descriptor.kind, namespace: requestedNamespace, name, resourceVersion: saved.json?.metadata?.resourceVersion || '' });
+  } catch (e) {
+    if (actor) await publishFoundationAudit(actor, 'postgres-profile-apply', 'StackGresProfile', 'failed', e.msg || e.message || String(e)).catch(() => {});
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 400, { error: e.msg || e.message || String(e) });
+  }
+}
+async function postgresOperator(req, res) {
+  if (req.method !== 'GET') return jsonRes(res, 405, { error: 'method not allowed' });
+  try {
+    const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
+    const [config, deployment] = await Promise.all([
+      k8sJson('GET', '/apis/stackgres.io/v1/namespaces/stackgres/sgconfigs/stackgres-operator', undefined, actor),
+      k8sJson('GET', '/apis/apps/v1/namespaces/stackgres/deployments/stackgres-operator', undefined, actor),
+    ]);
+    if (!config.ok) throw { code: config.status, msg: 'StackGres operator configuration unavailable: ' + k8sFailure(config) };
+    return jsonRes(res, 200, { schema: 'foundation.postgres.operator/v1alpha1', config: config.json,
+      deployment: deployment.ok ? deployment.json : null, refreshedAt: new Date().toISOString() });
+  } catch (e) {
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 502, { error: e.msg || e.message || String(e) });
+  }
+}
+function postgresOperationPlan(body) {
+  const target = parsePostgresClusterId(body.cluster || POSTGRES_DEFAULT_ID);
+  const operation = String(body.operation || '').trim();
+  const nameSuffix = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
+  const metadata = { name: `os-${target.name.slice(0, 42)}-${operation}-${nameSuffix}`.slice(0, 63), namespace: target.namespace,
+    labels: { 'opensphere.io/managed-by': 'foundation-control-plane', 'opensphere.io/component': 'postgres-operations' } };
+  if (operation === 'restart') return { target, operation, resource: { apiVersion: 'stackgres.io/v1', kind: 'SGDbOps', metadata,
+    spec: { sgCluster: target.name, op: 'restart', restart: { onlyPendingRestart: body.onlyPendingRestart === true } } } };
+  if (operation === 'vacuum') return { target, operation, resource: { apiVersion: 'stackgres.io/v1', kind: 'SGDbOps', metadata,
+    spec: { sgCluster: target.name, op: 'vacuum', vacuum: { analyze: body.analyze !== false, full: body.full === true, freeze: body.freeze === true } } } };
+  if (operation === 'repack') return { target, operation, resource: { apiVersion: 'stackgres.io/v1', kind: 'SGDbOps', metadata,
+    spec: { sgCluster: target.name, op: 'repack', repack: { noAnalyze: body.analyze === false, noKillBackend: body.noKillBackend === true } } } };
+  throw { code: 400, msg: 'operation must be restart, vacuum, or repack' };
+}
+async function postgresOperations(req, res, url) {
+  if (req.method === 'GET') {
+    try {
+      const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
+      const target = parsePostgresClusterId(url.searchParams.get('cluster') || POSTGRES_DEFAULT_ID);
+      const result = await k8sJson('GET', `/apis/stackgres.io/v1/namespaces/${target.namespace}/sgdbops`, undefined, actor);
+      if (!result.ok) throw { code: result.status, msg: 'StackGres operation inventory unavailable: ' + k8sFailure(result) };
+      const operations = (result.json?.items || []).filter((item) => item?.spec?.sgCluster === target.name).map((item) => ({
+        name: item?.metadata?.name || '', operation: item?.spec?.op || '', createdAt: item?.metadata?.creationTimestamp || '',
+        phase: item?.status?.opResult || item?.status?.phase || item?.status?.conditions?.find((condition) => condition.status === 'True')?.type || 'Pending',
+        status: item?.status || {},
+      })).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+      return jsonRes(res, 200, { schema: 'foundation.postgres.operations/v1alpha1', cluster: target.id, operations });
+    } catch (e) { return jsonRes(res, typeof e.code === 'number' ? e.code : 502, { error: e.msg || e.message || String(e) }); }
+  }
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  let actor;
+  try {
+    actor = await foundationOwnerActor(req);
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['cluster', 'operation', 'onlyPendingRestart', 'analyze', 'full', 'freeze', 'noKillBackend', 'reason', 'confirm', 'dryRun']);
+    const reason = requireOwnerReason(body.reason);
+    const plan = postgresOperationPlan(body);
+    requireOwnerConfirm(body.confirm, plan.target.name);
+    if (body.dryRun === true) return jsonRes(res, 200, { accepted: true, dryRun: true, resource: plan.resource,
+      impact: { classification: plan.operation === 'restart' ? '롤링 재시작' : '데이터 유지보수 작업', cluster: plan.target.id } });
+    await publishFoundationAudit(actor, 'postgres-operation', `${plan.target.namespace}/${plan.target.name}:${plan.operation}`, 'attempt', reason);
+    const created = await k8sJson('POST', `/apis/stackgres.io/v1/namespaces/${plan.target.namespace}/sgdbops`, plan.resource, actor);
+    if (!created.ok) throw { code: created.status, msg: k8sFailure(created) };
+    await publishFoundationAudit(actor, 'postgres-operation', `${plan.target.namespace}/${plan.target.name}:${plan.operation}`, 'accepted', reason);
+    return jsonRes(res, 201, { accepted: true, operation: plan.operation, name: created.json?.metadata?.name || plan.resource.metadata.name });
+  } catch (e) {
+    if (actor) await publishFoundationAudit(actor, 'postgres-operation', 'StackGres/SGDbOps', 'failed', e.msg || e.message || String(e)).catch(() => {});
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 400, { error: e.msg || e.message || String(e) });
+  }
+}
+function postgresBackupPlan(body) {
+  const target = parsePostgresClusterId(body.cluster || POSTGRES_DEFAULT_ID);
+  const requested = String(body.name || '').trim();
+  const name = requested ? requireK8sName(requested, 'backup name') : `os-${target.name.slice(0, 42)}-backup-${Date.now().toString(36)}`.slice(0, 63);
+  return { target, resource: { apiVersion: 'stackgres.io/v1', kind: 'SGBackup', metadata: { name, namespace: target.namespace,
+    labels: { 'opensphere.io/managed-by': 'foundation-control-plane', 'opensphere.io/component': 'postgres-backup' } }, spec: { sgCluster: target.name } } };
+}
+async function postgresBackups(req, res, url) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  let actor;
+  try {
+    actor = await foundationOwnerActor(req);
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['cluster', 'name', 'reason', 'confirm', 'dryRun']);
+    const reason = requireOwnerReason(body.reason);
+    const plan = postgresBackupPlan(body);
+    requireOwnerConfirm(body.confirm, plan.target.name);
+    if (body.dryRun === true) return jsonRes(res, 200, { accepted: true, dryRun: true, resource: plan.resource, impact: { classification: '즉시 백업 생성', cluster: plan.target.id } });
+    await publishFoundationAudit(actor, 'postgres-backup-create', `${plan.target.namespace}/${plan.target.name}`, 'attempt', reason);
+    const created = await k8sJson('POST', `/apis/stackgres.io/v1/namespaces/${plan.target.namespace}/sgbackups`, plan.resource, actor);
+    if (!created.ok) throw { code: created.status, msg: k8sFailure(created) };
+    await publishFoundationAudit(actor, 'postgres-backup-create', `${plan.target.namespace}/${plan.target.name}`, 'accepted', reason);
+    return jsonRes(res, 201, { accepted: true, name: created.json?.metadata?.name || plan.resource.metadata.name });
+  } catch (e) {
+    if (actor) await publishFoundationAudit(actor, 'postgres-backup-create', 'StackGres/SGBackup', 'failed', e.msg || e.message || String(e)).catch(() => {});
     return jsonRes(res, typeof e.code === 'number' ? e.code : 400, { error: e.msg || e.message || String(e) });
   }
 }
@@ -1986,6 +2348,10 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/foundation/psmdb/user') return psmdbUser(req, res);
     if (p === '/api/foundation/postgres/clusters') return postgresFleetClusters(req, res);
     if (p === '/api/foundation/postgres/namespaces') return postgresFleetNamespaces(req, res);
+    if (p === '/api/foundation/postgres/profiles') return postgresProfiles(req, res, new URL(req.url || '/', 'http://localhost'));
+    if (p === '/api/foundation/postgres/operator') return postgresOperator(req, res);
+    if (p === '/api/foundation/postgres/operations') return postgresOperations(req, res, new URL(req.url || '/', 'http://localhost'));
+    if (p === '/api/foundation/postgres/backups') return postgresBackups(req, res, new URL(req.url || '/', 'http://localhost'));
     if (p === '/api/foundation/postgres/admin/catalog') return postgresAdminCatalog(req, res, new URL(req.url || '/', 'http://localhost'));
     if (p === '/api/foundation/postgres/admin/query') return postgresAdminQuery(req, res);
     if (p === '/api/foundation/postgres/admin/action') return postgresAdminAction(req, res);
@@ -2078,7 +2444,8 @@ if (require.main === module) {
     validateHisStatusContract,
     parseResp, encodeRespCommand, parseInfo, sanitizeAclLine, requireValkeyDb, requireValkeyKey,
     postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost, postgresBindingDatabase,
-    parsePostgresClusterId, postgresClusterProjection,
+    parsePostgresClusterId, postgresClusterProjection, postgresProfileKind, sanitizePostgresProfileSpec, profileReferenceCounts, profileSpecDiff,
+    postgresOperationPlan, postgresBackupPlan,
     foundationBootstrapState,
     HIS_STATUS_SCHEMA, FOUNDATION_CORE_CRDS,
     FOUNDATION_ENGINE_MODEL, FOUNDATION_CLAIM_MODELS, POSTGRES_ADMIN, POSTGRES_DEFAULT_ID,

@@ -52,6 +52,14 @@ spec:
                   type: object
                   properties:
                     name: { type: string }
+                profileRefs:
+                  type: object
+                  description: Native StackGres configuration objects adopted by this claim.
+                  properties:
+                    instanceProfile: { type: string }
+                    postgresConfig: { type: string }
+                    poolingConfig: { type: string }
+                    objectStorage: { type: string }
             status:
               type: object
               x-kubernetes-preserve-unknown-fields: true
@@ -163,6 +171,14 @@ spec:
                     retention: { type: integer, minimum: 1 }
                     cronSchedule: { type: string }
                     objectStorageRef: { type: string }
+                profileRefs:
+                  type: object
+                  description: Approved native StackGres profile references applied by this plan.
+                  properties:
+                    instanceProfile: { type: string }
+                    postgresConfig: { type: string }
+                    poolingConfig: { type: string }
+                    objectStorage: { type: string }
                 constraints: { type: object, x-kubernetes-preserve-unknown-fields: true }
             status: { type: object, x-kubernetes-preserve-unknown-fields: true }
       subresources: { status: {} }
@@ -204,6 +220,14 @@ spec:
                 renderedResources:
                   type: array
                   items: { type: object, x-kubernetes-preserve-unknown-fields: true }
+                profileRefs:
+                  type: object
+                  description: Native StackGres profile references resolved for this installation.
+                  properties:
+                    instanceProfile: { type: string }
+                    postgresConfig: { type: string }
+                    poolingConfig: { type: string }
+                    objectStorage: { type: string }
             status: { type: object, x-kubernetes-preserve-unknown-fields: true }
       subresources: { status: {} }
       additionalPrinterColumns:

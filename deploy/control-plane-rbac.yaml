@@ -48,6 +48,22 @@ rules:
   - apiGroups: ["catalog.opensphere.io"]
     resources: [addoninstalls/status]
     verbs: [get, update, patch]
+  # Namespace-first PostgreSQL Fleet. The reconciler itself checks that a
+  # namespace is Foundation-registered with purpose=postgres-fleet before it
+  # applies anything; cluster-wide RBAC is required so one controller can
+  # reconcile the approved tenant namespaces without static RoleBindings.
+  - apiGroups: ["stackgres.io"]
+    resources: [sgclusters, sgscripts, sginstanceprofiles, sgpgconfigs, sgpoolconfigs, sgobjectstorages]
+    verbs: [get, list, watch, create, update, patch, delete, deletecollection]
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, list, watch, create, update, patch, delete, deletecollection]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: [roles, rolebindings]
+    verbs: [get, list, watch, create, update, patch, delete, deletecollection]
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: [podmonitors]
+    verbs: [get, list, watch, create, update, patch, delete, deletecollection]
   - apiGroups: [""]
     resources: [namespaces]
     verbs: [get, create, patch]

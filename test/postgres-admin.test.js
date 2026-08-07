@@ -6,6 +6,7 @@ const path = require('node:path');
 const {
   postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost, POSTGRES_ADMIN,
   POSTGRES_DEFAULT_ID, parsePostgresClusterId, postgresClusterProjection, postgresBindingDatabase,
+  postgresProfileKind, sanitizePostgresProfileSpec, profileReferenceCounts, profileSpecDiff, postgresOperationPlan, postgresBackupPlan,
 } = require('../server.js');
 
 function throwsMessage(fn, pattern) {
@@ -71,10 +72,79 @@ test('Foundation retains PostgreSQL governed endpoints but no longer compiles it
   const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
   const app = fs.readFileSync(path.join(__dirname, '../src/app/app.component.ts'), 'utf8');
   assert.match(server, /postgresFleetNamespaces/);
+  assert.match(server, /postgresProfiles/);
+  assert.match(server, /postgresOperator/);
   assert.match(server, /postgres-namespace-create/);
   assert.match(server, /postgresAdminAction/);
   assert.doesNotMatch(app, /PostgresPluginComponent|app-postgres-plugin/);
   assert.doesNotMatch(app, /if \(id === 'postgres'\) return undefined/);
   assert.match(app, /<app-plugin-outlet \*ngIf="activePlugin\(\) as p"/);
   assert.match(app, /\['samba', 'postgres'\]\.includes\(id\)/);
+});
+
+test('StackGres profile catalog accepts only typed, safe native profile specs', () => {
+  assert.deepEqual(postgresProfileKind('instance'), {
+    kind: 'instance', apiVersion: 'stackgres.io/v1', apiKind: 'SGInstanceProfile', resource: 'sginstanceprofiles',
+  });
+  assert.deepEqual(postgresProfileKind('objectStorage'), {
+    kind: 'objectStorage', apiVersion: 'stackgres.io/v1beta1', apiKind: 'SGObjectStorage', resource: 'sgobjectstorages',
+  });
+  assert.deepEqual(sanitizePostgresProfileSpec('instance', {
+    cpu: '1', memory: '2Gi', requests: { cpu: '500m', memory: '1Gi' },
+    containers: { postgres: { cpu: '1', memory: '2Gi' } },
+  }), {
+    cpu: '1', memory: '2Gi', requests: { cpu: '500m', memory: '1Gi' },
+    containers: { postgres: { cpu: '1', memory: '2Gi' } },
+  });
+  assert.deepEqual(sanitizePostgresProfileSpec('postgres', {
+    postgresVersion: '18', 'postgresql.conf': { max_connections: '200', wal_compression: 'on' },
+  }), {
+    postgresVersion: '18', 'postgresql.conf': { max_connections: '200', wal_compression: 'on' },
+  });
+  throwsMessage(() => sanitizePostgresProfileSpec('postgres', {
+    postgresVersion: '18', 'postgresql.conf': { 'max_connections; DROP DATABASE postgres': '200' },
+  }), /unsupported PostgreSQL parameter/);
+  assert.deepEqual(sanitizePostgresProfileSpec('objectStorage', {
+    type: 's3Compatible',
+    s3Compatible: { bucket: 'postgres-backups', endpoint: 'https://minio.example.test', enablePathStyleAddressing: true,
+      awsCredentials: { secretKeySelectors: { accessKeyId: { name: 'backup-credentials', key: 'accessKeyId' }, secretAccessKey: { name: 'backup-credentials', key: 'secretAccessKey' } } } },
+  }), {
+    type: 's3Compatible',
+    s3Compatible: { bucket: 'postgres-backups', endpoint: 'https://minio.example.test', enablePathStyleAddressing: true,
+      awsCredentials: { secretKeySelectors: { accessKeyId: { name: 'backup-credentials', key: 'accessKeyId' }, secretAccessKey: { name: 'backup-credentials', key: 'secretAccessKey' } } } },
+  });
+});
+
+test('profile reference inventory keeps deletion protection namespace scoped', () => {
+  const counts = profileReferenceCounts([
+    { metadata: { namespace: 'team-a', name: 'orders' }, spec: { sgInstanceProfile: 'medium', configurations: { sgPostgresConfig: 'pg18', sgPoolingConfig: 'pool', backups: [{ sgObjectStorage: 'backups' }] } } },
+    { metadata: { namespace: 'team-b', name: 'ledger' }, spec: { sgInstanceProfile: 'medium', configurations: { sgPostgresConfig: 'pg18' } } },
+  ]);
+  assert.deepEqual(counts.get('team-a/instance/medium'), ['orders']);
+  assert.deepEqual(counts.get('team-b/instance/medium'), ['ledger']);
+  assert.deepEqual(counts.get('team-a/pooling/pool'), ['orders']);
+  assert.deepEqual(counts.get('team-a/objectStorage/backups'), ['orders']);
+});
+
+test('profile preview reports the precise fields that would affect consumers', () => {
+  assert.deepEqual(profileSpecDiff(
+    { cpu: '1', requests: { cpu: '500m', memory: '1Gi' } },
+    { cpu: '2', requests: { cpu: '1', memory: '1Gi' } },
+  ), [
+    { path: 'cpu', before: '1', after: '2' },
+    { path: 'requests.cpu', before: '500m', after: '1' },
+  ]);
+});
+
+test('StackGres maintenance and backup requests are typed and cluster bound', () => {
+  const restart = postgresOperationPlan({ cluster: 'stackgres:team-a:orders', operation: 'restart', onlyPendingRestart: true });
+  assert.equal(restart.resource.kind, 'SGDbOps');
+  assert.equal(restart.resource.spec.sgCluster, 'orders');
+  assert.deepEqual(restart.resource.spec.restart, { onlyPendingRestart: true });
+  const vacuum = postgresOperationPlan({ cluster: 'stackgres:team-a:orders', operation: 'vacuum', full: true, freeze: true });
+  assert.deepEqual(vacuum.resource.spec.vacuum, { analyze: true, full: true, freeze: true });
+  const backup = postgresBackupPlan({ cluster: 'stackgres:team-a:orders', name: 'orders-pre-upgrade' });
+  assert.equal(backup.resource.kind, 'SGBackup');
+  assert.equal(backup.resource.metadata.name, 'orders-pre-upgrade');
+  throwsMessage(() => postgresOperationPlan({ cluster: 'stackgres:team-a:orders', operation: 'shell' }), /operation must be/);
 });

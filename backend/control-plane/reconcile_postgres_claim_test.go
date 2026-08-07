@@ -30,7 +30,7 @@ func TestDedicatedClaimRendersOneStackGresCluster(t *testing.T) {
 		CPU: "1", Memory: "2Gi", Size: "20Gi", StorageClass: "ceph-rbd",
 		Instances: 2, Pooling: true,
 	}
-	resources := renderPostgresResources(claim, plan, "S3curePassword")
+	resources := renderPostgresResources(claim, plan, postgresProfileRefs{}, "S3curePassword")
 	count := 0
 	var cluster *unstructured.Unstructured
 	for _, resource := range resources {
@@ -78,11 +78,70 @@ func TestDedicatedClaimRendersOneStackGresCluster(t *testing.T) {
 	}
 }
 
+func TestDedicatedClaimAdoptsReferencedStackGresProfiles(t *testing.T) {
+	claim := testPostgresClaim()
+	refs := postgresProfileRefs{
+		InstanceProfile: "postgres-medium",
+		PostgresConfig:  "postgres-18-standard",
+		PoolingConfig:   "pool-transaction",
+		ObjectStorage:   "postgres-backups",
+	}
+	resources := renderPostgresResources(claim, postgresPlan{
+		Name: "postgresql-prod-ha-pitr", Version: "18", Profile: "production",
+		CPU: "2", Memory: "4Gi", Size: "100Gi", Instances: 3, Pooling: true, Backup: true,
+	}, refs, "S3curePassword")
+	for _, resource := range resources {
+		if resource.GetKind() == "SGInstanceProfile" || resource.GetKind() == "SGPostgresConfig" || resource.GetKind() == "SGPoolingConfig" {
+			t.Fatalf("referenced profile %s/%s must not be rendered as a claim-owned copy", resource.GetKind(), resource.GetName())
+		}
+		if resource.GetKind() != "SGCluster" {
+			continue
+		}
+		if got, _, _ := unstructured.NestedString(resource.Object, "spec", "sgInstanceProfile"); got != refs.InstanceProfile {
+			t.Fatalf("instance profile=%q", got)
+		}
+		if got, _, _ := unstructured.NestedString(resource.Object, "spec", "configurations", "sgPostgresConfig"); got != refs.PostgresConfig {
+			t.Fatalf("postgres config=%q", got)
+		}
+		if got, _, _ := unstructured.NestedString(resource.Object, "spec", "configurations", "sgPoolingConfig"); got != refs.PoolingConfig {
+			t.Fatalf("pooling config=%q", got)
+		}
+		backups, _, _ := unstructured.NestedSlice(resource.Object, "spec", "configurations", "backups")
+		if len(backups) != 1 || backups[0].(map[string]interface{})["sgObjectStorage"] != refs.ObjectStorage {
+			t.Fatalf("backup object storage=%v", backups)
+		}
+		return
+	}
+	t.Fatal("SGCluster was not rendered")
+}
+
+func TestClaimProfileReferenceNameIsValidated(t *testing.T) {
+	claim := testPostgresClaim()
+	_ = unstructured.SetNestedField(claim.Object, "../../not-a-profile", "spec", "profileRefs", "instanceProfile")
+	if err := validatePostgresClaim(claim); err == nil {
+		t.Fatal("unsafe profile resource name accepted")
+	}
+}
+
+func TestPostgresFleetNamespaceRequiresFoundationRegistration(t *testing.T) {
+	if !postgresFleetNamespaceAccepted("opensphere-foundation", "opensphere-foundation", nil) {
+		t.Fatal("legacy Foundation namespace must remain accepted")
+	}
+	if !postgresFleetNamespaceAccepted("team-orders", "opensphere-foundation", map[string]string{
+		"opensphere.io/managed-by": "foundation", "opensphere.io/purpose": "postgres-fleet",
+	}) {
+		t.Fatal("Foundation-registered PostgreSQL namespace must be accepted")
+	}
+	if postgresFleetNamespaceAccepted("team-orders", "opensphere-foundation", map[string]string{"opensphere.io/managed-by": "foundation"}) {
+		t.Fatal("namespace without postgres-fleet purpose must be rejected")
+	}
+}
+
 func TestBootstrapSQLUsesApplicationIdentity(t *testing.T) {
 	resources := renderPostgresResources(testPostgresClaim(), postgresPlan{
 		Name: "postgresql-dev-single", Version: "18", Profile: "development",
 		CPU: "500m", Memory: "1Gi", Size: "10Gi", Instances: 1,
-	}, "SecretValue")
+	}, postgresProfileRefs{}, "SecretValue")
 	for _, resource := range resources {
 		if resource.GetName() != "pgc-orders-bootstrap-sql" {
 			continue
@@ -215,7 +274,7 @@ func TestBootstrapStatementsAreSeparateAutoCommitEntries(t *testing.T) {
 	resources := renderPostgresResources(testPostgresClaim(), postgresPlan{
 		Name: "postgresql-dev-single", Version: "18", Profile: "development",
 		CPU: "500m", Memory: "1Gi", Size: "10Gi", Instances: 1,
-	}, "SecretValue")
+	}, postgresProfileRefs{}, "SecretValue")
 	for _, resource := range resources {
 		if resource.GetKind() != "SGScript" {
 			continue
@@ -239,7 +298,7 @@ func TestDedicatedPostgresRendersPrometheusPodMonitor(t *testing.T) {
 	resources := renderPostgresResources(testPostgresClaim(), postgresPlan{
 		Name: "postgresql-dev-single", Version: "18", Profile: "development",
 		CPU: "500m", Memory: "1Gi", Size: "10Gi", Instances: 1,
-	}, "SecretValue")
+	}, postgresProfileRefs{}, "SecretValue")
 	for _, resource := range resources {
 		if resource.GetKind() != "PodMonitor" {
 			continue

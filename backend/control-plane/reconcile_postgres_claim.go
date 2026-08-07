@@ -41,6 +41,18 @@ type postgresPlan struct {
 	Name, Version, Profile, CPU, Memory, Size, StorageClass, ObjectStorage, BackupSchedule string
 	Instances, Retention                                                                   int64
 	Pooling, Backup                                                                        bool
+	ProfileRefs                                                                            postgresProfileRefs
+}
+
+// postgresProfileRefs identifies the native StackGres configuration objects that
+// an OpenSphere plan or claim adopts.  They are deliberately references rather
+// than a second copy of StackGres settings: SG* resources remain the desired
+// state authority and can be inspected with kubectl or the StackGres API.
+type postgresProfileRefs struct {
+	InstanceProfile string
+	PostgresConfig  string
+	PoolingConfig   string
+	ObjectStorage   string
 }
 
 func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -52,8 +64,12 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 	if claim.GetDeletionTimestamp() != nil {
 		return r.release(ctx, claim)
 	}
-	if claim.GetNamespace() != r.cfg.managedNS {
-		return r.reject(ctx, nn, "NamespaceNotManaged", fmt.Sprintf("StackGres PostgreSQL is currently limited to namespace %s", r.cfg.managedNS))
+	managed, err := r.isPostgresFleetNamespace(ctx, claim.GetNamespace())
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if !managed {
+		return r.reject(ctx, nn, "NamespaceNotManaged", "StackGres PostgreSQL requires a Foundation-managed Namespace with purpose postgres-fleet")
 	}
 	if !hasFinalizer(claim, postgresFleetFinalizer) {
 		if err := updateMetaRetry(ctx, r.direct, postgresClaimGVK, nn, func(o *unstructured.Unstructured) { addFinalizer(o, postgresFleetFinalizer) }); err != nil {
@@ -85,7 +101,11 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	resources := renderPostgresResources(claim, plan, password)
+	profileRefs := effectivePostgresProfileRefs(claim, plan)
+	if err := r.validatePostgresProfileRefs(ctx, claim.GetNamespace(), plan, profileRefs); err != nil {
+		return r.reject(ctx, nn, "InvalidProfileReference", err.Error())
+	}
+	resources := renderPostgresResources(claim, plan, profileRefs, password)
 	for _, resource := range resources {
 		if err := applyObj(ctx, r.direct, resource); err != nil {
 			if strings.Contains(err.Error(), "no matches for kind") || strings.Contains(err.Error(), "requested resource") {
@@ -139,6 +159,28 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 	})
 	ctrl.LoggerFrom(ctx).Info("postgres claim reconciled", "claim", req.NamespacedName, "plan", planName, "cluster", clusterName, "phase", phase)
 	return reconcile.Result{RequeueAfter: 30 * time.Second}, nil
+}
+
+func postgresFleetNamespaceAccepted(namespace, fallbackNamespace string, labels map[string]string) bool {
+	// The original Foundation namespace remains valid during the migration to a
+	// namespace-first fleet. New namespaces must be explicitly created by the
+	// Foundation flow and carry both labels; arbitrary namespaces are never
+	// accepted merely because a caller can create a PostgresClaim there.
+	if namespace == fallbackNamespace {
+		return true
+	}
+	return labels["opensphere.io/managed-by"] == "foundation" && labels["opensphere.io/purpose"] == "postgres-fleet"
+}
+
+func (r *postgresClaimReconciler) isPostgresFleetNamespace(ctx context.Context, namespace string) (bool, error) {
+	ns := object(schema.GroupVersionKind{Version: "v1", Kind: "Namespace"}, "", namespace)
+	if err := r.direct.Get(ctx, types.NamespacedName{Name: namespace}, ns); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return postgresFleetNamespaceAccepted(namespace, r.cfg.managedNS, ns.GetLabels()), nil
 }
 
 func (r *postgresClaimReconciler) reject(ctx context.Context, nn types.NamespacedName, reason, message string) (reconcile.Result, error) {
@@ -224,8 +266,15 @@ func parsePostgresPlan(o *unstructured.Unstructured) (postgresPlan, error) {
 	p.Retention, _, _ = unstructured.NestedInt64(o.Object, "spec", "backup", "retention")
 	p.ObjectStorage, _, _ = unstructured.NestedString(o.Object, "spec", "backup", "objectStorageRef")
 	p.BackupSchedule, _, _ = unstructured.NestedString(o.Object, "spec", "backup", "cronSchedule")
+	p.ProfileRefs.InstanceProfile, _, _ = unstructured.NestedString(o.Object, "spec", "profileRefs", "instanceProfile")
+	p.ProfileRefs.PostgresConfig, _, _ = unstructured.NestedString(o.Object, "spec", "profileRefs", "postgresConfig")
+	p.ProfileRefs.PoolingConfig, _, _ = unstructured.NestedString(o.Object, "spec", "profileRefs", "poolingConfig")
+	p.ProfileRefs.ObjectStorage, _, _ = unstructured.NestedString(o.Object, "spec", "profileRefs", "objectStorage")
 	if p.Version == "" || p.Instances < 1 || p.CPU == "" || p.Memory == "" || p.Size == "" {
 		return postgresPlan{}, fmt.Errorf("plan has incomplete StackGres sizing")
+	}
+	if p.ProfileRefs.ObjectStorage != "" {
+		p.ObjectStorage = p.ProfileRefs.ObjectStorage
 	}
 	if p.Backup && p.ObjectStorage == "" {
 		return postgresPlan{}, fmt.Errorf("backup-enabled plan requires objectStorageRef")
@@ -240,10 +289,72 @@ func validatePostgresClaim(claim *unstructured.Unstructured) error {
 			return fmt.Errorf("spec.%s is not a supported PostgreSQL identifier", field)
 		}
 	}
+	for _, field := range []string{"instanceProfile", "postgresConfig", "poolingConfig", "objectStorage"} {
+		value, _, _ := unstructured.NestedString(claim.Object, "spec", "profileRefs", field)
+		if value != "" && !postgresIdentifier.MatchString(value) {
+			return fmt.Errorf("spec.profileRefs.%s is not a supported Kubernetes resource name", field)
+		}
+	}
 	return nil
 }
 
-func renderPostgresResources(claim *unstructured.Unstructured, plan postgresPlan, password string) []*unstructured.Unstructured {
+func effectivePostgresProfileRefs(claim *unstructured.Unstructured, plan postgresPlan) postgresProfileRefs {
+	refs := plan.ProfileRefs
+	if value, _, _ := unstructured.NestedString(claim.Object, "spec", "profileRefs", "instanceProfile"); value != "" {
+		refs.InstanceProfile = value
+	}
+	if value, _, _ := unstructured.NestedString(claim.Object, "spec", "profileRefs", "postgresConfig"); value != "" {
+		refs.PostgresConfig = value
+	}
+	if value, _, _ := unstructured.NestedString(claim.Object, "spec", "profileRefs", "poolingConfig"); value != "" {
+		refs.PoolingConfig = value
+	}
+	if value, _, _ := unstructured.NestedString(claim.Object, "spec", "profileRefs", "objectStorage"); value != "" {
+		refs.ObjectStorage = value
+	}
+	return refs
+}
+
+func (r *postgresClaimReconciler) validatePostgresProfileRefs(ctx context.Context, namespace string, plan postgresPlan, refs postgresProfileRefs) error {
+	if !plan.Pooling && refs.PoolingConfig != "" {
+		return fmt.Errorf("poolingConfig profile requires a pooling-enabled plan")
+	}
+	checks := []struct {
+		name string
+		kind schema.GroupVersionKind
+	}{
+		{refs.InstanceProfile, schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGInstanceProfile"}},
+		{refs.PostgresConfig, schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGPostgresConfig"}},
+		{refs.PoolingConfig, schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGPoolingConfig"}},
+		{refs.ObjectStorage, schema.GroupVersionKind{Group: "stackgres.io", Version: "v1beta1", Kind: "SGObjectStorage"}},
+	}
+	for _, check := range checks {
+		if check.name == "" {
+			continue
+		}
+		obj := gvkObj(check.kind)
+		if err := r.direct.Get(ctx, types.NamespacedName{Namespace: namespace, Name: check.name}, obj); err != nil {
+			if apierrors.IsNotFound(err) {
+				return fmt.Errorf("referenced %s %s/%s was not found", check.kind.Kind, namespace, check.name)
+			}
+			return err
+		}
+		if check.kind.Kind == "SGPostgresConfig" && plan.Version != "" {
+			configuredVersion, _, _ := unstructured.NestedString(obj.Object, "spec", "postgresVersion")
+			if configuredVersion != "" && configuredVersion != plan.Version {
+				return fmt.Errorf("referenced SGPostgresConfig %s targets PostgreSQL %s, plan requires %s", check.name, configuredVersion, plan.Version)
+			}
+		}
+	}
+	if plan.Backup && refs.ObjectStorage == "" {
+		// Legacy plans carry the object storage name in spec.backup.objectStorageRef.
+		// The normal renderer keeps that contract until the catalog is migrated.
+		return nil
+	}
+	return nil
+}
+
+func renderPostgresResources(claim *unstructured.Unstructured, plan postgresPlan, refs postgresProfileRefs, password string) []*unstructured.Unstructured {
 	ns, clusterName := claim.GetNamespace(), postgresClusterName(claim)
 	database, _, _ := unstructured.NestedString(claim.Object, "spec", "database")
 	owner, _, _ := unstructured.NestedString(claim.Object, "spec", "owner")
@@ -256,12 +367,28 @@ func renderPostgresResources(claim *unstructured.Unstructured, plan postgresPlan
 		storageClass = plan.StorageClass
 	}
 
-	profile := object(schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGInstanceProfile"}, ns, clusterName+"-profile")
-	profile.Object["spec"] = map[string]interface{}{"cpu": plan.CPU, "memory": plan.Memory}
-	pgConfig := object(schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGPostgresConfig"}, ns, clusterName+"-postgres")
-	pgConfig.Object["spec"] = map[string]interface{}{"postgresVersion": plan.Version, "postgresql.conf": map[string]interface{}{"password_encryption": "scram-sha-256", "wal_compression": "on"}}
-	pooling := object(schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGPoolingConfig"}, ns, clusterName+"-pooling")
-	pooling.Object["spec"] = map[string]interface{}{"pgBouncer": map[string]interface{}{"pgbouncer.ini": map[string]interface{}{"pgbouncer": map[string]interface{}{"pool_mode": "transaction", "max_client_conn": "200"}}}}
+	profileName := refs.InstanceProfile
+	pgConfigName := refs.PostgresConfig
+	poolingName := refs.PoolingConfig
+	generated := make([]*unstructured.Unstructured, 0, 3)
+	if profileName == "" {
+		profile := object(schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGInstanceProfile"}, ns, clusterName+"-profile")
+		profile.Object["spec"] = map[string]interface{}{"cpu": plan.CPU, "memory": plan.Memory}
+		profileName = profile.GetName()
+		generated = append(generated, profile)
+	}
+	if pgConfigName == "" {
+		pgConfig := object(schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGPostgresConfig"}, ns, clusterName+"-postgres")
+		pgConfig.Object["spec"] = map[string]interface{}{"postgresVersion": plan.Version, "postgresql.conf": map[string]interface{}{"password_encryption": "scram-sha-256", "wal_compression": "on"}}
+		pgConfigName = pgConfig.GetName()
+		generated = append(generated, pgConfig)
+	}
+	if plan.Pooling && poolingName == "" {
+		pooling := object(schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGPoolingConfig"}, ns, clusterName+"-pooling")
+		pooling.Object["spec"] = map[string]interface{}{"pgBouncer": map[string]interface{}{"pgbouncer.ini": map[string]interface{}{"pgbouncer": map[string]interface{}{"pool_mode": "transaction", "max_client_conn": "200"}}}}
+		poolingName = pooling.GetName()
+		generated = append(generated, pooling)
+	}
 	scriptSecret := object(schema.GroupVersionKind{Version: "v1", Kind: "Secret"}, ns, clusterName+"-bootstrap-sql")
 	scriptSecret.Object["type"] = "Opaque"
 	escapedPassword := strings.ReplaceAll(password, "'", "''")
@@ -278,20 +405,24 @@ func renderPostgresResources(claim *unstructured.Unstructured, plan postgresPlan
 	}
 	cluster := object(sgClusterGVK, ns, clusterName)
 	configurations := map[string]interface{}{
-		"sgPostgresConfig": pgConfig.GetName(),
+		"sgPostgresConfig": pgConfigName,
 		"binding":          map[string]interface{}{"provider": "opensphere-stackgres", "database": database, "username": owner, "password": map[string]interface{}{"name": clusterName + "-app-credentials", "key": "password"}},
 		"observability":    map[string]interface{}{"disableMetrics": false},
 	}
 	if plan.Pooling {
-		configurations["sgPoolingConfig"] = pooling.GetName()
+		configurations["sgPoolingConfig"] = poolingName
 	}
 	if plan.Backup {
-		configurations["backups"] = []interface{}{map[string]interface{}{"sgObjectStorage": plan.ObjectStorage, "cronSchedule": plan.BackupSchedule}}
+		objectStorage := refs.ObjectStorage
+		if objectStorage == "" {
+			objectStorage = plan.ObjectStorage
+		}
+		configurations["backups"] = []interface{}{map[string]interface{}{"sgObjectStorage": objectStorage, "cronSchedule": plan.BackupSchedule}}
 	}
 	cluster.Object["spec"] = map[string]interface{}{
 		"instances":         plan.Instances,
 		"profile":           plan.Profile,
-		"sgInstanceProfile": profile.GetName(),
+		"sgInstanceProfile": profileName,
 		"postgres":          map[string]interface{}{"version": plan.Version},
 		"pods":              map[string]interface{}{"persistentVolume": map[string]interface{}{"size": storageSize, "storageClass": storageClass}, "disableConnectionPooling": !plan.Pooling},
 		"configurations":    configurations,
@@ -308,11 +439,7 @@ func renderPostgresResources(claim *unstructured.Unstructured, plan postgresPlan
 		"podMetricsEndpoints": []interface{}{map[string]interface{}{"port": "pgexporter", "path": "/metrics", "interval": "15s"}},
 	}
 	podMonitor.SetLabels(map[string]string{"release": "kube-prometheus-stack"})
-	resources := []*unstructured.Unstructured{profile, pgConfig}
-	if plan.Pooling {
-		resources = append(resources, pooling)
-	}
-	resources = append(resources, scriptSecret, script, role, binding, podMonitor, cluster)
+	resources := append(generated, scriptSecret, script, role, binding, podMonitor, cluster)
 	for _, resource := range resources {
 		stampPostgresLabels(resource, claim)
 		labels := resource.GetLabels()
@@ -332,7 +459,8 @@ func renderAddOnInstall(claim *unstructured.Unstructured, plan postgresPlan, res
 	if policy == "" {
 		policy = "Retain"
 	}
-	install.Object["spec"] = map[string]interface{}{"planRef": plan.Name, "claimRef": map[string]interface{}{"apiVersion": postgresClaimGVK.GroupVersion().String(), "kind": "PostgresClaim", "name": claim.GetName(), "uid": string(claim.GetUID())}, "deletionPolicy": policy, "renderedResources": refs}
+	profileRefs := effectivePostgresProfileRefs(claim, plan)
+	install.Object["spec"] = map[string]interface{}{"planRef": plan.Name, "claimRef": map[string]interface{}{"apiVersion": postgresClaimGVK.GroupVersion().String(), "kind": "PostgresClaim", "name": claim.GetName(), "uid": string(claim.GetUID())}, "deletionPolicy": policy, "renderedResources": refs, "profileRefs": map[string]interface{}{"instanceProfile": profileRefs.InstanceProfile, "postgresConfig": profileRefs.PostgresConfig, "poolingConfig": profileRefs.PoolingConfig, "objectStorage": profileRefs.ObjectStorage}}
 	stampPostgresLabels(install, claim)
 	labels := install.GetLabels()
 	labels["catalog.opensphere.io/plan"] = plan.Name

@@ -45,3 +45,49 @@ metadata: { name: opensphere-postgres-claims-manage-admins }
 roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: opensphere-postgres-claims-manage }
 subjects:
   - { apiGroup: rbac.authorization.k8s.io, kind: Group, name: opensphere-console-admins }
+---
+# Profile changes are deliberately separate from claim creation.  The Foundation
+# API validates the allowed StackGres fields, records the change reason, and
+# prevents deletion while an SGCluster still refers to the profile.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opensphere-postgres-profiles-manage
+  labels: { opensphere.io/managed-by: foundation, opensphere.io/purpose: postgres-fleet }
+rules:
+  - apiGroups: ["stackgres.io"]
+    resources: [sginstanceprofiles, sgpgconfigs, sgpoolconfigs]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: ["stackgres.io"]
+    resources: [sgclusters, sgconfigs]
+    verbs: [get, list, watch]
+  - apiGroups: ["apps"]
+    resources: [deployments]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: opensphere-postgres-profiles-manage-admins }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: opensphere-postgres-profiles-manage }
+subjects:
+  - { apiGroup: rbac.authorization.k8s.io, kind: Group, name: opensphere-console-admins }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opensphere-postgres-operations-manage
+  labels: { opensphere.io/managed-by: foundation, opensphere.io/purpose: postgres-fleet }
+rules:
+  - apiGroups: ["stackgres.io"]
+    resources: [sgdbops, sgbackups]
+    verbs: [get, list, watch, create]
+  - apiGroups: ["stackgres.io"]
+    resources: [sgclusters]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: opensphere-postgres-operations-manage-admins }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: opensphere-postgres-operations-manage }
+subjects:
+  - { apiGroup: rbac.authorization.k8s.io, kind: Group, name: opensphere-console-admins }
