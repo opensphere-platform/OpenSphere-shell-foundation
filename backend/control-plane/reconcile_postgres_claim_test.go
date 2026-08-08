@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -314,4 +315,69 @@ func TestDedicatedPostgresRendersPrometheusPodMonitor(t *testing.T) {
 		return
 	}
 	t.Fatal("dedicated StackGres resources did not include a PodMonitor")
+}
+
+func TestPostgresManagedStateIgnoresStackGresDefaultsAndStatus(t *testing.T) {
+	desired := gvkObj(sgClusterGVK)
+	desired.SetLabels(map[string]string{"app.kubernetes.io/managed-by": cpManagedBy})
+	desired.Object["spec"] = map[string]interface{}{
+		"instances":  int64(2),
+		"postgres":   map[string]interface{}{"version": "18"},
+		"managedSql": map[string]interface{}{"scripts": []interface{}{map[string]interface{}{"id": int64(1), "sgScript": "bootstrap"}}},
+	}
+	current := desired.DeepCopy()
+	current.SetLabels(map[string]string{"app.kubernetes.io/managed-by": cpManagedBy, "stackgres.io/default": "true"})
+	current.Object["status"] = map[string]interface{}{"instances": int64(2)}
+	current.Object["spec"].(map[string]interface{})["postgres"].(map[string]interface{})["flavor"] = "vanilla"
+	current.Object["spec"].(map[string]interface{})["managedSql"].(map[string]interface{})["scripts"] = []interface{}{
+		map[string]interface{}{"id": int64(2), "sgScript": "stackgres-default"},
+		map[string]interface{}{"id": int64(1), "sgScript": "bootstrap", "statusDefault": true},
+	}
+
+	if !postgresManagedStateEqual(current, desired) {
+		t.Fatal("StackGres defaults or status caused a false desired-state drift")
+	}
+	current.Object["spec"].(map[string]interface{})["instances"] = int64(3)
+	if postgresManagedStateEqual(current, desired) {
+		t.Fatal("an OpenSphere-owned SGCluster field drift was ignored")
+	}
+}
+
+func TestPostgresConditionTimestampChangesOnlyOnTransition(t *testing.T) {
+	o := gvkObj(postgresClaimGVK)
+	old := "2026-08-01T00:00:00Z"
+	o.Object["status"] = map[string]interface{}{"conditions": []interface{}{map[string]interface{}{
+		"type": "Ready", "status": "True", "reason": "ClusterReady", "message": "ready", "lastTransitionTime": old,
+	}}}
+
+	setPostgresCondition(o, "Ready", "True", "ClusterReady", "still ready")
+	conditions, _, _ := unstructured.NestedSlice(o.Object, "status", "conditions")
+	unchanged := conditions[0].(map[string]interface{})
+	if unchanged["lastTransitionTime"] != old {
+		t.Fatalf("lastTransitionTime changed without a status transition: %v", unchanged["lastTransitionTime"])
+	}
+
+	before := time.Now().UTC().Add(-time.Second)
+	setPostgresCondition(o, "Ready", "False", "Reconciling", "not ready")
+	conditions, _, _ = unstructured.NestedSlice(o.Object, "status", "conditions")
+	transitioned := conditions[0].(map[string]interface{})
+	transitionTime, err := time.Parse(time.RFC3339, transitioned["lastTransitionTime"].(string))
+	if err != nil || transitionTime.Before(before) {
+		t.Fatalf("status transition did not receive a fresh timestamp: %v (%v)", transitioned["lastTransitionTime"], err)
+	}
+}
+
+func TestMutateStatusChangedRejectsNoop(t *testing.T) {
+	o := gvkObj(postgresClaimGVK)
+	o.Object["status"] = map[string]interface{}{"phase": "Ready"}
+	if mutateStatusChanged(o, func(current *unstructured.Unstructured) {
+		setNested(current, "Ready", "status", "phase")
+	}) {
+		t.Fatal("identical status mutation was treated as a change")
+	}
+	if !mutateStatusChanged(o, func(current *unstructured.Unstructured) {
+		setNested(current, "Failed", "status", "phase")
+	}) {
+		t.Fatal("real status transition was ignored")
+	}
 }

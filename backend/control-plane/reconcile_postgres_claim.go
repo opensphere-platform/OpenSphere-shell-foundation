@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -107,7 +108,7 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 	}
 	resources := renderPostgresResources(claim, plan, profileRefs, password)
 	for _, resource := range resources {
-		if err := applyObj(ctx, r.direct, resource); err != nil {
+		if err := r.applyPostgresResource(ctx, resource); err != nil {
 			if strings.Contains(err.Error(), "no matches for kind") || strings.Contains(err.Error(), "requested resource") {
 				_ = updateStatusRetry(ctx, r.direct, postgresClaimGVK, nn, func(o *unstructured.Unstructured) {
 					setNested(o, "Pending", "status", "phase")
@@ -154,11 +155,126 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 		return reconcile.Result{}, err
 	}
 	_ = updateStatusRetry(ctx, r.direct, addOnInstallGVK, types.NamespacedName{Namespace: claim.GetNamespace(), Name: claim.GetName() + "-install"}, func(o *unstructured.Unstructured) {
+		previousPhase, _, _ := unstructured.NestedString(o.Object, "status", "phase")
 		setNested(o, phase, "status", "phase")
-		setNested(o, time.Now().UTC().Format(time.RFC3339), "status", "observedAt")
+		if previousPhase != phase {
+			setNested(o, time.Now().UTC().Format(time.RFC3339), "status", "observedAt")
+		}
 	})
 	ctrl.LoggerFrom(ctx).Info("postgres claim reconciled", "claim", req.NamespacedName, "plan", planName, "cluster", clusterName, "phase", phase)
 	return reconcile.Result{RequeueAfter: 30 * time.Second}, nil
+}
+
+// applyPostgresResource keeps the SGCluster write path declarative without
+// rewriting an unchanged object every polling cycle. StackGres 1.19 updates
+// SGCluster status through the main resource endpoint, so an unnecessary SSA
+// competes for resourceVersion and produces optimistic-lock 409 retries.
+func (r *postgresClaimReconciler) applyPostgresResource(ctx context.Context, desired *unstructured.Unstructured) error {
+	if desired.GroupVersionKind() != sgClusterGVK {
+		return applyObj(ctx, r.direct, desired)
+	}
+	current := gvkObj(sgClusterGVK)
+	nn := types.NamespacedName{Namespace: desired.GetNamespace(), Name: desired.GetName()}
+	if err := r.direct.Get(ctx, nn, current); err != nil {
+		if apierrors.IsNotFound(err) {
+			return applyObj(ctx, r.direct, desired)
+		}
+		return err
+	}
+	if postgresManagedStateEqual(current, desired) {
+		return nil
+	}
+	return applyObj(ctx, r.direct, desired)
+}
+
+// postgresManagedStateEqual compares only fields owned by the Foundation
+// renderer. StackGres may add defaults and status fields that must not make the
+// desired-state comparison look different.
+func postgresManagedStateEqual(current, desired *unstructured.Unstructured) bool {
+	currentLabels := current.GetLabels()
+	for key, value := range desired.GetLabels() {
+		if currentLabels[key] != value {
+			return false
+		}
+	}
+	return desiredSubsetEqual(current.Object["spec"], desired.Object["spec"])
+}
+
+func desiredSubsetEqual(current, desired interface{}) bool {
+	switch wanted := desired.(type) {
+	case map[string]interface{}:
+		actual, ok := current.(map[string]interface{})
+		if !ok {
+			return false
+		}
+		for key, value := range wanted {
+			actualValue, found := actual[key]
+			if !found || !desiredSubsetEqual(actualValue, value) {
+				return false
+			}
+		}
+		return true
+	case []interface{}:
+		actual, ok := current.([]interface{})
+		if !ok {
+			return false
+		}
+		if desiredListHasIdentity(wanted) {
+			for _, wantedItem := range wanted {
+				wantedMap := wantedItem.(map[string]interface{})
+				identityKey, identityValue := desiredListIdentity(wantedMap)
+				matched := false
+				for _, actualItem := range actual {
+					actualMap, ok := actualItem.(map[string]interface{})
+					if ok && reflect.DeepEqual(actualMap[identityKey], identityValue) && desiredSubsetEqual(actualMap, wantedMap) {
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					return false
+				}
+			}
+			return true
+		}
+		if len(actual) != len(wanted) {
+			return false
+		}
+		for i := range wanted {
+			if !desiredSubsetEqual(actual[i], wanted[i]) {
+				return false
+			}
+		}
+		return true
+	default:
+		return reflect.DeepEqual(current, desired)
+	}
+}
+
+func desiredListHasIdentity(items []interface{}) bool {
+	if len(items) == 0 {
+		return false
+	}
+	for _, item := range items {
+		value, ok := item.(map[string]interface{})
+		if !ok {
+			return false
+		}
+		key, _ := desiredListIdentity(value)
+		if key == "" {
+			return false
+		}
+	}
+	return true
+}
+
+func desiredListIdentity(item map[string]interface{}) (string, interface{}) {
+	for _, key := range []string{"id", "name"} {
+		if value, found := item[key]; found {
+			return key, value
+		}
+	}
+	return "", nil
 }
 
 func postgresFleetNamespaceAccepted(namespace, fallbackNamespace string, labels map[string]string) bool {
@@ -557,6 +673,18 @@ func stackGresBootstrapStatus(cluster *unstructured.Unstructured) (ready, failed
 }
 
 func setPostgresCondition(o *unstructured.Unstructured, conditionType, status, reason, message string) {
-	condition := map[string]interface{}{"type": conditionType, "status": status, "reason": reason, "message": message, "lastTransitionTime": time.Now().UTC().Format(time.RFC3339)}
+	lastTransitionTime := time.Now().UTC().Format(time.RFC3339)
+	conditions, _, _ := unstructured.NestedSlice(o.Object, "status", "conditions")
+	for _, item := range conditions {
+		condition, ok := item.(map[string]interface{})
+		if !ok || condition["type"] != conditionType || condition["status"] != status {
+			continue
+		}
+		if previous, ok := condition["lastTransitionTime"].(string); ok && previous != "" {
+			lastTransitionTime = previous
+		}
+		break
+	}
+	condition := map[string]interface{}{"type": conditionType, "status": status, "reason": reason, "message": message, "lastTransitionTime": lastTransitionTime}
 	_ = unstructured.SetNestedSlice(o.Object, []interface{}{condition}, "status", "conditions")
 }

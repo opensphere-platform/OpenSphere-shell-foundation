@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -52,7 +53,9 @@ func updateStatusRetry(ctx context.Context, c client.Client, gvk schema.GroupVer
 		if err := c.Get(ctx, nn, o); err != nil {
 			return err
 		}
-		mutate(o)
+		if !mutateStatusChanged(o, mutate) {
+			return nil
+		}
 		if err := c.Status().Update(ctx, o); err != nil {
 			if apierrors.IsConflict(err) {
 				last = err
@@ -63,6 +66,16 @@ func updateStatusRetry(ctx context.Context, c client.Client, gvk schema.GroupVer
 		return nil
 	}
 	return fmt.Errorf("status update conflict 재시도 소진: %s (%v)", nn, last)
+}
+
+// mutateStatusChanged applies the requested status mutation and reports whether
+// it produced a semantic change. Controllers watch their primary resource, so
+// issuing an identical Status().Update creates a self-triggering reconcile loop.
+func mutateStatusChanged(o *unstructured.Unstructured, mutate func(*unstructured.Unstructured)) bool {
+	before, beforeFound, _ := unstructured.NestedFieldCopy(o.Object, "status")
+	mutate(o)
+	after, afterFound, _ := unstructured.NestedFieldCopy(o.Object, "status")
+	return beforeFound != afterFound || !reflect.DeepEqual(before, after)
 }
 
 // updateMetaRetry — conflict 안전 메타데이터 쓰기(finalizer 등).
