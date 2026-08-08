@@ -455,6 +455,47 @@ function profileSpecDiff(before, after, path = '', changes = []) {
   }
   return changes.slice(0, 100);
 }
+async function postgresBackupTargets(req, res) {
+  if (req.method !== 'GET') return jsonRes(res, 405, { error: 'read-only endpoint' });
+  try {
+    const token = requestToken(req);
+    requireConsoleAdmin(await verifyToken(token));
+    const response = await fetch(`${CONSOLE_IDENTITY_URL}/api/external-channels/backup-targets`, {
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw { code: response.status, msg: body.error || 'external backup target catalog unavailable' };
+    const items = (Array.isArray(body.items) ? body.items : []).map((item) => ({
+      id: String(item.id || ''),
+      name: String(item.name || ''),
+      provider: String(item.provider || 's3'),
+      vendor: String(item.vendor || ''),
+      endpoint: String(item.endpoint || ''),
+      region: String(item.region || ''),
+      bucketName: String(item.bucketName || ''),
+      pathPrefix: String(item.pathPrefix || ''),
+      enabled: item.enabled === true,
+      healthState: String(item.healthState || 'Unknown'),
+      credential: {
+        configured: item.credential?.configured === true,
+        version: Number(item.credential?.version || 0),
+      },
+      lastTest: item.lastTest ? {
+        status: String(item.lastTest.status || ''),
+        at: String(item.lastTest.at || ''),
+        errorCode: item.lastTest.errorCode ? String(item.lastTest.errorCode) : null,
+      } : null,
+    })).filter((item) => item.id && item.name);
+    return jsonRes(res, 200, {
+      schema: 'foundation.postgres.external-backup-targets/v1alpha1',
+      items,
+      refreshedAt: new Date().toISOString(),
+    });
+  } catch (e) {
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 502, { error: e.msg || e.message || String(e) });
+  }
+}
 async function postgresProfiles(req, res, url) {
   const namespace = requireK8sName(url.searchParams.get('namespace') || FND_NS, 'namespace');
   if (req.method === 'GET') {
@@ -2348,6 +2389,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/foundation/psmdb/user') return psmdbUser(req, res);
     if (p === '/api/foundation/postgres/clusters') return postgresFleetClusters(req, res);
     if (p === '/api/foundation/postgres/namespaces') return postgresFleetNamespaces(req, res);
+    if (p === '/api/foundation/postgres/backup-targets') return postgresBackupTargets(req, res);
     if (p === '/api/foundation/postgres/profiles') return postgresProfiles(req, res, new URL(req.url || '/', 'http://localhost'));
     if (p === '/api/foundation/postgres/operator') return postgresOperator(req, res);
     if (p === '/api/foundation/postgres/operations') return postgresOperations(req, res, new URL(req.url || '/', 'http://localhost'));

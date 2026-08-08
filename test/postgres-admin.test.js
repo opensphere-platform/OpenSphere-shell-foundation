@@ -73,6 +73,9 @@ test('Foundation retains PostgreSQL governed endpoints but no longer compiles it
   const app = fs.readFileSync(path.join(__dirname, '../src/app/app.component.ts'), 'utf8');
   assert.match(server, /postgresFleetNamespaces/);
   assert.match(server, /postgresProfiles/);
+  assert.match(server, /postgresBackupTargets/);
+  assert.match(server, /foundation\.postgres\.external-backup-targets\/v1alpha1/);
+  assert.doesNotMatch(server, /postgresBackupTargets[\s\S]{0,2500}(applicationKey|accessKeyId)/);
   assert.match(server, /postgresOperator/);
   assert.match(server, /postgres-namespace-create/);
   assert.match(server, /postgresAdminAction/);
