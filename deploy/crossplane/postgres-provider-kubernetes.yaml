@@ -1,0 +1,84 @@
+# Crossplane Kubernetes Provider bridge for PFSS PostgreSQL.
+#
+# PostgresClaim remains the northbound contract. The Foundation control-plane
+# renders only secret-bearing bootstrap material directly; every non-secret
+# StackGres resource is applied and lifecycle-managed through provider-kubernetes
+# Object resources. The provider package and runtime are pinned to the curated
+# OpenSphere GHCR mirror for the Docker Desktop edge environment.
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: opensphere-provider-kubernetes-linux-amd64
+  labels:
+    app.kubernetes.io/part-of: foundation-postgres
+    opensphere.io/runtime-platform: linux-amd64
+spec:
+  deploymentTemplate:
+    spec:
+      selector: {}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: foundation-postgres
+            opensphere.io/runtime-platform: linux-amd64
+        spec:
+          containers:
+            - name: package-runtime
+              image: ghcr.io/opensphere-platform/mirror-crossplane-provider-kubernetes-package@sha256:575fda7def031757bfaf86b134558906f8fa08719c190adf5de790220553b878
+  serviceAccountTemplate:
+    metadata:
+      name: opensphere-provider-kubernetes
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: crossplane-contrib-provider-kubernetes
+  labels:
+    app.kubernetes.io/part-of: foundation-postgres
+spec:
+  package: ghcr.io/opensphere-platform/mirror-crossplane-provider-kubernetes-package@sha256:f6665ef36536d3c54343ac9142376c402fdac8d39591c9720ead104f8d9bf612
+  packagePullSecrets:
+    - name: opensphere-ghcr-pull
+  packagePullPolicy: IfNotPresent
+  revisionActivationPolicy: Automatic
+  revisionHistoryLimit: 1
+  runtimeConfigRef:
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: DeploymentRuntimeConfig
+    name: opensphere-provider-kubernetes-linux-amd64
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opensphere-provider-kubernetes-postgres
+rules:
+  - apiGroups: ["stackgres.io"]
+    resources: [sgclusters, sgscripts, sginstanceprofiles, sgpgconfigs, sgpoolconfigs, sgobjectstorages]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: [roles, rolebindings]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: [podmonitors]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opensphere-provider-kubernetes-postgres
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opensphere-provider-kubernetes-postgres
+subjects:
+  - kind: ServiceAccount
+    name: opensphere-provider-kubernetes
+    namespace: crossplane-system
+---
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: ClusterProviderConfig
+metadata:
+  name: opensphere-local-cluster
+spec:
+  credentials:
+    source: InjectedIdentity

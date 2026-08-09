@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"reflect"
@@ -20,12 +21,13 @@ import (
 )
 
 var (
-	postgresClaimGVK = schema.GroupVersionKind{Group: "provisioning.opensphere.io", Version: "v1beta1", Kind: "PostgresClaim"}
-	addOnPlanGVK     = schema.GroupVersionKind{Group: "catalog.opensphere.io", Version: "v1alpha1", Kind: "AddOnPlan"}
-	addOnInstallGVK  = schema.GroupVersionKind{Group: "catalog.opensphere.io", Version: "v1alpha1", Kind: "AddOnInstall"}
-	sgClusterGVK     = schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGCluster"}
-	sgScriptGVK      = schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGScript"}
-	podMonitorGVK    = schema.GroupVersionKind{Group: "monitoring.coreos.com", Version: "v1", Kind: "PodMonitor"}
+	postgresClaimGVK    = schema.GroupVersionKind{Group: "provisioning.opensphere.io", Version: "v1beta1", Kind: "PostgresClaim"}
+	addOnPlanGVK        = schema.GroupVersionKind{Group: "catalog.opensphere.io", Version: "v1alpha1", Kind: "AddOnPlan"}
+	addOnInstallGVK     = schema.GroupVersionKind{Group: "catalog.opensphere.io", Version: "v1alpha1", Kind: "AddOnInstall"}
+	sgClusterGVK        = schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGCluster"}
+	sgScriptGVK         = schema.GroupVersionKind{Group: "stackgres.io", Version: "v1", Kind: "SGScript"}
+	podMonitorGVK       = schema.GroupVersionKind{Group: "monitoring.coreos.com", Version: "v1", Kind: "PodMonitor"}
+	crossplaneObjectGVK = schema.GroupVersionKind{Group: "kubernetes.m.crossplane.io", Version: "v1alpha1", Kind: "Object"}
 )
 
 const postgresFleetFinalizer = "provisioning.opensphere.io/postgres-cluster-protect"
@@ -107,12 +109,20 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 		return r.reject(ctx, nn, "InvalidProfileReference", err.Error())
 	}
 	resources := renderPostgresResources(claim, plan, profileRefs, password)
+	bridgeTotal, bridgeReady := 0, 0
 	for _, resource := range resources {
-		if err := r.applyPostgresResource(ctx, resource); err != nil {
+		ready, bridged, err := r.applyPostgresResource(ctx, claim, resource)
+		if bridged {
+			bridgeTotal++
+			if ready {
+				bridgeReady++
+			}
+		}
+		if err != nil {
 			if strings.Contains(err.Error(), "no matches for kind") || strings.Contains(err.Error(), "requested resource") {
 				_ = updateStatusRetry(ctx, r.direct, postgresClaimGVK, nn, func(o *unstructured.Unstructured) {
 					setNested(o, "Pending", "status", "phase")
-					setPostgresCondition(o, "Rendered", "False", "StackGresUnavailable", "StackGres 1.19 CRDs/operator are not installed")
+					setPostgresCondition(o, "CrossplaneBridge", "False", "CrossplaneUnavailable", "Crossplane provider-kubernetes Object API is not installed")
 				})
 				return reconcile.Result{RequeueAfter: 30 * time.Second}, nil
 			}
@@ -127,9 +137,14 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 	clusterName := postgresClusterName(claim)
 	cluster := gvkObj(sgClusterGVK)
 	clusterErr := r.direct.Get(ctx, types.NamespacedName{Namespace: claim.GetNamespace(), Name: clusterName}, cluster)
-	ready := clusterErr == nil && stackGresReady(cluster)
+	bridgeConnected := bridgeTotal > 0 && bridgeReady == bridgeTotal
+	ready := clusterErr == nil && stackGresReady(cluster) && bridgeConnected
 	phase := "Provisioning"
 	conditionStatus, reason, message := "False", "StackGresReconciling", "Dedicated StackGres cluster is reconciling"
+	bridgeStatus, bridgeReason, bridgeMessage := "False", "CrossplaneReconciling", fmt.Sprintf("Crossplane provider-kubernetes has reconciled %d/%d managed objects", bridgeReady, bridgeTotal)
+	if bridgeConnected {
+		bridgeStatus, bridgeReason, bridgeMessage = "True", "CrossplaneConnected", fmt.Sprintf("PostgresClaim is bridged through %d Crossplane managed objects", bridgeTotal)
+	}
 	if clusterErr == nil {
 		_, bootstrapFailed, bootstrapMessage := stackGresBootstrapStatus(cluster)
 		if bootstrapFailed {
@@ -150,6 +165,8 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 		_ = unstructured.SetNestedMap(o.Object, map[string]interface{}{"apiVersion": "stackgres.io/v1", "kind": "SGCluster", "name": clusterName, "namespace": claim.GetNamespace()}, "status", "providerRef")
 		_ = unstructured.SetNestedMap(o.Object, map[string]interface{}{"name": bindingName, "namespace": claim.GetNamespace()}, "status", "bindingRef")
 		_ = unstructured.SetNestedMap(o.Object, map[string]interface{}{"name": claim.GetName() + "-install", "namespace": claim.GetNamespace()}, "status", "addOnInstallRef")
+		_ = unstructured.SetNestedMap(o.Object, map[string]interface{}{"provider": "provider-kubernetes", "providerConfig": "opensphere-local-cluster", "objects": int64(bridgeTotal), "readyObjects": int64(bridgeReady)}, "status", "crossplaneRef")
+		setPostgresCondition(o, "CrossplaneBridge", bridgeStatus, bridgeReason, bridgeMessage)
 		setPostgresCondition(o, "Ready", conditionStatus, reason, message)
 	}); err != nil {
 		return reconcile.Result{}, err
@@ -165,26 +182,69 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 	return reconcile.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
-// applyPostgresResource keeps the SGCluster write path declarative without
-// rewriting an unchanged object every polling cycle. StackGres 1.19 updates
-// SGCluster status through the main resource endpoint, so an unnecessary SSA
-// competes for resourceVersion and produces optimistic-lock 409 retries.
-func (r *postgresClaimReconciler) applyPostgresResource(ctx context.Context, desired *unstructured.Unstructured) error {
-	if desired.GroupVersionKind() != sgClusterGVK {
-		return applyObj(ctx, r.direct, desired)
+// applyPostgresResource keeps credential-bearing Secrets inside the PFSS trust
+// boundary and delegates every non-secret resource to Crossplane's Kubernetes
+// provider. This makes Crossplane the actual southbound allocation/lifecycle
+// bridge while StackGres remains the PostgreSQL execution authority.
+func (r *postgresClaimReconciler) applyPostgresResource(ctx context.Context, claim, desired *unstructured.Unstructured) (ready, bridged bool, err error) {
+	if desired.GetKind() == "Secret" && desired.GetAPIVersion() == "v1" {
+		return true, false, applyObj(ctx, r.direct, desired)
 	}
-	current := gvkObj(sgClusterGVK)
-	nn := types.NamespacedName{Namespace: desired.GetNamespace(), Name: desired.GetName()}
-	if err := r.direct.Get(ctx, nn, current); err != nil {
-		if apierrors.IsNotFound(err) {
-			return applyObj(ctx, r.direct, desired)
+	object := renderCrossplaneObject(claim, desired)
+	if err := applyObj(ctx, r.direct, object); err != nil {
+		return false, true, err
+	}
+	current := gvkObj(crossplaneObjectGVK)
+	if err := r.direct.Get(ctx, types.NamespacedName{Namespace: object.GetNamespace(), Name: object.GetName()}, current); err != nil {
+		return false, true, client.IgnoreNotFound(err)
+	}
+	return crossplaneManagedObjectReady(current), true, nil
+}
+
+func renderCrossplaneObject(claim, desired *unstructured.Unstructured) *unstructured.Unstructured {
+	object := object(crossplaneObjectGVK, claim.GetNamespace(), crossplaneObjectName(desired))
+	stampPostgresLabels(object, claim)
+	labels := object.GetLabels()
+	labels["provisioning.opensphere.io/target-kind"] = strings.ToLower(desired.GetKind())
+	object.SetLabels(labels)
+	policy, _, _ := unstructured.NestedString(claim.Object, "spec", "deletionPolicy")
+	managementPolicies := []interface{}{"Observe", "Create", "Update", "LateInitialize"}
+	if policy == "Delete" {
+		managementPolicies = []interface{}{"*"}
+	}
+	object.Object["spec"] = map[string]interface{}{
+		"managementPolicies": managementPolicies,
+		"forProvider":        map[string]interface{}{"manifest": desired.Object},
+		"providerConfigRef":  map[string]interface{}{"kind": "ClusterProviderConfig", "name": "opensphere-local-cluster"},
+	}
+	return object
+}
+
+func crossplaneObjectName(desired *unstructured.Unstructured) string {
+	raw := strings.ToLower(desired.GetKind() + "-" + desired.GetName())
+	if len(raw) <= 63 {
+		return raw
+	}
+	digest := sha256.Sum256([]byte(raw))
+	return raw[:52] + "-" + fmt.Sprintf("%x", digest[:5])
+}
+
+func crossplaneManagedObjectReady(object *unstructured.Unstructured) bool {
+	conditions, _, _ := unstructured.NestedSlice(object.Object, "status", "conditions")
+	ready, synced := false, false
+	for _, item := range conditions {
+		condition, ok := item.(map[string]interface{})
+		if !ok || condition["status"] != "True" {
+			continue
 		}
-		return err
+		switch condition["type"] {
+		case "Ready":
+			ready = true
+		case "Synced":
+			synced = true
+		}
 	}
-	if postgresManagedStateEqual(current, desired) {
-		return nil
-	}
-	return applyObj(ctx, r.direct, desired)
+	return ready && synced
 }
 
 // postgresManagedStateEqual compares only fields owned by the Foundation
@@ -338,18 +398,21 @@ func (r *postgresClaimReconciler) ensureApplicationSecret(ctx context.Context, c
 
 func (r *postgresClaimReconciler) release(ctx context.Context, claim *unstructured.Unstructured) (reconcile.Result, error) {
 	policy, _, _ := unstructured.NestedString(claim.Object, "spec", "deletionPolicy")
+	if err := r.direct.DeleteAllOf(ctx, gvkObj(crossplaneObjectGVK), client.InNamespace(claim.GetNamespace()), client.MatchingLabels{"provisioning.opensphere.io/postgres-claim": claim.GetName()}); err != nil && !apierrors.IsNotFound(err) {
+		return reconcile.Result{}, err
+	}
+	remaining := &unstructured.UnstructuredList{}
+	remaining.SetGroupVersionKind(schema.GroupVersionKind{Group: crossplaneObjectGVK.Group, Version: crossplaneObjectGVK.Version, Kind: "ObjectList"})
+	if err := r.direct.List(ctx, remaining, client.InNamespace(claim.GetNamespace()), client.MatchingLabels{"provisioning.opensphere.io/postgres-claim": claim.GetName()}); err != nil && !apierrors.IsNotFound(err) {
+		return reconcile.Result{}, err
+	}
+	if len(remaining.Items) > 0 {
+		return reconcile.Result{RequeueAfter: 3 * time.Second}, nil
+	}
 	if policy == "Delete" {
 		for _, gvk := range []schema.GroupVersionKind{
-			sgClusterGVK,
-			sgScriptGVK,
-			{Group: "stackgres.io", Version: "v1", Kind: "SGPoolingConfig"},
-			{Group: "stackgres.io", Version: "v1", Kind: "SGPostgresConfig"},
-			{Group: "stackgres.io", Version: "v1", Kind: "SGInstanceProfile"},
 			addOnInstallGVK,
 			{Version: "v1", Kind: "Secret"},
-			{Group: "rbac.authorization.k8s.io", Version: "v1", Kind: "Role"},
-			{Group: "rbac.authorization.k8s.io", Version: "v1", Kind: "RoleBinding"},
-			podMonitorGVK,
 		} {
 			if err := r.direct.DeleteAllOf(ctx, gvkObj(gvk), client.InNamespace(claim.GetNamespace()), client.MatchingLabels{"provisioning.opensphere.io/postgres-claim": claim.GetName()}); err != nil && !apierrors.IsNotFound(err) {
 				return reconcile.Result{}, err

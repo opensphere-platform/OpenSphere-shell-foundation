@@ -317,6 +317,44 @@ func TestDedicatedPostgresRendersPrometheusPodMonitor(t *testing.T) {
 	t.Fatal("dedicated StackGres resources did not include a PodMonitor")
 }
 
+func TestCrossplaneObjectCarriesStackGresManifestWithoutSecretMaterial(t *testing.T) {
+	claim := testPostgresClaim()
+	desired := gvkObj(sgClusterGVK)
+	desired.SetNamespace(claim.GetNamespace())
+	desired.SetName("pgc-orders")
+	desired.Object["spec"] = map[string]interface{}{"instances": int64(2)}
+	object := renderCrossplaneObject(claim, desired)
+	if object.GroupVersionKind() != crossplaneObjectGVK {
+		t.Fatalf("unexpected bridge GVK: %s", object.GroupVersionKind())
+	}
+	manifest, found, err := unstructured.NestedMap(object.Object, "spec", "forProvider", "manifest")
+	if err != nil || !found || manifest["kind"] != "SGCluster" {
+		t.Fatalf("StackGres manifest was not delegated to Crossplane: found=%v err=%v manifest=%v", found, err, manifest)
+	}
+	provider, _, _ := unstructured.NestedString(object.Object, "spec", "providerConfigRef", "name")
+	if provider != "opensphere-local-cluster" {
+		t.Fatalf("providerConfigRef=%q", provider)
+	}
+	if object.GetLabels()["provisioning.opensphere.io/postgres-claim"] != claim.GetName() {
+		t.Fatal("Crossplane Object is not traceable to its PostgresClaim")
+	}
+}
+
+func TestCrossplaneBridgeRequiresReadyAndSynced(t *testing.T) {
+	object := gvkObj(crossplaneObjectGVK)
+	object.Object["status"] = map[string]interface{}{"conditions": []interface{}{
+		map[string]interface{}{"type": "Ready", "status": "True"},
+		map[string]interface{}{"type": "Synced", "status": "True"},
+	}}
+	if !crossplaneManagedObjectReady(object) {
+		t.Fatal("Ready and Synced Crossplane Object was not accepted")
+	}
+	object.Object["status"].(map[string]interface{})["conditions"].([]interface{})[1] = map[string]interface{}{"type": "Synced", "status": "False"}
+	if crossplaneManagedObjectReady(object) {
+		t.Fatal("unsynced Crossplane Object was reported ready")
+	}
+}
+
 func TestPostgresManagedStateIgnoresStackGresDefaultsAndStatus(t *testing.T) {
 	desired := gvkObj(sgClusterGVK)
 	desired.SetLabels(map[string]string{"app.kubernetes.io/managed-by": cpManagedBy})
