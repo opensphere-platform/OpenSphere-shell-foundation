@@ -19,9 +19,11 @@ import (
 )
 
 const (
-	postgresModeDedicated      = "Dedicated"
-	postgresModeSharedDatabase = "SharedDatabase"
-	postgresModeDatabaseAccess = "DatabaseAccess"
+	postgresModeDedicated       = "Dedicated"
+	postgresModeSharedDatabase  = "SharedDatabase"
+	postgresModeDatabaseAccess  = "DatabaseAccess"
+	postgresSharedApplyVersion  = int64(2)
+	postgresSharedRevokeVersion = int64(3)
 )
 
 type postgresTarget struct {
@@ -66,7 +68,11 @@ func (r *postgresClaimReconciler) reconcileSharedPostgresClaim(ctx context.Conte
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	resources, scriptID, err := renderSharedPostgresResources(claim, target, mode, password, false)
+	databaseOwner, err := r.postgresDatabaseOwner(ctx, claim, target)
+	if err != nil {
+		return r.setSharedPostgresStatus(ctx, claim, target, "Pending", "False", "DatabaseOwnershipPending", err.Error(), 0, 0)
+	}
+	resources, scriptID, err := renderSharedPostgresResources(claim, target, mode, password, databaseOwner, false)
 	if err != nil {
 		return r.reject(ctx, nn, "InvalidAccessPolicy", err.Error())
 	}
@@ -91,7 +97,7 @@ func (r *postgresClaimReconciler) reconcileSharedPostgresClaim(ctx context.Conte
 	clusterErr := r.direct.Get(ctx, types.NamespacedName{Namespace: target.Namespace, Name: target.ClusterName}, cluster)
 	sqlReady, sqlFailed, sqlMessage := false, false, "StackGres가 데이터베이스 요청을 적용하고 있습니다"
 	if clusterErr == nil {
-		sqlReady, sqlFailed, sqlMessage = stackGresManagedSQLStatus(cluster, scriptID, int64(1))
+		sqlReady, sqlFailed, sqlMessage = stackGresManagedSQLStatus(cluster, scriptID, postgresSharedApplyVersion)
 	}
 	if sqlFailed {
 		return r.setSharedPostgresStatus(ctx, claim, target, "Failed", "False", "DatabaseRequestFailed", sqlMessage, bridgeTotal, bridgeReady)
@@ -138,7 +144,45 @@ func (r *postgresClaimReconciler) resolvePostgresTarget(ctx context.Context, cla
 	return postgresTarget{Claim: targetClaim, Namespace: namespace, ClaimName: name, ClusterName: postgresClusterName(targetClaim)}, nil
 }
 
-func renderSharedPostgresResources(claim *unstructured.Unstructured, target postgresTarget, mode, password string, cleanup bool) ([]*unstructured.Unstructured, int64, error) {
+func (r *postgresClaimReconciler) postgresDatabaseOwner(ctx context.Context, claim *unstructured.Unstructured, target postgresTarget) (string, error) {
+	owner, _, _ := unstructured.NestedString(claim.Object, "spec", "owner")
+	if postgresClaimMode(claim) == postgresModeSharedDatabase {
+		return owner, nil
+	}
+	database, _, _ := unstructured.NestedString(claim.Object, "spec", "database")
+	targetDatabase, _, _ := unstructured.NestedString(target.Claim.Object, "spec", "database")
+	if database == targetDatabase {
+		targetOwner, _, _ := unstructured.NestedString(target.Claim.Object, "spec", "owner")
+		if targetOwner != "" {
+			return targetOwner, nil
+		}
+	}
+	claims := &unstructured.UnstructuredList{}
+	claims.SetGroupVersionKind(schema.GroupVersionKind{Group: postgresClaimGVK.Group, Version: postgresClaimGVK.Version, Kind: "PostgresClaimList"})
+	if err := r.direct.List(ctx, claims); err != nil {
+		return "", err
+	}
+	for i := range claims.Items {
+		candidate := &claims.Items[i]
+		if postgresClaimMode(candidate) != postgresModeSharedDatabase {
+			continue
+		}
+		candidateDatabase, _, _ := unstructured.NestedString(candidate.Object, "spec", "database")
+		candidateTarget, _, _ := unstructured.NestedString(candidate.Object, "spec", "clusterRef", "name")
+		candidateTargetNS, _, _ := unstructured.NestedString(candidate.Object, "spec", "clusterRef", "namespace")
+		candidatePhase, _, _ := unstructured.NestedString(candidate.Object, "status", "phase")
+		if candidateDatabase != database || candidateTarget != target.ClaimName || candidateTargetNS != target.Namespace || candidatePhase != "Ready" {
+			continue
+		}
+		candidateOwner, _, _ := unstructured.NestedString(candidate.Object, "spec", "owner")
+		if candidateOwner != "" {
+			return candidateOwner, nil
+		}
+	}
+	return "", fmt.Errorf("Database %s의 PFSS 관리 Owner를 확인할 수 없습니다. 전용 인스턴스 기본 DB 또는 SharedDatabase 요청으로 생성된 DB만 접근 계정을 발급할 수 있습니다", database)
+}
+
+func renderSharedPostgresResources(claim *unstructured.Unstructured, target postgresTarget, mode, password, databaseOwner string, cleanup bool) ([]*unstructured.Unstructured, int64, error) {
 	stem := sharedPostgresResourceStem(claim)
 	database, _, _ := unstructured.NestedString(claim.Object, "spec", "database")
 	owner, _, _ := unstructured.NestedString(claim.Object, "spec", "owner")
@@ -167,13 +211,13 @@ func renderSharedPostgresResources(claim *unstructured.Unstructured, target post
 	if mode == postgresModeSharedDatabase {
 		actionSQL = fmt.Sprintf("CREATE DATABASE %s OWNER %s;\n", quotePostgresIdentifier(database), quotePostgresIdentifier(owner))
 	} else if access == "ReadOnly" {
-		actionSQL = fmt.Sprintf("GRANT CONNECT ON DATABASE %s TO %s;\nGRANT USAGE ON SCHEMA public TO %s;\nGRANT SELECT ON ALL TABLES IN SCHEMA public TO %s;\nGRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %s;\nALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO %s;\nALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO %s;\n", quotePostgresIdentifier(database), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner))
+		actionSQL = fmt.Sprintf("GRANT CONNECT ON DATABASE %s TO %s;\nGRANT USAGE ON SCHEMA public TO %s;\nGRANT SELECT ON ALL TABLES IN SCHEMA public TO %s;\nGRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %s;\nALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA public GRANT SELECT ON TABLES TO %s;\nALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO %s;\n", quotePostgresIdentifier(database), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(databaseOwner), quotePostgresIdentifier(owner), quotePostgresIdentifier(databaseOwner), quotePostgresIdentifier(owner))
 	} else {
-		actionSQL = fmt.Sprintf("GRANT CONNECT ON DATABASE %s TO %s;\nGRANT USAGE, CREATE ON SCHEMA public TO %s;\nGRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public TO %s;\nGRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO %s;\nALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLES TO %s;\nALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO %s;\n", quotePostgresIdentifier(database), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner))
+		actionSQL = fmt.Sprintf("GRANT CONNECT ON DATABASE %s TO %s;\nGRANT USAGE, CREATE ON SCHEMA public TO %s;\nGRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public TO %s;\nGRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO %s;\nALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLES TO %s;\nALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO %s;\n", quotePostgresIdentifier(database), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(databaseOwner), quotePostgresIdentifier(owner), quotePostgresIdentifier(databaseOwner), quotePostgresIdentifier(owner))
 	}
-	version := int64(1)
+	version := postgresSharedApplyVersion
 	if cleanup {
-		version = 2
+		version = postgresSharedRevokeVersion
 		roleSQL = fmt.Sprintf("ALTER ROLE %s NOLOGIN;\n", quotePostgresIdentifier(owner))
 		if mode == postgresModeSharedDatabase {
 			policy, _, _ := unstructured.NestedString(claim.Object, "spec", "deletionPolicy")
@@ -396,7 +440,7 @@ func (r *postgresClaimReconciler) releaseSharedPostgresClaim(ctx context.Context
 		// The target has already disappeared. Releasing local bridge objects is the only safe action left.
 		return r.finishSharedPostgresRelease(ctx, claim, postgresTarget{})
 	}
-	resources, scriptID, err := renderSharedPostgresResources(claim, target, postgresClaimMode(claim), "release-placeholder", true)
+	resources, scriptID, err := renderSharedPostgresResources(claim, target, postgresClaimMode(claim), "release-placeholder", "postgres", true)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -412,7 +456,7 @@ func (r *postgresClaimReconciler) releaseSharedPostgresClaim(ctx context.Context
 	if err := r.direct.Get(ctx, types.NamespacedName{Namespace: target.Namespace, Name: target.ClusterName}, cluster); err != nil {
 		return reconcile.Result{}, err
 	}
-	ready, failed, message := stackGresManagedSQLStatus(cluster, scriptID, int64(2))
+	ready, failed, message := stackGresManagedSQLStatus(cluster, scriptID, postgresSharedRevokeVersion)
 	if failed {
 		return reconcile.Result{}, fmt.Errorf("PostgreSQL 연결 회수 실패: %s", message)
 	}
