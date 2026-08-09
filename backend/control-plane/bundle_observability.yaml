@@ -10,12 +10,14 @@ kind: ServiceAccount
 metadata:
   name: foundation-observability-collector
   namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: otel }
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: foundation-observability-collector-config
   namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: otel }
 data:
   config.yaml: |
     receivers:
@@ -52,13 +54,14 @@ kind: Deployment
 metadata:
   name: foundation-observability-collector
   namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: otel }
 spec:
   replicas: 1
   selector:
     matchLabels: { app: foundation-observability-collector }
   template:
     metadata:
-      labels: { app: foundation-observability-collector }
+      labels: { app: foundation-observability-collector, foundation.opensphere.io/engine: otel }
     spec:
       serviceAccountName: foundation-observability-collector
       imagePullSecrets:
@@ -89,6 +92,7 @@ kind: Service
 metadata:
   name: foundation-observability-collector
   namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: otel }
 spec:
   selector: { app: foundation-observability-collector }
   ports:
@@ -104,6 +108,7 @@ kind: NetworkPolicy
 metadata:
   name: foundation-observability-collector
   namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: otel }
 spec:
   podSelector:
     matchLabels: { app: foundation-observability-collector }
@@ -124,6 +129,7 @@ kind: ServiceMonitor
 metadata:
   name: foundation-observability-collector
   namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: otel }
 spec:
   selector:
     matchLabels: { app: foundation-observability-collector }

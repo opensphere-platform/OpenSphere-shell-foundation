@@ -15,7 +15,7 @@
       "manual": "percona-psmdb-operations.ko.md",
       "officialDocs": "https://docs.percona.com/percona-operator-for-mongodb/",
       "installer": "foundation-model",
-      "operands": ["mirror/percona-server-mongodb-operator:edge", "mirror/percona-server-mongodb:edge"]
+      "operands": ["mirror/percona-server-mongodb-operator:edge", "mirror/percona-server-mongodb:edge", "mirror/percona-backup-mongodb:edge", "mirror/pmm-client:edge"]
     },
     {
       "id": "valkey",
@@ -29,7 +29,7 @@
       "manual": "valkey-operations.ko.md",
       "officialDocs": "https://valkey.io/topics/",
       "installer": "foundation-model",
-      "operands": ["mirror/valkey:edge"]
+      "operands": ["mirror/valkey:edge", "mirror/redis-exporter:edge"]
     },
     {
       "id": "rustfs",
@@ -71,7 +71,7 @@
       "manual": "syncope-operations.ko.md",
       "officialDocs": "https://syncope.apache.org/docs/",
       "installer": "foundation-model",
-      "operands": ["mirror/apache-syncope:edge"]
+      "operands": ["mirror/syncope:edge"]
     },
     {
       "id": "opa",
@@ -127,7 +127,7 @@
       "manual": "stalwart-operations.ko.md",
       "officialDocs": "https://stalw.art/docs/",
       "installer": "foundation-model",
-      "operands": ["mirror/stalwart:edge"]
+      "operands": ["mirror/stalwart:edge", "mirror/stalwart-cli:edge"]
     },
     {
       "id": "novu",
@@ -211,7 +211,7 @@
       "manual": "grafana-operator-operations.ko.md",
       "officialDocs": "https://grafana.github.io/grafana-operator/",
       "installer": "foundation-model",
-      "operands": ["mirror/grafana-operator:edge"]
+      "operands": ["mirror/grafana-operator:edge", "mirror/grafana:edge"]
     },
     {
       "id": "ptm",

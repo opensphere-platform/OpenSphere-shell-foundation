@@ -34,7 +34,11 @@ spec:
           args:
             - --managed-namespace=opensphere-foundation
             # image-source: ghcr-mirror(ok) origin=otel/opentelemetry-collector-contrib:0.111.0
-            - --collector-image=ghcr.io/opensphere-platform/mirror-opentelemetry-collector-contrib@sha256:a2a52e43c1a80aa94120ad78c2db68780eb90e6d11c8db5b3ce2f6a0cc6b5029
+            - --collector-image=ghcr.io/opensphere-platform/mirror/opentelemetry-collector-contrib@sha256:a2a52e43c1a80aa94120ad78c2db68780eb90e6d11c8db5b3ce2f6a0cc6b5029
+            - --tempo-image=ghcr.io/opensphere-platform/mirror/grafana-tempo@sha256:cda87c212d8c584dc0b89e337e7ed648a5100feb657e5d528480ee4fa03dbbe3
+            - --loki-image=ghcr.io/opensphere-platform/mirror/grafana-loki@sha256:70b9f699fc9bb868b62f1cfd4f787dfa50242f1fd92e6089787d5d7daea75fe8
+            - --observability-gateway-image=ghcr.io/opensphere-platform/opensphere-observability-gateway@sha256:864f63f871bec88486b5aa872a65c1fdb9e2e97abde59d7f95a32f74061344dc
+            - --grafana-image=ghcr.io/opensphere-platform/mirror/grafana@sha256:121a7a9ece6dc10b969f1f96eed64b4f07dfac0d0b8abc070f7cb83bbde86f63
             # image-source: ghcr-mirror(ok) origin=quay.io/keycloak/keycloak:26.0
             - --keycloak-image=ghcr.io/opensphere-platform/mirror/keycloak@sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858
             - --psmdb-image=ghcr.io/opensphere-platform/mirror/percona-server-mongodb@sha256:53f89c001997627554e6afc0feb5906209ba109f4f98c62f2ca8456c214af60c
@@ -42,7 +46,19 @@ spec:
             - --valkey-exporter-image=ghcr.io/opensphere-platform/mirror/redis-exporter@sha256:bbc0b673a89296eab36d6c6c2bde8571ee868dc4059306be482c03d7b05aa662
             - --rustfs-image=ghcr.io/opensphere-platform/mirror/rustfs@sha256:60f4f2f41ce95216f8cac676e69f9d90c0bfec458a3bc7fd7fb9b7c2452ac57a
             - --opensearch-image=ghcr.io/opensphere-platform/mirror/opensearch@sha256:44ba7ea58a319adf61c33ab16873f9ef5dbb30b291a832d375172f0b2d24e3c9
-            - --opa-image=ghcr.io/opensphere-platform/mirror/opa@sha256:3ece20d3a58eb4051db71c0b84fc962bca2a6f9aa74ee8ea3d027d693fdc2d1a
+            - --litellm-image=ghcr.io/opensphere-platform/mirror/litellm@sha256:a1745e629abfb17d434426ff48b115f54f4f4c4a0f5af241de569e93c63c411e
+            - --langfuse-image=ghcr.io/opensphere-platform/mirror/langfuse@sha256:d9f082c0a7c18e967ae11b2ea1cb769644d125c5f27c559bd03108e2eb36acc2
+            - --langfuse-worker-image=ghcr.io/opensphere-platform/mirror/langfuse-worker@sha256:dbdb379956060ea0dbe3cb30c139bed9dad99b2ec37e28b9018486d066251763
+            - --clickhouse-image=ghcr.io/opensphere-platform/mirror/clickhouse-server@sha256:f40cd6034fb8c54dce6a85338750fbad79f387e2705e1991a85f2e7086b5b9ea
+            - --stalwart-image=ghcr.io/opensphere-platform/mirror/stalwart@sha256:254320d6d9af6bafce85fcf301aaa29fa0a4a07e2b91e19fe97588ecfb230fab
+            - --stalwart-cli-image=ghcr.io/opensphere-platform/mirror/stalwart-cli@sha256:fe199affac1d120a8c200ef39ae629765a2976270e0453575c1caf906ee15b52
+            - --novu-api-image=ghcr.io/opensphere-platform/mirror/novu-api@sha256:d9550e949cf469a3124c6859844863c15881c512fcd2cf5ea2147f8b339fb4e7
+            - --novu-worker-image=ghcr.io/opensphere-platform/mirror/novu-worker@sha256:83296878d1b633ca5c9a4e39b10283fa8e2c4d5d341c11847ffd1e4a3897f3b0
+            - --novu-ws-image=ghcr.io/opensphere-platform/mirror/novu-ws@sha256:61560aaf8b60a9ea38cec7cd5976a441ef7f90721892a0d38958b3ac17196836
+            - --novu-dashboard-image=ghcr.io/opensphere-platform/mirror/novu-dashboard@sha256:08f477a1ae9393c67d5853d75ae4e4b3fb03786a6386a0ce89678518dc2b0909
+            - --mattermost-image=ghcr.io/opensphere-platform/mirror/mattermost-team-edition@sha256:1c538cf33c2144ba2c825571cd414aaaebf8d8c231d4b18081b811cd0ca0ef2a
+            - --velero-image=ghcr.io/opensphere-platform/mirror/velero@sha256:37396519f399536e5f01427d723565ae69294ec3fb5625cf1c87c09eaa9de16b
+            - --opa-image=ghcr.io/opensphere-platform/mirror/opa@sha256:57f7d06808fff6de3ea1d698e6430990973ca1370be0e54975f0083d615521da
             - --opa-control-image=ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:618f765e95441ca69987f53aeed4278fbeddb2bd89d36a91ad43f23706187e8e
             # image-source: GHCR mirror, origin=apache/syncope:4.0.7 linux/amd64
             - --syncope-image=ghcr.io/opensphere-platform/mirror/syncope@sha256:970ecea41b897656063eed5b1a8b6637ec84fa8543340831a9f1bbf767f2a2f9

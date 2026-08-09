@@ -9,6 +9,10 @@ const spec = JSON.parse(fs.readFileSync(path.join(ROOT, 'plugin.json'), 'utf8'))
 const MODEL_PATH = '/api/k8s/apis/foundation.opensphere.io/v1alpha1/foundationmodels';
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
+function claimCollectionPath() {
+  return `/api/k8s/apis/foundation.opensphere.io/v1alpha1/namespaces/${encodeURIComponent(spec.namespace)}/foundationclaims`;
+}
+
 function json(res, status, value) {
   const body = JSON.stringify(value);
   res.writeHead(status, {
@@ -191,6 +195,65 @@ async function applyRuntime(req, res) {
   return json(res, 202, { accepted: true, plugin: spec.id, model: control.model, engine: control.engineId, enabled: input.enabled });
 }
 
+async function listClaims(req, res) {
+  const upstream = await foundationRequest(req, claimCollectionPath());
+  const text = await upstream.text();
+  if (!upstream.ok) return json(res, upstream.status, parseJson(text, { error: `Foundation host HTTP ${upstream.status}` }));
+  const list = parseJson(text, { items: [] });
+  return json(res, 200, {
+    module: spec.id,
+    namespace: spec.namespace,
+    items: (Array.isArray(list.items) ? list.items : []).filter((item) => item?.spec?.module === spec.id),
+  });
+}
+
+async function createClaim(req, res) {
+  if (typeof req.headers.authorization !== 'string' || !req.headers.authorization.startsWith('Bearer ')) {
+    return json(res, 401, { error: 'authenticated Console identity is required' });
+  }
+  if (typeof req.headers['x-os-idempotency-key'] !== 'string' || !req.headers['x-os-idempotency-key']) {
+    return json(res, 400, { error: 'X-OS-Idempotency-Key is required' });
+  }
+  const input = parseJson(await readBody(req), null);
+  if (!input || typeof input !== 'object') return json(res, 400, { error: 'request body is required' });
+  const name = String(input.name || '').trim();
+  if (!/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(name) || name.length > 63) return json(res, 400, { error: 'name must be a DNS label' });
+  const requestType = String(input.requestType || '');
+  if (!Array.isArray(spec.control.requestTypes) || !spec.control.requestTypes.includes(requestType)) {
+    return json(res, 400, { error: `unsupported requestType for ${spec.id}` });
+  }
+  const requestMode = String(spec.control.requestModes?.[requestType] || 'pending');
+  if (requestMode === 'pending') {
+    return json(res, 409, { error: 'RequestDriverNotReady', module: spec.id, requestType });
+  }
+  const parameters = input.parameters || {};
+  validateConfiguration(parameters, 'parameters');
+  const request = { type: requestType };
+  if (input.targetRef && typeof input.targetRef === 'object') {
+    const targetName = String(input.targetRef.name || '').trim();
+    if (!/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(targetName) || targetName.length > 63) return json(res, 400, { error: 'targetRef.name must be a DNS label' });
+    request.targetRef = {
+      ...(input.targetRef.apiVersion ? { apiVersion: String(input.targetRef.apiVersion) } : {}),
+      ...(input.targetRef.kind ? { kind: String(input.targetRef.kind) } : {}),
+      name: targetName,
+      ...(input.targetRef.namespace ? { namespace: String(input.targetRef.namespace) } : {}),
+    };
+  }
+  const claim = {
+    apiVersion: 'foundation.opensphere.io/v1alpha1', kind: 'FoundationClaim',
+    metadata: { name, namespace: spec.namespace, labels: { 'foundation.opensphere.io/module': spec.id } },
+    spec: { model: spec.control.model, module: spec.id, request, parameters },
+  };
+  if (input.profileName) claim.spec.profileRef = { name: String(input.profileName) };
+  if (input.credentialSecretName) claim.spec.credentialSecretRef = { name: String(input.credentialSecretName) };
+  const upstream = await foundationRequest(req, claimCollectionPath(), {
+    method: 'POST', contentType: 'application/json', body: JSON.stringify(claim),
+  });
+  const text = await upstream.text();
+  if (!upstream.ok) return json(res, upstream.status, parseJson(text, { error: `Foundation host HTTP ${upstream.status}` }));
+  return json(res, 202, { accepted: true, module: spec.id, namespace: spec.namespace, name, requestType, requestMode });
+}
+
 function staticFile(res, pathname) {
   const relative = pathname.replace(/^\/plugins\/?/, '');
   const target = path.resolve(ROOT, relative);
@@ -262,6 +325,8 @@ const server = http.createServer((req, res) => {
       // of becoming unhandled rejections that terminate the plugin process.
       if (url.pathname === '/api/runtime/status' && req.method === 'GET') return await runtimeStatus(req, res);
       if (url.pathname === '/api/runtime/apply' && req.method === 'POST') return await applyRuntime(req, res);
+      if (url.pathname === '/api/claims' && req.method === 'GET') return await listClaims(req, res);
+      if (url.pathname === '/api/claims' && req.method === 'POST') return await createClaim(req, res);
       if (url.pathname === '/cli/manifest' && req.method === 'GET') return json(res, 200, cliManifest());
       if (url.pathname === '/cli/status' && req.method === 'GET') return await runtimeStatus(req, res);
       if (url.pathname === '/manual' && req.method === 'GET') {

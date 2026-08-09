@@ -4,6 +4,11 @@ import { resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 const catalog = JSON.parse(readFileSync(resolve(root, 'plugins/catalog.json'), 'utf8'));
 const mirrors = JSON.parse(readFileSync(resolve(root, 'oci/mirrors.json'), 'utf8'));
+const controls = JSON.parse(readFileSync(resolve(root, 'plugins/control-contracts.json'), 'utf8'));
+const engineSurface = readFileSync(resolve(root, 'src/app/foundation/engines.component.ts'), 'utf8');
+const operatorSurface = readFileSync(resolve(root, 'src/app/foundation/roadmap-module.component.ts'), 'utf8');
+const overviewSurface = readFileSync(resolve(root, 'src/app/foundation/overview.component.ts'), 'utf8');
+const engineProbes = readFileSync(resolve(root, 'src/app/foundation/engines.service.ts'), 'utf8');
 if (catalog.schemaVersion !== 1 || catalog.hostRef !== 'foundation') throw new Error('invalid Foundation plugin catalog header');
 if (!Array.isArray(catalog.plugins) || catalog.plugins.length !== 18) throw new Error(`expected 18 Foundation-bundled plugins; PostgreSQL, OpenSearch and directory are separately governed, got ${catalog.plugins?.length}`);
 const ids = new Set();
@@ -57,4 +62,61 @@ for (const mirror of mirrors.images ?? []) {
 }
 const missing = [...referencedMirrors].filter((name) => !mirrorNames.has(name));
 if (missing.length) throw new Error(`Foundation plugin operands missing from mirror catalog: ${missing.join(', ')}`);
-process.stdout.write(`verified ${catalog.plugins.length} Foundation-bundled plugins and ${referencedMirrors.size} operand mirrors; PostgreSQL, OpenSearch and directory are separately governed\n`);
+if (controls.schemaVersion !== 2) throw new Error(`expected PFSS control contract schemaVersion 2, got ${controls.schemaVersion}`);
+const separatelyGoverned = ['postgres', 'opensearch', 'directory'];
+const allPFSS = [...catalog.plugins.map((item) => item.id), ...separatelyGoverned].sort();
+const controlIDs = Object.keys(controls.contracts ?? {}).sort();
+if (JSON.stringify(allPFSS) !== JSON.stringify(controlIDs)) {
+  throw new Error(`PFSS control contracts must cover exactly ${allPFSS.length} modules: catalog=${allPFSS.join(',')} controls=${controlIDs.join(',')}`);
+}
+const allowedRequestTypes = new Set([
+  'Instance', 'Database', 'Access', 'Bucket', 'Index', 'Realm', 'Client', 'Directory',
+  'Policy', 'Route', 'Project', 'MailDomain', 'Mailbox', 'Workflow', 'Workspace',
+  'Pipeline', 'Tenant', 'Dashboard', 'DataSource', 'BackupPolicy', 'Restore', 'Application', 'Provider',
+]);
+const allowedRequestModes = new Set(['managed', 'shared', 'bind-existing', 'bind-shared', 'pending']);
+for (const id of allPFSS) {
+  const control = controls.contracts[id];
+  if (!control.model || !control.engineId || !control.parameterPath || !control.reconciler || !control.operatorDriver || !control.nativeResource) {
+    throw new Error(`${id} has an incomplete Operator control contract`);
+  }
+  if (!Array.isArray(control.requestTypes) || control.requestTypes.length < 1 || control.requestTypes.some((item) => !allowedRequestTypes.has(item))) {
+    throw new Error(`${id} has invalid requestTypes`);
+  }
+  if (!control.requestModes || Object.keys(control.requestModes).sort().join(',') !== [...control.requestTypes].sort().join(',')) {
+    throw new Error(`${id} requestModes must cover every requestType exactly once`);
+  }
+  for (const [requestType, mode] of Object.entries(control.requestModes)) {
+    if (!allowedRequestModes.has(mode)) throw new Error(`${id}/${requestType} has invalid request mode ${mode}`);
+  }
+  if (control.reconciler === 'pending' && Object.values(control.requestModes).some((mode) => mode !== 'pending')) {
+    throw new Error(`${id} cannot publish available requestModes while its reconciler is pending`);
+  }
+  if (!Array.isArray(control.capabilities) || control.capabilities.length < 1) throw new Error(`${id} has no binding capabilities`);
+  for (const dependency of control.dependencies ?? []) {
+    if (!dependency || typeof dependency.module !== 'string' || typeof dependency.purpose !== 'string' || typeof dependency.required !== 'boolean') {
+      throw new Error(`${id} has an incomplete dependency contract`);
+    }
+    if (!allPFSS.includes(dependency.module) && !dependency.module.startsWith('external:')) {
+      throw new Error(`${id} depends on unknown module ${dependency.module}`);
+    }
+    if (!allowedRequestTypes.has(dependency.requestType)) throw new Error(`${id} dependency ${dependency.module} has invalid requestType`);
+  }
+  if (control.reconciler === 'pending' && !control.blocker) throw new Error(`${id} pending reconciler must publish an honest blocker`);
+}
+const expectedEngineCards = [
+  'keycloak', 'syncope', 'samba', 'opa', 'postgres', 'psmdb', 'valkey', 'rustfs', 'opensearch',
+  'litellm', 'langfuse', 'stalwart', 'novu', 'mattermost', 'otel', 'tempo', 'loki', 'grafana-operator', 'ptm',
+];
+for (const id of expectedEngineCards) {
+  const card = engineSurface.match(new RegExp(`id:\\s*'${id}'[\\s\\S]*?category:\\s*'[^']+'[\\s\\S]*?impl:\\s*'([^']+)'[\\s\\S]*?liveKey:\\s*'([^']*)'`));
+  if (!card) throw new Error(`${id} is missing from the PFS module surface`);
+  if (card[1] !== 'real') throw new Error(`${id} regressed to non-Operator implementation state ${card[1]}`);
+  if (!card[2]) throw new Error(`${id} must expose a live Operator/operand probe`);
+  if (!engineProbes.includes(`this.probe('${card[2]}',`)) throw new Error(`${id} live probe ${card[2]} is not wired`);
+}
+for (const retired of ['Phase 1 관리 표면', 'reconciler 구현 후 활성화', '아직 설치되지 않았습니다']) {
+  if (operatorSurface.includes(retired)) throw new Error(`operator surface regressed to retired placeholder copy: ${retired}`);
+}
+if (overviewSurface.includes('const PLANNED:')) throw new Error('PFS overview regressed to the retired roadmap-only domain model');
+process.stdout.write(`verified ${allPFSS.length} PFSS Operator contracts, ${catalog.plugins.length} bundled plugins and ${referencedMirrors.size} operand mirrors\n`);

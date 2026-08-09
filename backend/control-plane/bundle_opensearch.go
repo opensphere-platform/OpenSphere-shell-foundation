@@ -11,13 +11,18 @@ import (
 )
 
 const osStatefulSetName = "opensphere-search"
+const openSearchAdminSecretName = osStatefulSetName + "-admin-credentials"
+const openSearchSecurityConfigSecretName = osStatefulSetName + "-security-config"
 
 var statefulSetGVK = schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "StatefulSet"}
+var openSearchClusterGVK = schema.GroupVersionKind{Group: "opensearch.opster.io", Version: "v1", Kind: "OpenSearchCluster"}
+var openSearchRoleGVK = schema.GroupVersionKind{Group: "opensearch.opster.io", Version: "v1", Kind: "OpensearchRole"}
+var openSearchUserGVK = schema.GroupVersionKind{Group: "opensearch.opster.io", Version: "v1", Kind: "OpensearchUser"}
 
 func opensearchNS(cfg *config, fm *unstructured.Unstructured) string { return dataNS(cfg, fm) }
 func opensearchSvcDNS(ns string) string                              { return osStatefulSetName + "." + ns + ".svc" }
 func opensearchEndpoint(cfg *config, fm *unstructured.Unstructured) string {
-	return "http://" + opensearchSvcDNS(opensearchNS(cfg, fm)) + ":9200"
+	return "https://" + opensearchSvcDNS(opensearchNS(cfg, fm)) + ":9200"
 }
 func opensearchProbe(cfg *config, fm *unstructured.Unstructured) string {
 	return opensearchSvcDNS(opensearchNS(cfg, fm)) + ":9200"
@@ -28,6 +33,7 @@ type opensearchOpts struct {
 	storageSize  string
 	javaOpts     string
 	image        string
+	version      string
 	replicas     int64
 	resources    map[string]interface{}
 	monitoring   bool
@@ -39,6 +45,7 @@ func opensearchParams(fm *unstructured.Unstructured, cfg *config) opensearchOpts
 		storageSize:  "5Gi",
 		javaOpts:     "-Xms512m -Xmx512m",
 		image:        cfg.opensearchImage,
+		version:      "3.7.0",
 		replicas:     1,
 		resources:    resReq("500m", "1Gi", "2", "2Gi"),
 		monitoring:   false,
@@ -54,7 +61,8 @@ func opensearchParams(fm *unstructured.Unstructured, cfg *config) opensearchOpts
 	o.storageSize = pStr(p, "storageSize", o.storageSize)
 	o.javaOpts = pStr(p, "javaOpts", o.javaOpts)
 	o.javaOpts = pStr(p, "heap", o.javaOpts)
-	o.image = imageWithTag(o.image, pStr(p, "version", ""))
+	o.version = pStr(p, "version", o.version)
+	o.image = imageWithTag(o.image, o.version)
 	o.image = pStr(p, "image", o.image)
 	o.replicas = pInt(p, "replicas", o.replicas)
 	o.resources = resourceProfile(pStr(p, "resourceProfile", "small"), p)
@@ -65,100 +73,82 @@ func opensearchParams(fm *unstructured.Unstructured, cfg *config) opensearchOpts
 func buildOpenSearchBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructured.Unstructured, error) {
 	ns := opensearchNS(cfg, fm)
 	o := opensearchParams(fm, cfg)
-	labels := engineLabels("opensearch", osStatefulSetName)
-
-	sts := &unstructured.Unstructured{Object: map[string]interface{}{
-		"apiVersion": "apps/v1",
-		"kind":       "StatefulSet",
+	if o.replicas < 1 || o.replicas > 99 {
+		return nil, fmt.Errorf("OpenSearch replicas must be in range 1..99")
+	}
+	cluster := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "opensearch.opster.io/v1",
+		"kind":       "OpenSearchCluster",
 		"metadata": map[string]interface{}{
 			"name":      osStatefulSetName,
 			"namespace": ns,
 		},
 		"spec": map[string]interface{}{
-			"serviceName": osStatefulSetName,
-			"replicas":    o.replicas,
-			"selector": map[string]interface{}{
-				"matchLabels": labels,
-			},
-			"template": map[string]interface{}{
-				"metadata": map[string]interface{}{"labels": labels},
-				"spec": map[string]interface{}{
-					"imagePullSecrets": []interface{}{map[string]interface{}{"name": "opensphere-ghcr-pull"}},
-					"securityContext":  map[string]interface{}{"runAsNonRoot": true, "runAsUser": int64(1000), "fsGroup": int64(1000)},
-					"containers": []interface{}{
-						map[string]interface{}{
-							"name":            "opensearch",
-							"image":           o.image,
-							"securityContext": map[string]interface{}{"allowPrivilegeEscalation": false, "runAsNonRoot": true, "runAsUser": int64(1000), "runAsGroup": int64(1000), "capabilities": map[string]interface{}{"drop": []interface{}{"ALL"}}},
-							"env": []interface{}{
-								map[string]interface{}{"name": "cluster.name", "value": osStatefulSetName},
-								map[string]interface{}{"name": "node.name", "value": osStatefulSetName + "-0"},
-								map[string]interface{}{"name": "discovery.type", "value": "single-node"},
-								map[string]interface{}{"name": "DISABLE_SECURITY_PLUGIN", "value": "true"},
-								map[string]interface{}{"name": "DISABLE_INSTALL_DEMO_CONFIG", "value": "true"},
-								map[string]interface{}{"name": "bootstrap.memory_lock", "value": "false"},
-								map[string]interface{}{"name": "OPENSEARCH_JAVA_OPTS", "value": o.javaOpts},
-							},
-							"ports": []interface{}{
-								map[string]interface{}{"name": "http", "containerPort": int64(9200)},
-								map[string]interface{}{"name": "transport", "containerPort": int64(9300)},
-							},
-							"resources": o.resources,
-							"readinessProbe": map[string]interface{}{
-								"httpGet":             map[string]interface{}{"path": "/_cluster/health", "port": int64(9200)},
-								"initialDelaySeconds": int64(25),
-								"periodSeconds":       int64(10),
-								"timeoutSeconds":      int64(5),
-								"failureThreshold":    int64(18),
-							},
-							"volumeMounts": []interface{}{
-								map[string]interface{}{"name": "data", "mountPath": "/usr/share/opensearch/data"},
-							},
-						},
-					},
+			"general": map[string]interface{}{
+				"serviceName":      osStatefulSetName,
+				"version":          o.version,
+				"image":            o.image,
+				"imagePullPolicy":  "IfNotPresent",
+				"imagePullSecrets": []interface{}{map[string]interface{}{"name": "opensphere-ghcr-pull"}},
+				"setVMMaxMapCount": false,
+				"podSecurityContext": map[string]interface{}{
+					"runAsNonRoot": true, "runAsUser": int64(1000), "runAsGroup": int64(1000), "fsGroup": int64(1000),
+				},
+				"securityContext": map[string]interface{}{
+					"allowPrivilegeEscalation": false, "privileged": false,
+					"capabilities": map[string]interface{}{"drop": []interface{}{"ALL"}},
 				},
 			},
-			"volumeClaimTemplates": []interface{}{
+			"security": map[string]interface{}{
+				"tls": map[string]interface{}{
+					"transport": map[string]interface{}{"generate": true, "perNode": true},
+					"http":      map[string]interface{}{"generate": true},
+				},
+				"config": map[string]interface{}{
+					"adminCredentialsSecret": map[string]interface{}{"name": openSearchAdminSecretName},
+					"securityConfigSecret":   map[string]interface{}{"name": openSearchSecurityConfigSecretName},
+				},
+			},
+			"dashboards": map[string]interface{}{"enable": false},
+			"nodePools": []interface{}{
 				map[string]interface{}{
-					"metadata": map[string]interface{}{"name": "data"},
-					"spec": map[string]interface{}{
-						"accessModes":      []interface{}{"ReadWriteOnce"},
-						"storageClassName": o.storageClass,
-						"resources": map[string]interface{}{
-							"requests": map[string]interface{}{"storage": o.storageSize},
-						},
+					"component": "nodes", "replicas": o.replicas, "diskSize": o.storageSize, "jvm": o.javaOpts,
+					"roles": []interface{}{"cluster_manager", "data", "ingest"}, "resources": o.resources,
+					"persistence": map[string]interface{}{
+						"pvc": map[string]interface{}{"storageClass": o.storageClass, "accessModes": []interface{}{"ReadWriteOnce"}},
 					},
 				},
 			},
 		},
 	}}
-	stampLabels(sts, "data", fm.GetName())
-	markEngine(sts, "opensearch")
+	stampLabels(cluster, "data", fm.GetName())
+	markEngine(cluster, "opensearch")
 
-	svc := &unstructured.Unstructured{Object: map[string]interface{}{
-		"apiVersion": "v1",
-		"kind":       "Service",
-		"metadata": map[string]interface{}{
-			"name":      osStatefulSetName,
-			"namespace": ns,
-		},
-		"spec": map[string]interface{}{
-			"selector": labels,
-			"ports": []interface{}{
-				map[string]interface{}{"name": "http", "port": int64(9200), "targetPort": int64(9200)},
-				map[string]interface{}{"name": "transport", "port": int64(9300), "targetPort": int64(9300)},
-			},
-		},
-	}}
-	stampLabels(svc, "data", fm.GetName())
-	markEngine(svc, "opensearch")
-
-	np := engineNetworkPolicy("opensearch", osStatefulSetName, ns, fm.GetName(), 9200)
-	objects := []*unstructured.Unstructured{sts, svc, np}
+	np := openSearchNetworkPolicy(ns, fm.GetName())
+	objects := []*unstructured.Unstructured{cluster, np}
 	if o.monitoring {
 		objects = append(objects, opensearchServiceMonitor(ns, fm.GetName()))
 	}
 	return objects, nil
+}
+
+func openSearchNetworkPolicy(ns, owner string) *unstructured.Unstructured {
+	platformNamespaces := map[string]interface{}{"matchExpressions": []interface{}{map[string]interface{}{"key": "kubernetes.io/metadata.name", "operator": "In", "values": []interface{}{ns, "opensphere-console", "monitoring"}}}}
+	managedConsumers := map[string]interface{}{"matchLabels": map[string]interface{}{"opensphere.io/managed-by": "foundation", "opensphere.io/purpose": "pfss-service"}}
+	u := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": map[string]interface{}{"name": osStatefulSetName + "-internal", "namespace": ns},
+		"spec": map[string]interface{}{
+			"podSelector": map[string]interface{}{"matchLabels": map[string]interface{}{"opster.io/opensearch-cluster": osStatefulSetName}},
+			"policyTypes": []interface{}{"Ingress"},
+			"ingress": []interface{}{map[string]interface{}{
+				"from":  []interface{}{map[string]interface{}{"namespaceSelector": platformNamespaces}, map[string]interface{}{"namespaceSelector": managedConsumers}},
+				"ports": []interface{}{map[string]interface{}{"protocol": "TCP", "port": int64(9200)}},
+			}},
+		},
+	}}
+	stampLabels(u, "data", owner)
+	markEngine(u, "opensearch")
+	return u
 }
 
 func opensearchServiceMonitor(ns, owner string) *unstructured.Unstructured {
@@ -193,27 +183,24 @@ func markEngine(u *unstructured.Unstructured, engine string) {
 	u.SetLabels(l)
 }
 
-func (r *modelReconciler) getOpenSearchStatefulSet(ctx context.Context, ns string) (*unstructured.Unstructured, error) {
-	c := gvkObj(statefulSetGVK)
+func (r *modelReconciler) getOpenSearchCluster(ctx context.Context, ns string) (*unstructured.Unstructured, error) {
+	c := gvkObj(openSearchClusterGVK)
 	err := r.direct.Get(ctx, types.NamespacedName{Namespace: ns, Name: osStatefulSetName}, c)
 	return c, err
 }
 
 func opensearchReady(ctx context.Context, r *modelReconciler, fm *unstructured.Unstructured) bool {
-	c, err := r.getOpenSearchStatefulSet(ctx, opensearchNS(r.cfg, fm))
+	c, err := r.getOpenSearchCluster(ctx, opensearchNS(r.cfg, fm))
 	if err != nil {
 		return false
 	}
-	replicas, _, _ := unstructured.NestedInt64(c.Object, "spec", "replicas")
-	ready, _, _ := unstructured.NestedInt64(c.Object, "status", "readyReplicas")
-	if replicas <= 0 {
-		replicas = 1
-	}
-	return ready >= replicas
+	phase, _, _ := unstructured.NestedString(c.Object, "status", "phase")
+	health, _, _ := unstructured.NestedString(c.Object, "status", "health")
+	return phase == "RUNNING" && (health == "green" || health == "yellow")
 }
 
 func opensearchGone(ctx context.Context, r *modelReconciler, fm *unstructured.Unstructured) bool {
-	_, err := r.getOpenSearchStatefulSet(ctx, opensearchNS(r.cfg, fm))
+	_, err := r.getOpenSearchCluster(ctx, opensearchNS(r.cfg, fm))
 	return apierrors.IsNotFound(err)
 }
 
@@ -228,25 +215,24 @@ func observeOpenSearch(ctx context.Context, r *modelReconciler, fm *unstructured
 			mk("opensearch_endpoint", "", "disabled", false, "spec.parameters.engines.opensearch"),
 		}
 	}
-	sts, err := r.getOpenSearchStatefulSet(ctx, opensearchNS(r.cfg, fm))
-	var replicas, ready int64
+	cluster, err := r.getOpenSearchCluster(ctx, opensearchNS(r.cfg, fm))
+	var ready int64
+	phase, health := "", "unknown"
 	if err == nil {
-		replicas, _, _ = unstructured.NestedInt64(sts.Object, "spec", "replicas")
-		ready, _, _ = unstructured.NestedInt64(sts.Object, "status", "readyReplicas")
+		ready, _, _ = unstructured.NestedInt64(cluster.Object, "status", "availableNodes")
+		phase, _, _ = unstructured.NestedString(cluster.Object, "status", "phase")
+		health, _, _ = unstructured.NestedString(cluster.Object, "status", "health")
 	}
 	up := "0"
-	healthy := false
-	if replicas <= 0 {
-		replicas = 1
-	}
-	if ready >= replicas {
+	healthy := phase == "RUNNING" && (health == "green" || health == "yellow")
+	if healthy {
 		up = "1"
-		healthy = true
 	}
 	return []interface{}{
-		mk("opensearch_up", "bool", up, healthy, "StatefulSet.status.readyReplicas"),
+		mk("opensearch_up", "bool", up, healthy, "OpenSearchCluster.status.phase"),
 		mk("opensearch_namespace", "", opensearchNS(r.cfg, fm), true, "spec.parameters.namespace"),
-		mk("opensearch_ready_replicas", "count", fmt.Sprintf("%d/%d", ready, replicas), healthy, "StatefulSet.status.readyReplicas"),
+		mk("opensearch_ready_replicas", "count", fmt.Sprintf("%d/%d", ready, o.replicas), healthy, "OpenSearchCluster.status.availableNodes"),
+		mk("opensearch_health", "", health, healthy, "OpenSearchCluster.status.health"),
 		mk("opensearch_endpoint", "", opensearchEndpoint(r.cfg, fm), true, "Service"),
 		mk("opensearch_storage", "", o.storageSize+" @ "+o.storageClass, true, "StatefulSet.volumeClaimTemplates"),
 		mk("opensearch_heap", "", o.javaOpts, true, "OPENSEARCH_JAVA_OPTS"),

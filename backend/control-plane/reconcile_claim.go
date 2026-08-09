@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -44,11 +45,68 @@ func (r *claimReconciler) Reconcile(ctx context.Context, req reconcile.Request) 
 	// 모델 FM 조회(설치 NS 의존 endpoint/probe 계산용 — endpointFM/probeFM).
 	fmObj := gvkObj(fmGVK)
 	fmErr := r.cached.Get(ctx, types.NamespacedName{Name: model}, fmObj)
-	installed := fmErr == nil && func() bool { ph, _, _ := unstructured.NestedString(fmObj.Object, "status", "phase"); return ph == "Installed" }()
+	installed := fmErr == nil && func() bool {
+		ph, _, _ := unstructured.NestedString(fmObj.Object, "status", "phase")
+		return ph == "Installed"
+	}()
 	hasEP := hasBundle && (b.endpoint != nil || b.endpointFM != nil)
 	hasPr := hasBundle && (b.probe != nil || b.probeFM != nil)
-	epOf := func() string { if b.endpointFM != nil { return b.endpointFM(r.cfg, fmObj) }; if b.endpoint != nil { return b.endpoint(r.cfg) }; return "" }
-	prOf := func() string { if b.probeFM != nil { return b.probeFM(r.cfg, fmObj) }; if b.probe != nil { return b.probe(r.cfg) }; return "" }
+	epOf := func() string {
+		if b.endpointFM != nil {
+			return b.endpointFM(r.cfg, fmObj)
+		}
+		if b.endpoint != nil {
+			return b.endpoint(r.cfg)
+		}
+		return ""
+	}
+	prOf := func() string {
+		if b.probeFM != nil {
+			return b.probeFM(r.cfg, fmObj)
+		}
+		if b.probe != nil {
+			return b.probe(r.cfg)
+		}
+		return ""
+	}
+
+	// module이 있으면 동일 Claim/Binding lifecycle 위에서 제품별 Operator
+	// 계약을 사용한다. module이 없는 기존 Claim은 위의 model bundle 경로를
+	// 그대로 유지하므로 API 확장이 기존 소비자를 깨뜨리지 않는다.
+	var moduleProjection *serviceBindingProjection
+	module, _, _ := unstructured.NestedString(fc.Object, "spec", "module")
+	if module != "" {
+		contract, ok := serviceContract(module)
+		if !ok {
+			return r.rejectServiceClaim(ctx, nn, "UnknownModule", fmt.Sprintf("unsupported PFSS module %q", module))
+		}
+		if contract.Model != model {
+			return r.rejectServiceClaim(ctx, nn, "ModelMismatch", fmt.Sprintf("module %s belongs to model %s", module, contract.Model))
+		}
+		if !installed {
+			return r.pendingServiceClaim(ctx, nn, "ModelNotInstalled")
+		}
+		dependencies, pendingReason, err := r.reconcileServiceDependencies(ctx, fc, contract)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		if pendingReason != "" {
+			return r.pendingServiceClaim(ctx, nn, pendingReason)
+		}
+		projection, pendingReason, err := r.resolveServiceModuleBinding(ctx, fc, fmObj, contract)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		if pendingReason != "" {
+			reason := pendingReason
+			return r.pendingServiceClaim(ctx, nn, reason)
+		}
+		projection.Dependencies = dependencies
+		moduleProjection = &projection
+		hasEP, hasPr = projection.Endpoint != "", projection.Probe != ""
+		epOf = func() string { return projection.Endpoint }
+		prOf = func() string { return projection.Probe }
+	}
 	// endpoint/probe는 bind 필수 — 누락한 레지스트리 항목(install-only 모델 등)은 nil-deref 대신 Pending 처리.
 	if !hasEP || !hasPr || !installed {
 		if err := updateStatusRetry(ctx, r.direct, fcGVK, nn, func(o *unstructured.Unstructured) { setNested(o, "Pending", "status", "phase") }); err != nil {
@@ -71,7 +129,11 @@ func (r *claimReconciler) Reconcile(ctx context.Context, req reconcile.Request) 
 	}
 
 	// Binding 발급(SSA) — finalizer + ownerRef→Claim(같은 ns, controller=true). endpoint는 모델별(observability=collector, identity=issuer).
-	if err := applyObj(ctx, r.direct, r.buildBinding(fc, bindingName, model, epOf())); err != nil {
+	binding := r.buildBinding(fc, bindingName, model, epOf())
+	if moduleProjection != nil {
+		moduleProjection.apply(binding)
+	}
+	if err := applyObj(ctx, r.direct, binding); err != nil {
 		return reconcile.Result{}, err
 	}
 	// Binding status — 구조적 스키마라 스키마 필드만(rttMs 정수). availability는 정직상 생략. probe도 모델별 대상.
@@ -106,6 +168,154 @@ func (r *claimReconciler) Reconcile(ctx context.Context, req reconcile.Request) 
 // cleanup 실패 시 finalizer를 남긴 채 requeue(담보 유지). observability는 공유 collector라 cleanup이 명시적 no-op → 항상 완료.
 func (r *claimReconciler) release(ctx context.Context, fc *unstructured.Unstructured) (reconcile.Result, error) {
 	nn := types.NamespacedName{Namespace: fc.GetNamespace(), Name: fc.GetName()}
+	module, _, _ := unstructured.NestedString(fc.Object, "spec", "module")
+	if module == "percona-psmdb" {
+		cleaned, err := r.cleanupPSMDBServiceClaim(ctx, fc)
+		if err != nil {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, err
+		}
+		if !cleaned {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+	}
+	if module == "valkey" || module == "opensearch" || module == "rustfs" {
+		modelName, _, _ := unstructured.NestedString(fc.Object, "spec", "model")
+		model := gvkObj(fmGVK)
+		if err := r.direct.Get(ctx, types.NamespacedName{Name: modelName}, model); err != nil {
+			if apierrors.IsNotFound(err) {
+				// The owning model and its operand are already gone, so there is no
+				// remote ACL state left to retain this claim finalizer for.
+				model = nil
+			} else {
+				return reconcile.Result{RequeueAfter: 10 * time.Second}, err
+			}
+		}
+		if model != nil {
+			cleaned := true
+			var err error
+			if module == "valkey" {
+				cleaned, err = r.cleanupValkeyServiceClaim(ctx, fc, model)
+			} else if module == "opensearch" {
+				cleaned, err = r.cleanupOpenSearchServiceClaim(ctx, fc, model)
+			} else {
+				cleaned, err = r.cleanupRustFSServiceClaim(ctx, fc, model)
+			}
+			if err != nil {
+				return reconcile.Result{RequeueAfter: 10 * time.Second}, err
+			}
+			if !cleaned {
+				return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
+			}
+		}
+	}
+	if module == "keycloak" {
+		cleaned, err := r.cleanupKeycloakServiceClaim(ctx, fc)
+		if err != nil {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, err
+		}
+		if !cleaned {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+	}
+	if module == "directory" {
+		model := gvkObj(fmGVK)
+		if err := r.direct.Get(ctx, types.NamespacedName{Name: "identity"}, model); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return reconcile.Result{RequeueAfter: 10 * time.Second}, err
+			}
+			model = nil
+		}
+		if model != nil {
+			cleaned, err := r.cleanupDirectoryServiceClaim(ctx, fc, model)
+			if err != nil {
+				return reconcile.Result{RequeueAfter: 10 * time.Second}, err
+			}
+			if !cleaned {
+				return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
+			}
+		}
+	}
+	if module == "ptm" {
+		cleaned, err := r.cleanupBackupServiceClaim(ctx, fc)
+		if err != nil {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, err
+		}
+		if !cleaned {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+	}
+	if module == "stalwart" {
+		cleaned, err := r.cleanupStalwartServiceClaim(ctx, fc)
+		if err != nil {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, err
+		}
+		if !cleaned {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+	}
+	if module == "novu" {
+		cleaned, err := r.cleanupNovuServiceClaim(ctx, fc)
+		if err != nil {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, err
+		}
+		if !cleaned {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+	}
+	if module == "mattermost" {
+		cleaned, err := r.cleanupMattermostServiceClaim(ctx, fc)
+		if err != nil {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, err
+		}
+		if !cleaned {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+	}
+	if module == "grafana-tempo" || module == "grafana-loki" {
+		cleaned, err := r.cleanupObservabilityTenantClaim(ctx, fc, module)
+		if err != nil {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, err
+		}
+		if !cleaned {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+	}
+	if module == "grafana-operator" {
+		cleaned, err := r.cleanupGrafanaServiceClaim(ctx, fc)
+		if err != nil {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, err
+		}
+		if !cleaned {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+	}
+	if module == "litellm" {
+		cleaned, err := r.cleanupLiteLLMServiceClaim(ctx, fc)
+		if err != nil {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, err
+		}
+		if !cleaned {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+	}
+	if module == "langfuse" {
+		cleaned, err := r.cleanupLangfuseServiceClaim(ctx, fc)
+		if err != nil {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, err
+		}
+		if !cleaned {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+	}
+	if module == "opa" {
+		cleaned, err := r.cleanupOPAServiceClaim(ctx, fc)
+		if err != nil {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, err
+		}
+		if !cleaned {
+			return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+	}
 	bindingName := fc.GetName() + "-binding"
 	bnn := types.NamespacedName{Namespace: fc.GetNamespace(), Name: bindingName}
 	b := gvkObj(fbGVK)

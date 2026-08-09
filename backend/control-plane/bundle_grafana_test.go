@@ -1,0 +1,48 @@
+package main
+
+import (
+	"strings"
+	"testing"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+)
+
+func TestGrafanaBundleUsesOperatorCRAndCanonicalOperandMirror(t *testing.T) {
+	cfg := &config{
+		managedNS: "opensphere-foundation", defaultStorageClass: "standard",
+		grafanaImage: "ghcr.io/opensphere-platform/mirror/grafana@sha256:operand",
+	}
+	fm := &unstructured.Unstructured{Object: map[string]interface{}{"metadata": map[string]interface{}{"name": "observability"}}}
+	objects := buildGrafanaBundle(cfg, fm)
+	if len(objects) != 1 || objects[0].GetKind() != "Grafana" {
+		t.Fatalf("expected one Grafana CR, got %#v", objects)
+	}
+	grafana := objects[0]
+	version, _, _ := unstructured.NestedString(grafana.Object, "spec", "version")
+	if version != cfg.grafanaImage || strings.Contains(version, "grafana-operator") {
+		t.Fatalf("Grafana operand image=%q", version)
+	}
+	if _, found, _ := unstructured.NestedString(grafana.Object, "spec", "config", "security", "admin_password"); found {
+		t.Fatal("admin password must never be embedded in the Grafana CR")
+	}
+	storageClass, _, _ := unstructured.NestedString(grafana.Object, "spec", "persistentVolumeClaim", "spec", "storageClassName")
+	if storageClass != "standard" {
+		t.Fatalf("storageClass=%q", storageClass)
+	}
+	selector := grafana.GetLabels()[grafanaSelectorKey]
+	if selector != grafanaSelectorValue {
+		t.Fatalf("cross-namespace content selector label=%q", selector)
+	}
+}
+
+func TestGrafanaReadinessRequiresSuccessfulCurrentInstance(t *testing.T) {
+	grafana := object(grafanaGVK, "opensphere-foundation", grafanaName)
+	grafana.Object["status"] = map[string]interface{}{"stage": "complete", "stageStatus": "success", "replicas": int64(1)}
+	if !grafanaObjectReady(grafana) {
+		t.Fatal("successful Grafana instance was not ready")
+	}
+	grafana.Object["status"].(map[string]interface{})["stageStatus"] = "failed"
+	if grafanaObjectReady(grafana) {
+		t.Fatal("failed Grafana instance reported ready")
+	}
+}

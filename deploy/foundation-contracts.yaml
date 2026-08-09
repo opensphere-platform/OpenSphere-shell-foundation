@@ -95,6 +95,63 @@ spec:
               required: [model]
               properties:
                 model: { type: string }
+                module:
+                  type: string
+                  description: >-
+                    소비할 PFSS 모듈 ID입니다. 생략하면 기존 model 단위 공유
+                    binding 계약으로 동작합니다.
+                  pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+                request:
+                  type: object
+                  description: 모듈별 Operator가 수렴할 요청 종류와 대상입니다.
+                  properties:
+                    type:
+                      type: string
+                      enum:
+                        - Instance
+                        - Database
+                        - Access
+                        - Bucket
+                        - Index
+                        - Realm
+                        - Client
+                        - Directory
+                        - Policy
+                        - Route
+                        - Project
+                        - MailDomain
+                        - Mailbox
+                        - Workflow
+                        - Workspace
+                        - Pipeline
+                        - Tenant
+                        - Dashboard
+                        - DataSource
+                        - BackupPolicy
+                        - Restore
+                        - Application
+                        - Provider
+                    targetRef:
+                      type: object
+                      properties:
+                        apiVersion: { type: string }
+                        kind: { type: string }
+                        name: { type: string }
+                        namespace: { type: string }
+                      required: [name]
+                profileRef:
+                  type: object
+                  properties:
+                    name: { type: string }
+                    namespace: { type: string }
+                  required: [name]
+                credentialSecretRef:
+                  type: object
+                  description: >-
+                    자격 증명 원문이 아니라 동일 Namespace의 Secret 참조만 허용합니다.
+                  properties:
+                    name: { type: string }
+                  required: [name]
                 parameters:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
@@ -135,6 +192,61 @@ spec:
                     name: { type: string }
                     namespace: { type: string }
                 endpoint: { type: string }
+                module: { type: string }
+                endpoints:
+                  type: array
+                  items:
+                    type: object
+                    required: [name, uri]
+                    properties:
+                      name: { type: string }
+                      uri: { type: string }
+                      protocol: { type: string }
+                      readOnly: { type: boolean }
+                secretRef:
+                  type: object
+                  properties:
+                    name: { type: string }
+                    namespace: { type: string }
+                  required: [name, namespace]
+                resourceRef:
+                  type: object
+                  properties:
+                    apiVersion: { type: string }
+                    kind: { type: string }
+                    name: { type: string }
+                    namespace: { type: string }
+                  required: [kind, name]
+                capabilities:
+                  type: array
+                  items: { type: string }
+                dependencies:
+                  type: array
+                  description: >-
+                    제어면이 실제로 수렴·연결 확인한 하위 서비스 Binding입니다.
+                    선언된 의존성 목록이 아니라 현재 연결 증거만 게시합니다.
+                  items:
+                    type: object
+                    required: [module, requestType, required]
+                    properties:
+                      module: { type: string }
+                      requestType: { type: string }
+                      required: { type: boolean }
+                      endpoint: { type: string }
+                      bindingRef:
+                        type: object
+                        properties:
+                          name: { type: string }
+                          namespace: { type: string }
+                        required: [name, namespace]
+                      resourceRef:
+                        type: object
+                        properties:
+                          apiVersion: { type: string }
+                          kind: { type: string }
+                          name: { type: string }
+                          namespace: { type: string }
+                        required: [kind, name]
             status:
               type: object
               x-kubernetes-preserve-unknown-fields: true

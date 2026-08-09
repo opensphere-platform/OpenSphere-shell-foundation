@@ -1,5 +1,7 @@
 # identity operand 번들 — control plane이 SSA로 적용(__NAMESPACE__/__IMAGE__ 치환).
-# D-3: Keycloak(start-dev, H2) operand. ★2026-07-23 핸드오프: workforce realm 정의는 이 번들이 소유하지 않는다 —
+# D-3: Keycloak production operand. Runtime state is stored in a dedicated
+# StackGres PostgresClaim and bootstrap administrator credentials are supplied
+# by the exact-name Secret foundation-identity-keycloak-admin.
 #   P3 identity operator 소유 CM `keycloak-realm-import`(ns opensphere-foundation)를 --import-realm 으로 마운트만 한다
 #   (인라인 realm CM 폐기, 아래 volumes). 소유권: control-plane=Keycloak operand / P3=realm config·Syncope·IGA.
 # 2026-07-06 self-contained: Samba-AD operand 선언은 이 번들에서 제거됨 — plugin(OpenSphere-plugin-directory)이
@@ -17,6 +19,19 @@ metadata:
   name: foundation-identity-keycloak
   namespace: __NAMESPACE__
   labels: { foundation.opensphere.io/engine: keycloak }
+---
+apiVersion: provisioning.opensphere.io/v1beta1
+kind: PostgresClaim
+metadata:
+  name: foundation-identity-keycloak-pg
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: keycloak, catalog.opensphere.io/provider: stackgres }
+spec:
+  database: keycloak
+  owner: keycloak
+  isolation: Dedicated
+  planRef: { name: postgresql-dev-single }
+  deletionPolicy: Retain
 ---
 # [P3-W1 realm-import 핸드오프 2026-07-23] 인라인 workforce realm 정의는 폐기됨.
 #   realm 정본 = P3 identity operator 소유 ConfigMap `keycloak-realm-import`(ns opensphere-foundation, 아래
@@ -46,9 +61,18 @@ spec:
       containers:
         - name: keycloak
           image: __IMAGE__
-          args: ["start-dev", "--import-realm"]
+          args: ["start", "--import-realm"]
           env:
             - { name: KC_HTTP_ENABLED, value: "true" }
+            - { name: KC_HOSTNAME_STRICT, value: "false" }
+            - { name: KC_HEALTH_ENABLED, value: "true" }
+            - { name: KC_METRICS_ENABLED, value: "true" }
+            - { name: KC_DB, value: postgres }
+            - { name: KC_DB_URL, value: "jdbc:postgresql://pgc-foundation-identity-keycloak-pg.__NAMESPACE__.svc:5432/keycloak" }
+            - { name: KC_DB_USERNAME, valueFrom: { secretKeyRef: { name: pgc-foundation-identity-keycloak-pg-binding, key: username } } }
+            - { name: KC_DB_PASSWORD, valueFrom: { secretKeyRef: { name: pgc-foundation-identity-keycloak-pg-binding, key: password } } }
+            - { name: KC_BOOTSTRAP_ADMIN_USERNAME, valueFrom: { secretKeyRef: { name: foundation-identity-keycloak-admin, key: username } } }
+            - { name: KC_BOOTSTRAP_ADMIN_PASSWORD, valueFrom: { secretKeyRef: { name: foundation-identity-keycloak-admin, key: password } } }
           ports:
             - { name: http, containerPort: 8080 }
           readinessProbe:
@@ -62,9 +86,9 @@ spec:
             initialDelaySeconds: 90
             periodSeconds: 20
             failureThreshold: 6
-          # 2026-07-06: 1Gi에서 start-dev(--import-realm) 초기 빌드가 OOMKilled(137) 실측 → 1536Mi로 상향.
+          # Keycloak augmentation and realm import are memory intensive.
           resources: { requests: { cpu: 250m, memory: 512Mi }, limits: { cpu: "1", memory: 1536Mi } }
-          # Keycloak은 /opt/keycloak/data(H2)에 써야 하므로 readOnlyRootFilesystem 불가. 그 외 하드닝 유지.
+          # Quarkus augmentation writes below /opt/keycloak during initial start.
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: false, capabilities: { drop: [ALL] } }
           volumeMounts:
             - { name: realm, mountPath: /opt/keycloak/data/import, readOnly: true }

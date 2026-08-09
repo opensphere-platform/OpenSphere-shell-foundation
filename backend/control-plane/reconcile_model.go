@@ -44,7 +44,7 @@ func (r *modelReconciler) Reconcile(ctx context.Context, req reconcile.Request) 
 	model, _, _ := unstructured.NestedString(fm.Object, "spec", "model")
 	desired, _, _ := unstructured.NestedString(fm.Object, "spec", "desiredState")
 
-	// 실 번들 보유 모델만 배포(D-1 observability·D-3 identity). 나머지는 정직하게 "대기".
+	// 정본 model registry에 등록된 bundle만 조정한다. 알 수 없는 model은 fail-closed Pending 처리한다.
 	b, ok := bundles[model]
 	if !ok {
 		return r.setPending(ctx, fm, desired)
@@ -68,7 +68,7 @@ func (r *modelReconciler) setPending(ctx context.Context, fm *unstructured.Unstr
 		setNested(o, phase, "status", "phase")
 		setNested(o, false, "status", "operator", "deployed")
 		setNested(o, "reconcile: bundle pending", "status", "controlPlane")
-		setNested(o, "bundle 미구현(D-2·D-4~D-6 — 정직 표기)", "status", "note")
+		setNested(o, "지원하지 않는 FoundationModel — bundle registry에 없음", "status", "note")
 		_ = unstructured.SetNestedSlice(o.Object, []interface{}{}, "status", "observed")
 		// observedAt는 측정 시각을 함의하므로 미측정(bundle 대기) 모델엔 기록하지 않는다(정직).
 	})
@@ -116,9 +116,22 @@ func (r *modelReconciler) install(ctx context.Context, fm *unstructured.Unstruct
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("rustfs credential ensure: %w", err)
 	}
+	if err := r.ensureOpenSearchAdminCredential(ctx, fm, ns); err != nil {
+		return reconcile.Result{}, fmt.Errorf("OpenSearch operator admin credential ensure: %w", err)
+	}
 	if fm.GetName() == "identity" && syncopeExplicitlyEnabled(fm) {
 		if err := r.ensureSyncopePrerequisites(ctx, fm.GetName(), ns); err != nil {
 			return reconcile.Result{}, fmt.Errorf("syncope prerequisite ensure: %w", err)
+		}
+	}
+	if fm.GetName() == "ai" {
+		if err := r.ensureAIRuntimeSecret(ctx, fm, ns); err != nil {
+			return reconcile.Result{}, fmt.Errorf("AI runtime prerequisite ensure: %w", err)
+		}
+	}
+	if fm.GetName() == "communication" {
+		if err := r.ensureCommunicationRuntimeSecret(ctx, fm, ns); err != nil {
+			return reconcile.Result{}, fmt.Errorf("communication runtime prerequisite ensure: %w", err)
 		}
 	}
 	objs, err := b.build(r.cfg, fm)
@@ -137,6 +150,14 @@ func (r *modelReconciler) install(ctx context.Context, fm *unstructured.Unstruct
 			// 나머지 operand(Deployment/Service 등)는 정상 배포되도록 CRD 부재는 non-fatal degrade.
 			if o.GetKind() == "ServiceMonitor" && meta.IsNoMatchError(err) {
 				log.Info("ServiceMonitor CRD 없음 — Basic Prometheus Operator 미설치로 판단, 관측 연결 위임 skip(non-fatal)", "name", o.GetName())
+				continue
+			}
+			if o.GetKind() == "OpenSearchCluster" && meta.IsNoMatchError(err) {
+				log.Info("OpenSearch Operator CRD 없음 — operator dependency 대기", "name", o.GetName())
+				continue
+			}
+			if o.GetKind() == "Grafana" && meta.IsNoMatchError(err) {
+				log.Info("Grafana Operator CRD 없음 — operator dependency 대기", "name", o.GetName())
 				continue
 			}
 			return reconcile.Result{}, fmt.Errorf("apply %s/%s: %w", o.GetKind(), o.GetName(), err)
@@ -282,5 +303,8 @@ func bundleKinds() []schema.GroupVersionKind {
 		{Group: "cert-manager.io", Version: "v1", Kind: "Certificate"},
 		postgresClaimGVK, // PostgreSQL은 StackGres 전용 PostgresClaim을 통해 회수한다.
 		psmdbGVK,         // data: PerconaServerMongoDB CR(라벨 회수)
+		openSearchClusterGVK,
+		grafanaGVK,
+		fcGVK, // model-owned dependency Claims (AI/Communication/Backup)
 	}
 }

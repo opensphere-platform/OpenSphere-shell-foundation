@@ -1,25 +1,132 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "contracts": {
-    "postgres": { "model": "data", "engineId": "postgres", "parameterPath": "root", "reconciler": "implemented" },
-    "percona-psmdb": { "model": "data", "engineId": "psmdb", "parameterPath": "dataEngines.psmdb", "reconciler": "implemented" },
-    "valkey": { "model": "data", "engineId": "valkey", "parameterPath": "dataEngines.valkey", "reconciler": "implemented" },
-    "opensearch": { "model": "data", "engineId": "opensearch", "parameterPath": "dataEngines.opensearch", "reconciler": "implemented" },
-    "rustfs": { "model": "data", "engineId": "rustfs", "parameterPath": "dataEngines.rustfs", "reconciler": "implemented" },
-    "keycloak": { "model": "identity", "engineId": "keycloak", "parameterPath": "identityEngines.keycloak", "reconciler": "implemented" },
-    "apache-syncope": { "model": "identity", "engineId": "syncope", "parameterPath": "identityEngines.syncope", "reconciler": "pending", "blocker": "Apache Syncope 전용 operand renderer와 readiness adapter가 아직 control-plane에 등록되지 않았습니다." },
-    "opa": { "model": "identity", "engineId": "opa", "parameterPath": "identityEngines.opa", "reconciler": "foundation-control-plane", "blocker": "운영 승격 전 서명 bundle 저장소와 영속 decision-log sink 연결이 필요합니다." },
-    "litellm": { "model": "ai", "engineId": "litellm", "parameterPath": "aiEngines.litellm", "reconciler": "pending", "blocker": "LiteLLM gateway와 provider SecretRef를 처리하는 AI bundle이 아직 control-plane에 등록되지 않았습니다." },
-    "langfuse": { "model": "ai", "engineId": "langfuse", "parameterPath": "aiEngines.langfuse", "reconciler": "pending", "blocker": "Langfuse web·worker·ClickHouse·PostgreSQL 연결 bundle이 아직 control-plane에 등록되지 않았습니다." },
-    "stalwart": { "model": "communication", "engineId": "stalwart", "parameterPath": "communicationEngines.stalwart", "reconciler": "pending", "blocker": "Stalwart mail domain·TLS·DNS·storage 계약 renderer가 아직 control-plane에 등록되지 않았습니다." },
-    "novu": { "model": "communication", "engineId": "novu", "parameterPath": "communicationEngines.novu", "reconciler": "pending", "blocker": "Novu API·worker·websocket·dashboard와 데이터 계층 bundle이 아직 control-plane에 등록되지 않았습니다." },
-    "mattermost": { "model": "communication", "engineId": "mattermost", "parameterPath": "communicationEngines.mattermost", "reconciler": "pending", "blocker": "Mattermost database·file storage·ingress 계약 renderer가 아직 control-plane에 등록되지 않았습니다." },
-    "opentelemetry": { "model": "observability", "engineId": "otel", "parameterPath": "observabilityEngines.otel", "reconciler": "implemented", "singletonModel": true },
-    "grafana-tempo": { "model": "observability", "engineId": "tempo", "parameterPath": "observabilityEngines.tempo", "reconciler": "pending", "blocker": "Tempo storage·retention·memberlist renderer가 아직 control-plane에 등록되지 않았습니다." },
-    "grafana-loki": { "model": "observability", "engineId": "loki", "parameterPath": "observabilityEngines.loki", "reconciler": "pending", "blocker": "Loki storage schema·retention·gateway renderer가 아직 control-plane에 등록되지 않았습니다." },
-    "grafana-operator": { "model": "observability", "engineId": "grafana-operator", "parameterPath": "observabilityEngines.grafanaOperator", "reconciler": "pending", "blocker": "Grafana Operator CRD·instance·datasource renderer가 아직 control-plane에 등록되지 않았습니다." },
-    "ptm": { "model": "backup", "engineId": "ptm", "parameterPath": "backupEngines.ptm", "reconciler": "pending", "blocker": "Velero와 .ptm 동일시점 복구 manifest를 결합하는 backup bundle이 아직 control-plane에 등록되지 않았습니다." },
-    "argocd": { "model": "delivery", "engineId": "argocd", "parameterPath": "deliveryEngines.argocd", "reconciler": "pending", "blocker": "Argo CD bootstrap·repository SecretRef·ApplicationSet renderer가 아직 control-plane에 등록되지 않았습니다." },
-    "crossplane": { "model": "delivery", "engineId": "crossplane", "parameterPath": "deliveryEngines.crossplane", "reconciler": "pending", "blocker": "Crossplane core·provider-helm·ProviderConfig renderer가 아직 control-plane에 등록되지 않았습니다." }
+    "postgres": {
+      "model": "data", "engineId": "postgres", "parameterPath": "root", "reconciler": "implemented",
+      "operatorDriver": "stackgres", "nativeResource": "provisioning.opensphere.io/PostgresClaim",
+      "requestTypes": ["Instance", "Database", "Access"], "requestModes": {"Instance": "managed", "Database": "managed", "Access": "managed"}, "capabilities": ["sql", "backup", "pooling", "extensions"]
+    },
+    "percona-psmdb": {
+      "model": "data", "engineId": "psmdb", "parameterPath": "dataEngines.psmdb", "reconciler": "implemented",
+      "operatorDriver": "percona-operator", "nativeResource": "psmdb.percona.com/PerconaServerMongoDB",
+      "requestTypes": ["Instance", "Database", "Access"], "requestModes": {"Instance": "managed", "Database": "managed", "Access": "managed"}, "capabilities": ["mongodb", "replicaset", "backup"]
+    },
+    "valkey": {
+      "model": "data", "engineId": "valkey", "parameterPath": "dataEngines.valkey", "reconciler": "implemented",
+      "operatorDriver": "foundation-operator", "nativeResource": "foundation.opensphere.io/FoundationModel",
+      "requestTypes": ["Instance", "Access"], "requestModes": {"Instance": "shared", "Access": "managed"}, "capabilities": ["resp", "acl", "persistence"]
+    },
+    "opensearch": {
+      "model": "data", "engineId": "opensearch", "parameterPath": "dataEngines.opensearch", "reconciler": "implemented",
+      "operatorDriver": "opensearch-operator", "nativeResource": "opensearch.opster.io/OpenSearchCluster",
+      "requestTypes": ["Instance", "Index", "Access"], "requestModes": {"Instance": "shared", "Index": "managed", "Access": "managed"}, "capabilities": ["search", "index", "roles"]
+    },
+    "rustfs": {
+      "model": "data", "engineId": "rustfs", "parameterPath": "dataEngines.rustfs", "reconciler": "implemented",
+      "operatorDriver": "foundation-operator", "nativeResource": "apps/StatefulSet",
+      "requestTypes": ["Instance", "Bucket", "Access"], "requestModes": {"Instance": "shared", "Bucket": "managed", "Access": "managed"}, "capabilities": ["s3", "bucket", "iam"]
+    },
+    "keycloak": {
+      "model": "identity", "engineId": "keycloak", "parameterPath": "identityEngines.keycloak", "reconciler": "implemented",
+      "operatorDriver": "foundation-operator", "nativeResource": "apps/Deployment",
+      "requestTypes": ["Instance", "Realm", "Client", "Access"], "requestModes": {"Instance": "shared", "Realm": "managed", "Client": "managed", "Access": "bind-existing"}, "capabilities": ["oidc", "oauth2", "realm"]
+    },
+    "directory": {
+      "model": "identity", "engineId": "samba", "parameterPath": "identityEngines.samba", "reconciler": "implemented",
+      "operatorDriver": "directory-operator", "nativeResource": "apps/Deployment",
+      "requestTypes": ["Instance", "Directory", "Access"], "requestModes": {"Instance": "shared", "Directory": "bind-shared", "Access": "managed"}, "capabilities": ["ldap", "ldaps", "kerberos", "dns"]
+    },
+    "apache-syncope": {
+      "model": "identity", "engineId": "syncope", "parameterPath": "identityEngines.syncope", "reconciler": "implemented",
+      "operatorDriver": "foundation-operator", "nativeResource": "apps/StatefulSet",
+      "requestTypes": ["Instance", "Access"], "requestModes": {"Instance": "shared", "Access": "bind-existing"}, "capabilities": ["iga", "scim", "provisioning"],
+      "dependencies": [{"module": "postgres", "requestType": "Instance", "required": true, "purpose": "durable IGA state"}]
+    },
+    "opa": {
+      "model": "identity", "engineId": "opa", "parameterPath": "identityEngines.opa", "reconciler": "implemented",
+      "operatorDriver": "foundation-operator", "nativeResource": "apps/Deployment",
+      "requestTypes": ["Instance", "Policy", "Access"], "requestModes": {"Instance": "shared", "Policy": "bind-existing", "Access": "managed"}, "capabilities": ["rego", "decision", "bundle"],
+      "dependencies": [{"module": "postgres", "requestType": "Database", "required": true, "purpose": "decision audit log"}]
+    },
+    "litellm": {
+      "model": "ai", "engineId": "litellm", "parameterPath": "aiEngines.litellm", "reconciler": "implemented",
+      "operatorDriver": "ai-operator", "nativeResource": "foundation.opensphere.io/FoundationClaim",
+      "requestTypes": ["Instance", "Route", "Access"], "requestModes": {"Instance": "shared", "Route": "managed", "Access": "managed"}, "capabilities": ["openai-api", "model-route", "quota"],
+      "dependencies": [{"module": "postgres", "requestType": "Database", "required": true, "purpose": "routing and quota state"}]
+    },
+    "langfuse": {
+      "model": "ai", "engineId": "langfuse", "parameterPath": "aiEngines.langfuse", "reconciler": "implemented",
+      "operatorDriver": "ai-operator", "nativeResource": "foundation.opensphere.io/FoundationClaim",
+      "requestTypes": ["Instance", "Project", "Access"], "requestModes": {"Instance": "shared", "Project": "bind-shared", "Access": "managed"}, "capabilities": ["llm-trace", "evaluation", "cost"],
+      "dependencies": [
+        {"module": "postgres", "requestType": "Database", "required": true, "purpose": "application metadata"},
+        {"module": "valkey", "requestType": "Instance", "required": true, "purpose": "queue and cache"}
+      ]
+    },
+    "stalwart": {
+      "model": "communication", "engineId": "stalwart", "parameterPath": "communicationEngines.stalwart", "reconciler": "implemented",
+      "operatorDriver": "communication-operator", "nativeResource": "foundation.opensphere.io/FoundationClaim",
+      "requestTypes": ["Instance", "MailDomain", "Mailbox", "Access"], "requestModes": {"Instance": "shared", "MailDomain": "managed", "Mailbox": "managed", "Access": "bind-existing"}, "capabilities": ["smtp", "imap", "jmap"]
+    },
+    "novu": {
+      "model": "communication", "engineId": "novu", "parameterPath": "communicationEngines.novu", "reconciler": "implemented",
+      "operatorDriver": "communication-operator", "nativeResource": "foundation.opensphere.io/FoundationClaim",
+      "requestTypes": ["Instance", "Workflow", "Access"], "requestModes": {"Instance": "shared", "Workflow": "managed", "Access": "bind-existing"}, "capabilities": ["notification", "workflow", "subscriber"],
+      "dependencies": [
+        {"module": "percona-psmdb", "requestType": "Database", "required": true, "purpose": "notification state"},
+        {"module": "valkey", "requestType": "Instance", "required": true, "purpose": "queue and cache"}
+      ]
+    },
+    "mattermost": {
+      "model": "communication", "engineId": "mattermost", "parameterPath": "communicationEngines.mattermost", "reconciler": "implemented",
+      "operatorDriver": "communication-operator", "nativeResource": "foundation.opensphere.io/FoundationClaim",
+      "requestTypes": ["Instance", "Workspace", "Access"], "requestModes": {"Instance": "shared", "Workspace": "managed", "Access": "managed"}, "capabilities": ["chat", "chatops", "webhook"],
+      "dependencies": [
+        {"module": "postgres", "requestType": "Database", "required": true, "purpose": "workspace state"},
+        {"module": "rustfs", "requestType": "Bucket", "required": true, "purpose": "file storage"}
+      ]
+    },
+    "opentelemetry": {
+      "model": "observability", "engineId": "otel", "parameterPath": "observabilityEngines.otel", "reconciler": "implemented",
+      "operatorDriver": "foundation-operator", "nativeResource": "apps/Deployment", "singletonModel": true,
+      "requestTypes": ["Instance", "Pipeline", "Access"], "requestModes": {"Instance": "shared", "Pipeline": "bind-shared", "Access": "bind-shared"}, "capabilities": ["otlp-grpc", "otlp-http", "metrics"]
+    },
+    "grafana-tempo": {
+      "model": "observability", "engineId": "tempo", "parameterPath": "observabilityEngines.tempo", "reconciler": "implemented",
+      "operatorDriver": "foundation-operator", "nativeResource": "apps/StatefulSet",
+      "requestTypes": ["Instance", "Tenant", "Access"], "requestModes": {"Instance": "shared", "Tenant": "managed", "Access": "bind-existing"}, "capabilities": ["traces", "search", "service-graph"],
+      "dependencies": [{"module": "rustfs", "requestType": "Bucket", "required": false, "purpose": "production object storage"}]
+    },
+    "grafana-loki": {
+      "model": "observability", "engineId": "loki", "parameterPath": "observabilityEngines.loki", "reconciler": "implemented",
+      "operatorDriver": "foundation-operator", "nativeResource": "apps/StatefulSet",
+      "requestTypes": ["Instance", "Tenant", "Access"], "requestModes": {"Instance": "shared", "Tenant": "managed", "Access": "bind-existing"}, "capabilities": ["logs", "logql", "retention"],
+      "dependencies": [{"module": "rustfs", "requestType": "Bucket", "required": false, "purpose": "production object storage"}]
+    },
+    "grafana-operator": {
+      "model": "observability", "engineId": "grafana-operator", "parameterPath": "observabilityEngines.grafanaOperator", "reconciler": "implemented",
+      "operatorDriver": "grafana-operator", "nativeResource": "grafana.integreatly.org/Grafana",
+      "requestTypes": ["Instance", "Dashboard", "DataSource", "Access"], "requestModes": {"Instance": "shared", "Dashboard": "managed", "DataSource": "managed", "Access": "managed"}, "capabilities": ["dashboard", "datasource", "alerting"]
+    },
+    "ptm": {
+      "model": "backup", "engineId": "ptm", "parameterPath": "backupEngines.ptm", "reconciler": "implemented",
+      "operatorDriver": "backup-operator", "nativeResource": "velero.io/Backup",
+      "requestTypes": ["BackupPolicy", "Restore", "Access"], "requestModes": {"BackupPolicy": "managed", "Restore": "managed", "Access": "bind-shared"}, "capabilities": ["backup", "restore", "point-in-time-manifest"],
+      "dependencies": [
+        {"module": "external:velero", "requestType": "Instance", "required": true, "purpose": "Kubernetes backup engine"},
+        {"module": "external:external-channel", "requestType": "Bucket", "required": true, "purpose": "approved backup target"}
+      ],
+      "blocker": "BackupPolicy/Restore driver와 signed .ptm evidence는 구현되었습니다. 실제 Ready는 외부 Velero·External Channel Binding과 non-zero backup/restore drill 증거가 있을 때만 성립합니다."
+    },
+    "argocd": {
+      "model": "delivery", "engineId": "argocd", "parameterPath": "deliveryEngines.argocd", "reconciler": "implemented",
+      "operatorDriver": "argocd-operator", "nativeResource": "argoproj.io/Application",
+      "requestTypes": ["Application", "Project", "Access"], "requestModes": {"Application": "bind-existing", "Project": "bind-existing", "Access": "bind-shared"}, "capabilities": ["gitops", "application", "sync"]
+    },
+    "crossplane": {
+      "model": "delivery", "engineId": "crossplane", "parameterPath": "deliveryEngines.crossplane", "reconciler": "implemented",
+      "operatorDriver": "crossplane-operator", "nativeResource": "pkg.crossplane.io/Provider",
+      "requestTypes": ["Provider", "Instance", "Access"], "requestModes": {"Provider": "bind-existing", "Instance": "bind-existing", "Access": "bind-shared"}, "capabilities": ["provider", "composition", "managed-resource"]
+    }
   }
 }

@@ -31,25 +31,41 @@ var (
 
 // config — 좌표는 코드에 박지 않고 플래그로(Deployment args). G-HARDCODE 정신.
 type config struct {
-	managedNS           string
-	collectorImage      string
-	keycloakImage       string
-	keycloakPgImage     string // 이전 배포 계약 호환용. Keycloak plugin 소유 전환 후 신규 bundle에서는 미사용.
-	pgImage             string // 이전 PostgreSQL operand 배포 계약 호환용. 현재 PostgreSQL plugin이 lifecycle을 소유.
-	sambaImage          string // (deprecated 2026-07-06) samba operand는 plugin이 소유 — 미사용, arg 호환 위해 잔존
-	sambaPluginSvc      string // samba operand 선언 제공 plugin svc(self-contained) — GET /operand/manifests
-	pgbouncerImage      string // 이전 PostgreSQL 배포 계약 호환용. 현재 StackGres가 pooling lifecycle을 소유.
-	psmdbImage          string
-	valkeyImage         string
-	valkeyExporterImage string
-	rustfsImage         string
-	opensearchImage     string
-	opaImage            string
-	opaControlImage     string
-	syncopeImage        string
-	syncopeMonitorImage string
-	veleroNamespace     string // 이전 backup 계약 호환용. 현재 data bundle에서는 미사용.
-	defaultStorageClass string // HostRequirements 기본값(§1.2) — Basic StorageClass 이름의 단일 선언점
+	managedNS                 string
+	collectorImage            string
+	tempoImage                string
+	lokiImage                 string
+	observabilityGatewayImage string
+	grafanaImage              string
+	keycloakImage             string
+	keycloakPgImage           string // 이전 배포 계약 호환용. Keycloak plugin 소유 전환 후 신규 bundle에서는 미사용.
+	pgImage                   string // 이전 PostgreSQL operand 배포 계약 호환용. 현재 PostgreSQL plugin이 lifecycle을 소유.
+	sambaImage                string // (deprecated 2026-07-06) samba operand는 plugin이 소유 — 미사용, arg 호환 위해 잔존
+	sambaPluginSvc            string // samba operand 선언 제공 plugin svc(self-contained) — GET /operand/manifests
+	pgbouncerImage            string // 이전 PostgreSQL 배포 계약 호환용. 현재 StackGres가 pooling lifecycle을 소유.
+	psmdbImage                string
+	valkeyImage               string
+	valkeyExporterImage       string
+	rustfsImage               string
+	opensearchImage           string
+	litellmImage              string
+	langfuseImage             string
+	langfuseWorkerImage       string
+	clickhouseImage           string
+	stalwartImage             string
+	stalwartCLIImage          string
+	novuAPIImage              string
+	novuWorkerImage           string
+	novuWSImage               string
+	novuDashboardImage        string
+	mattermostImage           string
+	veleroImage               string
+	opaImage                  string
+	opaControlImage           string
+	syncopeImage              string
+	syncopeMonitorImage       string
+	veleroNamespace           string // 이전 backup 계약 호환용. 현재 data bundle에서는 미사용.
+	defaultStorageClass       string // HostRequirements 기본값(§1.2) — Basic StorageClass 이름의 단일 선언점
 }
 
 func gvkObj(g schema.GroupVersionKind) *unstructured.Unstructured {
@@ -80,6 +96,10 @@ func main() {
 	flag.StringVar(&cfg.managedNS, "managed-namespace", "opensphere-foundation", "관리 번들(operand)을 배치할 네임스페이스")
 	// [[ghcr-image-mirror-policy]]: 원본 레지스트리 직접참조 폐지, ghcr.io/opensphere-platform/mirror/* 경유로 조달.
 	flag.StringVar(&cfg.collectorImage, "collector-image", "ghcr.io/opensphere-platform/mirror/opentelemetry-collector-contrib:0.111.0", "observability collector operand 이미지(GHCR 미러, origin=otel/opentelemetry-collector-contrib:0.111.0)")
+	flag.StringVar(&cfg.tempoImage, "tempo-image", "ghcr.io/opensphere-platform/mirror/grafana-tempo:3.0.2", "Tempo trace store operand image(GHCR mirror)")
+	flag.StringVar(&cfg.lokiImage, "loki-image", "ghcr.io/opensphere-platform/mirror/grafana-loki:3.7.3", "Loki log store operand image(GHCR mirror)")
+	flag.StringVar(&cfg.observabilityGatewayImage, "observability-gateway-image", "ghcr.io/opensphere-platform/opensphere-observability-gateway:edge", "authenticated Loki/Tempo tenant gateway image")
+	flag.StringVar(&cfg.grafanaImage, "grafana-image", "ghcr.io/opensphere-platform/mirror/grafana:13.1.0", "Grafana operand image(GHCR mirror)")
 	flag.StringVar(&cfg.keycloakImage, "keycloak-image", "ghcr.io/opensphere-platform/mirror/keycloak:26.0", "identity Keycloak operand 이미지(GHCR 미러, origin=quay.io/keycloak/keycloak:26.0)")
 	flag.StringVar(&cfg.keycloakPgImage, "keycloak-pg-image", "", "(compatibility) 이전 Keycloak PostgreSQL image 인자를 수용합니다")
 	flag.StringVar(&cfg.pgImage, "pg-image", "", "(compatibility) 이전 PostgreSQL operand image 인자를 수용합니다")
@@ -94,6 +114,18 @@ func main() {
 	// HostRequirements(§1.2 "Basic은 요구만 선언") 기본값 — 클러스터 실측 StorageClass 이름(rancher.io/local-path 기반 "standard").
 	flag.StringVar(&cfg.defaultStorageClass, "default-storage-class", "standard", "PVC가 참조할 Basic StorageClass 기본값(FoundationModel.spec.parameters.hostRequirements.storageClass로 모델별 override 가능)")
 	flag.StringVar(&cfg.opensearchImage, "opensearch-image", "ghcr.io/opensphere-platform/mirror/opensearch:3.7.0", "data OpenSearch operand image(GHCR mirror, origin=opensearchproject/opensearch:3.7.0)")
+	flag.StringVar(&cfg.litellmImage, "litellm-image", "ghcr.io/opensphere-platform/mirror/litellm:1.93.0", "AI LiteLLM operand image(GHCR mirror)")
+	flag.StringVar(&cfg.langfuseImage, "langfuse-image", "ghcr.io/opensphere-platform/mirror/langfuse:3.221.1", "AI Langfuse web operand image(GHCR mirror)")
+	flag.StringVar(&cfg.langfuseWorkerImage, "langfuse-worker-image", "ghcr.io/opensphere-platform/mirror/langfuse-worker:3.221.1", "AI Langfuse worker operand image(GHCR mirror)")
+	flag.StringVar(&cfg.clickhouseImage, "clickhouse-image", "ghcr.io/opensphere-platform/mirror/clickhouse-server:25.8.28.1-alpine", "Langfuse analytics store image(GHCR mirror)")
+	flag.StringVar(&cfg.stalwartImage, "stalwart-image", "ghcr.io/opensphere-platform/mirror/stalwart:0.16.13", "Communication Stalwart operand image(GHCR mirror)")
+	flag.StringVar(&cfg.stalwartCLIImage, "stalwart-cli-image", "ghcr.io/opensphere-platform/mirror/stalwart-cli:1.0.12", "Communication Stalwart declarative administration CLI image(GHCR mirror)")
+	flag.StringVar(&cfg.novuAPIImage, "novu-api-image", "ghcr.io/opensphere-platform/mirror/novu-api:3.18.0", "Communication Novu API image(GHCR mirror)")
+	flag.StringVar(&cfg.novuWorkerImage, "novu-worker-image", "ghcr.io/opensphere-platform/mirror/novu-worker:3.18.0", "Communication Novu worker image(GHCR mirror)")
+	flag.StringVar(&cfg.novuWSImage, "novu-ws-image", "ghcr.io/opensphere-platform/mirror/novu-ws:3.18.0", "Communication Novu websocket image(GHCR mirror)")
+	flag.StringVar(&cfg.novuDashboardImage, "novu-dashboard-image", "ghcr.io/opensphere-platform/mirror/novu-dashboard:3.18.0", "Communication Novu dashboard image(GHCR mirror)")
+	flag.StringVar(&cfg.mattermostImage, "mattermost-image", "ghcr.io/opensphere-platform/mirror/mattermost-team-edition:11.9.0", "Communication Mattermost operand image(GHCR mirror)")
+	flag.StringVar(&cfg.veleroImage, "velero-image", "ghcr.io/opensphere-platform/mirror/velero:1.18.2", "Backup Velero operand image(GHCR mirror)")
 	flag.StringVar(&cfg.opaImage, "opa-image", "ghcr.io/opensphere-platform/mirror/opa:1.18.2-static", "identity OPA operand image(GHCR mirror, origin=openpolicyagent/opa:1.18.2-static)")
 	flag.StringVar(&cfg.opaControlImage, "opa-control-image", "ghcr.io/opensphere-platform/opensphere-foundation-control-plane:edge", "OPA signed bundle and durable decision-log control service image")
 	flag.StringVar(&cfg.syncopeImage, "syncope-image", "ghcr.io/opensphere-platform/mirror/syncope:4.0.7", "identity Apache Syncope operand image(GHCR mirror, origin=apache/syncope:4.0.7)")

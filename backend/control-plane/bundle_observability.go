@@ -68,6 +68,29 @@ func buildObservabilityBundle(cfg *config, fm *unstructured.Unstructured) ([]*un
 	if err != nil {
 		return nil, err
 	}
+	if !engineEnabled(fm, "otel") {
+		kept := objs[:0]
+		for _, o := range objs {
+			if o.GetLabels()[lblEngine] != "otel" {
+				kept = append(kept, o)
+			}
+		}
+		objs = kept
+	} else {
+		configureCollectorPipeline(objs, cfg.managedNS, engineEnabled(fm, "tempo"), engineEnabled(fm, "loki"))
+	}
+	if engineEnabled(fm, "tempo") {
+		objs = append(objs, buildTempoBundle(cfg, fm)...)
+	}
+	if engineEnabled(fm, "loki") {
+		objs = append(objs, buildLokiBundle(cfg, fm)...)
+	}
+	if engineEnabled(fm, "tempo") || engineEnabled(fm, "loki") {
+		objs = append(objs, buildObservabilityGatewayBundle(cfg, fm)...)
+	}
+	if engineEnabled(fm, "grafana-operator") {
+		objs = append(objs, buildGrafanaBundle(cfg, fm)...)
+	}
 	// PrometheusDelegate=false(HostRequirements, §1.2)면 Basic Prometheus 위임을 원치 않는 것이므로
 	// ServiceMonitor를 아예 선언하지 않는다(기본=true라 통상 경로는 영향 없음).
 	if !readHostRequirements(fm, cfg).PrometheusDelegate {
@@ -80,6 +103,77 @@ func buildObservabilityBundle(cfg *config, fm *unstructured.Unstructured) ([]*un
 		objs = kept
 	}
 	return objs, nil
+}
+
+// configureCollectorPipeline turns the bundled collector from a debug-only
+// receiver into the shared PFSS telemetry bridge.  The generated exporters
+// follow the native OTLP endpoints documented by Tempo and Loki; disabled
+// stores are never referenced so a partial observability profile stays valid.
+func configureCollectorPipeline(objs []*unstructured.Unstructured, ns string, tempoEnabled, lokiEnabled bool) {
+	for _, obj := range objs {
+		if obj.GetKind() != "ConfigMap" || obj.GetName() != collectorName+"-config" {
+			continue
+		}
+		data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
+		if data == nil {
+			data = map[string]string{}
+		}
+		data["config.yaml"] = collectorPipelineConfig(ns, tempoEnabled, lokiEnabled)
+		_ = unstructured.SetNestedStringMap(obj.Object, data, "data")
+	}
+}
+
+func collectorPipelineConfig(ns string, tempoEnabled, lokiEnabled bool) string {
+	traceExporters := "[debug]"
+	logExporters := "[debug]"
+	extraExporters := ""
+	if tempoEnabled {
+		traceExporters = "[otlp/tempo]"
+		extraExporters += fmt.Sprintf(`
+  otlp/tempo:
+    endpoint: %s.%s.svc:4317
+    headers:
+      x-scope-orgid: opensphere-platform
+    tls:
+      insecure: true`, tempoName, ns)
+	}
+	if lokiEnabled {
+		logExporters = "[otlphttp/loki]"
+		extraExporters += fmt.Sprintf(`
+  otlphttp/loki:
+    endpoint: http://%s.%s.svc:3100/otlp
+    headers:
+      x-scope-orgid: opensphere-platform`, lokiName, ns)
+	}
+	return fmt.Sprintf(`receivers:
+  otlp:
+    protocols:
+      grpc: { endpoint: 0.0.0.0:4317 }
+      http: { endpoint: 0.0.0.0:4318 }
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+  batch: {}
+exporters:
+  debug:
+    verbosity: basic
+  prometheus:
+    endpoint: 0.0.0.0:8889%s
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+service:
+  extensions: [health_check]
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8888
+  pipelines:
+    traces:  { receivers: [otlp], processors: [memory_limiter, batch], exporters: %s }
+    metrics: { receivers: [otlp], processors: [memory_limiter, batch], exporters: [debug, prometheus] }
+    logs:    { receivers: [otlp], processors: [memory_limiter, batch], exporters: %s }
+`, extraExporters, traceExporters, logExporters)
 }
 
 // collectorSvcDNS — Binding endpoint·probe·metric 스크레이프의 단일 좌표(번들 Service 이름과 일치).
@@ -100,13 +194,13 @@ func observeObservability(ctx context.Context, r *modelReconciler, fm *unstructu
 	var sample map[string]interface{}
 	if !ready {
 		rate["value"], rate["healthy"], rate["note"] = "0", false, "collector not ready"
-		return []interface{}{up, rate}, sample
+		return append([]interface{}{up, rate}, observeObservabilityEngines(ctx, r, fm)...), sample
 	}
 	cur, httpOk, found := scrapeAcceptedSpans(ctx, collectorSvcDNS(r.cfg.managedNS))
 	if !httpOk {
 		rate["value"], rate["healthy"] = "n/a", false
 		rate["source"], rate["note"] = "n/a (no scrape)", "collector metrics unreachable"
-		return []interface{}{up, rate}, sample
+		return append([]interface{}{up, rate}, observeObservabilityEngines(ctx, r, fm)...), sample
 	}
 	now := time.Now().UTC()
 	last, lastTs, hasLast := readSample(fm)
@@ -129,5 +223,5 @@ func observeObservability(ctx context.Context, r *modelReconciler, fm *unstructu
 		"acceptedSpans": strconv.FormatFloat(cur, 'f', -1, 64),
 		"ts":            now.Format(time.RFC3339),
 	}
-	return []interface{}{up, rate}, sample
+	return append([]interface{}{up, rate}, observeObservabilityEngines(ctx, r, fm)...), sample
 }

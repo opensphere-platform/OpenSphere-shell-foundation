@@ -24,6 +24,13 @@
       ]
     },
     {
+      "name": "opensearch-operator",
+      "edgeVersion": "2.8.0",
+      "versions": [
+        { "version": "2.8.0", "source": "docker.io/opensearchproject/opensearch-operator:2.8.0" }
+      ]
+    },
+    {
       "name": "opentelemetry-collector-contrib",
       "edgeVersion": "0.154.0",
       "versions": [
@@ -43,6 +50,20 @@
       "edgeVersion": "1.22.0",
       "versions": [
         { "version": "1.22.0", "source": "docker.io/percona/percona-server-mongodb-operator:1.22.0" }
+      ]
+    },
+    {
+      "name": "percona-backup-mongodb",
+      "edgeVersion": "2.15.0",
+      "versions": [
+        { "version": "2.15.0", "source": "docker.io/percona/percona-backup-mongodb:2.15.0" }
+      ]
+    },
+    {
+      "name": "pmm-client",
+      "edgeVersion": "3.8.1",
+      "versions": [
+        { "version": "3.8.1", "source": "docker.io/percona/pmm-client:3.8.1" }
       ]
     },
     {
@@ -75,10 +96,10 @@
       ]
     },
     {
-      "name": "apache-syncope",
-      "edgeVersion": "4.1.1",
+      "name": "syncope",
+      "edgeVersion": "4.0.7",
       "versions": [
-        { "version": "4.1.1", "source": "docker.io/apache/syncope:4.1.1" }
+        { "version": "4.0.7", "source": "docker.io/apache/syncope:4.0.7" }
       ]
     },
     {
@@ -121,6 +142,13 @@
       "edgeVersion": "0.16.13",
       "versions": [
         { "version": "0.16.13", "source": "docker.io/stalwartlabs/stalwart:v0.16.13" }
+      ]
+    },
+    {
+      "name": "stalwart-cli",
+      "edgeVersion": "1.0.12",
+      "versions": [
+        { "version": "1.0.12", "source": "ghcr.io/stalwartlabs/cli:1.0.12" }
       ]
     },
     {
@@ -178,6 +206,13 @@
       "edgeVersion": "5.24.0",
       "versions": [
         { "version": "5.24.0", "source": "ghcr.io/grafana/grafana-operator:v5.24.0" }
+      ]
+    },
+    {
+      "name": "grafana",
+      "edgeVersion": "13.1.0",
+      "versions": [
+        { "version": "13.1.0", "source": "docker.io/grafana/grafana:13.1.0" }
       ]
     },
     {

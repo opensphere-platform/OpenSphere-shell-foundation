@@ -89,6 +89,7 @@ class FoundationPluginElement extends HTMLElement {
       window.dispatchEvent(new PopStateEvent('popstate'));
     });
     this.querySelectorAll('[data-tab]').forEach((button) => button.addEventListener('click', () => this.navigate(button.dataset.tab)));
+    this.querySelector('[data-create-claim]')?.addEventListener('click', () => void this.createClaim());
   }
 
   renderTab(active) {
@@ -119,24 +120,35 @@ class FoundationPluginElement extends HTMLElement {
   }
 
   operator() {
-    return `<section class="rm-work"><h2>Operator</h2><p>서명 package, Host API, 설치 주체의 실제 준비 상태를 구분합니다.</p><table class="table"><thead><tr><th>검사</th><th>상태</th><th>근거</th></tr></thead><tbody><tr><td>UIPluginPackage</td><td>${statePill('ok', 'Activated')}</td><td>${esc(SPEC.version)} · ${esc(SPEC.channel)}</td></tr><tr><td>Host API</td><td data-runtime-api>${statePill('info', '확인 중')}</td><td>${esc(RUNTIME.apiBase || '승인 context 대기')}</td></tr><tr><td>Operand reconciler</td><td>${statePill('warn', '별도 검증')}</td><td>${esc(SPEC.installer)}</td></tr></tbody></table></section>`;
+    const modes = Object.values(SPEC.control.requestModes || {});
+    const someReady = modes.some((mode) => mode !== 'pending');
+    const ready = SPEC.control.reconciler === 'implemented' && modes.length > 0 && modes.every((mode) => mode !== 'pending');
+    const operatorState = ready ? 'Ready' : someReady ? 'Partial' : 'Pending';
+    const requestRows = (SPEC.control.requestTypes || []).map((requestType) => { const mode = SPEC.control.requestModes?.[requestType] || 'pending'; const available = mode !== 'pending'; return `<tr><td>${esc(requestType)}</td><td>${statePill(available ? 'ok' : 'warn', mode)}</td><td>${available ? '실제 driver 경로가 검증 대상입니다.' : 'driver 구현·배포 검증 전에는 Claim이 Pending을 유지합니다.'}</td></tr>`; }).join('');
+    return `<section class="rm-work"><h2>Operator</h2><p>모든 PFSS 모듈은 공통 Claim/Binding lifecycle을 사용하고 제품별 driver가 실제 리소스를 수렴합니다.</p><table class="table"><thead><tr><th>검사</th><th>상태</th><th>근거</th></tr></thead><tbody><tr><td>UIPluginPackage</td><td>${statePill('ok', 'Activated')}</td><td>${esc(SPEC.version)} · ${esc(SPEC.channel)}</td></tr><tr><td>Host API</td><td data-runtime-api>${statePill('info', '확인 중')}</td><td>${esc(RUNTIME.apiBase || '승인 context 대기')}</td></tr><tr><td>Operator driver</td><td>${statePill(ready ? 'ok' : 'warn', operatorState)}</td><td>${esc(SPEC.control.operatorDriver)} · <code>${esc(SPEC.control.nativeResource)}</code></td></tr>${requestRows}</tbody></table>${ready ? '' : `<div class="alert alert-warning"><div class="alert-items"><div class="alert-item"><span class="alert-text">${esc(SPEC.control.blocker || (someReady ? '요청 종류별 driver 보강이 진행 중입니다.' : '배포 검증 대기'))}</span></div></div></div>`}</section>`;
   }
 
   clusterPlan() {
     const operands = SPEC.operands.map((item) => `<tr><td><code>${esc(item)}</code></td><td>channel ref</td><td>적용 시 digest 고정 필수</td></tr>`).join('');
-    return `<section class="rm-work"><h2>Cluster plan</h2><div class="rm-form"><label><span>Channel</span><input value="${esc(SPEC.channel)}" disabled></label><label><span>Installer</span><input value="${esc(SPEC.installer)}" disabled></label><label><span>Namespace</span><input value="${esc(SPEC.namespace)}" disabled></label></div><table class="table"><thead><tr><th>Operand image</th><th>선언</th><th>적용 정책</th></tr></thead><tbody>${operands}</tbody></table><div class="alert alert-warning" role="status"><div class="alert-items"><div class="alert-item"><span class="alert-text">이 공용 package 화면은 계획을 증명하며 임의 Kubernetes write를 수행하지 않습니다. 전용 reconciler가 승인된 digest·리소스·rollback 계약을 제공할 때만 적용할 수 있습니다.</span></div></div></div></section>`;
+    return `<section class="rm-work"><h2>Cluster plan</h2><div class="rm-form"><label><span>Channel</span><input value="${esc(SPEC.channel)}" disabled></label><label><span>Operator driver</span><input value="${esc(SPEC.control.operatorDriver)}" disabled></label><label><span>Native resource</span><input value="${esc(SPEC.control.nativeResource)}" disabled></label><label><span>Namespace</span><input value="${esc(SPEC.namespace)}" disabled></label></div><table class="table"><thead><tr><th>Operand image</th><th>선언</th><th>적용 정책</th></tr></thead><tbody>${operands}</tbody></table><div class="alert alert-info" role="status"><div class="alert-items"><div class="alert-item"><span class="alert-text">사용자는 FoundationClaim만 제출합니다. 제품별 Operator driver가 승인된 digest의 native resource를 선언하고 FoundationBinding으로 연결을 발급합니다.</span></div></div></div></section>`;
   }
 
   topology() {
-    return `<section class="rm-work"><h2>Topology</h2><div class="rm-topology">${SPEC.operands.map((item) => `<article><span class="rm-node">${esc(item.split(':')[0])}</span>${statePill('warn', 'Operand condition 필요')}</article>`).join('')}</div></section>`;
+    const dependencies = SPEC.control.dependencies || [];
+    const requestModes = Object.values(SPEC.control.requestModes || {});
+    const operatorReady = requestModes.length > 0 && requestModes.every((mode) => mode !== 'pending');
+    const dependencyNodes = dependencies.map((item) => `<article><span class="rm-node">${esc(item.module)}</span>${statePill(item.required ? 'warn' : 'info', item.required ? '필수' : '운영 Profile')}<small>${esc(item.requestType)} · ${esc(item.purpose)}</small></article>`).join('');
+    const operandNodes = SPEC.operands.map((item) => `<article><span class="rm-node">${esc(item.split(':')[0])}</span>${statePill('warn', 'Operand condition 필요')}</article>`).join('');
+    return `<section class="rm-work"><h2>Topology</h2><p>의존 서비스는 별도 FoundationClaim/FoundationBinding으로 연결되며 원문 자격 증명을 전달하지 않습니다.</p><div class="rm-topology"><article><span class="rm-node">${esc(SPEC.id)}</span>${statePill(operatorReady ? 'ok' : 'warn', operatorReady ? SPEC.control.operatorDriver : '요청별 보강 중')}</article>${dependencyNodes}${operandNodes}</div>${dependencies.length ? '' : '<p class="os-sub">필수 PFS 의존성이 없는 독립 Operator입니다.</p>'}</section>`;
   }
 
   configuration() {
-    return `<section class="rm-work"><h2>Configuration</h2><dl class="os-kv"><dt>Capability</dt><dd><code>${esc(SPEC.capability)}</code></dd><dt>Namespace</dt><dd><code>${esc(SPEC.namespace)}</code></dd><dt>Apply owner</dt><dd>${esc(SPEC.installer)}</dd><dt>Package channel</dt><dd>${esc(SPEC.channel)}</dd></dl><p class="os-sub">제품별 리소스·스토리지·접속 정책은 전용 reconciler schema가 제공해야 하며, 정의되지 않은 입력은 생성하지 않습니다.</p></section>`;
+    const dependencies = (SPEC.control.dependencies || []).map((item) => `${item.required ? '필수' : 'Profile'}: ${item.module} / ${item.requestType}`).join(' · ');
+    return `<section class="rm-work"><h2>Configuration</h2><dl class="os-kv"><dt>Capability</dt><dd><code>${esc(SPEC.capability)}</code></dd><dt>Namespace</dt><dd><code>${esc(SPEC.namespace)}</code></dd><dt>Operator</dt><dd>${esc(SPEC.control.operatorDriver)}</dd><dt>Native resource</dt><dd><code>${esc(SPEC.control.nativeResource)}</code></dd><dt>Request kinds</dt><dd>${(SPEC.control.requestTypes || []).map((item) => { const mode = SPEC.control.requestModes?.[item] || 'pending'; return statePill(mode === 'pending' ? 'warn' : 'info', `${item} · ${mode}`); }).join(' ')}</dd><dt>Binding capabilities</dt><dd>${(SPEC.control.capabilities || []).map((item) => `<code>${esc(item)}</code>`).join(' · ')}</dd><dt>Dependencies</dt><dd>${dependencies ? esc(dependencies) : '없음'}</dd></dl><p class="os-sub">자격 증명 원문은 입력하지 않고 동일 Namespace의 SecretRef만 참조합니다.</p></section>`;
   }
 
   domainResources() {
-    return `<section class="rm-work"><h2>${esc(DOMAIN_LABELS[SPEC.sector] || 'Resources & Access')}</h2><table class="table"><thead><tr><th>계약</th><th>상태</th><th>소유자</th></tr></thead><tbody><tr><td>${esc(SPEC.capability)}</td><td>${statePill('warn', 'Claim/Binding schema 필요')}</td><td>Foundation Control Plane</td></tr></tbody></table></section>`;
+    return `<section class="rm-work"><h2>${esc(DOMAIN_LABELS[SPEC.sector] || 'Resources & Access')}</h2><table class="table"><thead><tr><th>계약</th><th>요청 종류</th><th>발급 결과</th><th>소유자</th></tr></thead><tbody><tr><td>${esc(SPEC.capability)}</td><td>${esc((SPEC.control.requestTypes || []).join(' · '))}</td><td>${statePill('ok', 'FoundationBinding v1alpha1')}</td><td>${esc(SPEC.control.operatorDriver)}</td></tr></tbody></table></section>`;
   }
 
   backups() {
@@ -148,7 +160,60 @@ class FoundationPluginElement extends HTMLElement {
   }
 
   claims() {
-    return `<section class="rm-work"><h2>Claims</h2><table class="table"><thead><tr><th>Capability</th><th>상태</th><th>발급 주체</th></tr></thead><tbody><tr><td><code>${esc(SPEC.capability)}</code></td><td>${statePill('warn', '계약 schema 필요')}</td><td>Foundation Control Plane</td></tr></tbody></table></section>`;
+    const availableRequests = (SPEC.control.requestTypes || []).filter((item) => (SPEC.control.requestModes?.[item] || 'pending') !== 'pending');
+    const requestOptions = (SPEC.control.requestTypes || []).map((item) => { const mode = SPEC.control.requestModes?.[item] || 'pending'; return `<option value="${esc(item)}"${mode === 'pending' ? ' disabled' : ''}>${esc(item)}${mode === 'pending' ? ' · 준비 중' : ''}</option>`; }).join('');
+    return `<section class="rm-work"><h2>Claims</h2><p>제품 특성에 맞는 요청을 제출하면 Operator가 native resource와 연결 Binding을 수렴합니다.</p>${availableRequests.length ? '' : '<div class="alert alert-warning"><div class="alert-items"><div class="alert-item"><span class="alert-text">현재 배포 가능한 요청 driver가 없습니다. 준비 중인 요청은 제출할 수 없습니다.</span></div></div></div>'}<div class="rm-form"><label><span>이름</span><input data-claim-name placeholder="${esc(SPEC.id)}-request"></label><label><span>요청 종류</span><select data-claim-type>${requestOptions}</select></label><label><span>대상 이름 (선택)</span><input data-claim-target placeholder="기존 인스턴스 또는 리소스"></label><label><span>대상 Namespace (선택)</span><input data-claim-target-namespace placeholder="미입력 시 현재 Namespace"></label><label><span>Profile / Plan (선택)</span><input data-claim-profile placeholder="승인된 Profile 또는 Plan"></label><label><span>데이터·리소스 이름 (선택)</span><input data-claim-resource placeholder="database, bucket, index, realm 등"></label><label><span>소유자·계정 (선택)</span><input data-claim-owner placeholder="owner 또는 application account"></label><label><span>접근 수준 (선택)</span><select data-claim-access><option value="">제품 기본값</option><option value="ReadOnly">ReadOnly</option><option value="ReadWrite">ReadWrite</option></select></label><label><span>Credential Secret (선택)</span><input data-claim-secret placeholder="SecretRef 이름"></label></div><button class="btn btn-sm btn-primary" type="button" data-create-claim${availableRequests.length ? '' : ' disabled'}>요청</button><span class="os-sub" data-claim-result></span><table class="table"><thead><tr><th>이름</th><th>종류</th><th>상태</th><th>Binding</th></tr></thead><tbody data-claim-list><tr><td colspan="4">불러오는 중</td></tr></tbody></table></section>`;
+  }
+
+  async createClaim() {
+    const result = this.querySelector('[data-claim-result]');
+    const name = this.querySelector('[data-claim-name]')?.value?.trim() || '';
+    const requestType = this.querySelector('[data-claim-type]')?.value || '';
+    const targetName = this.querySelector('[data-claim-target]')?.value?.trim() || '';
+    const targetNamespace = this.querySelector('[data-claim-target-namespace]')?.value?.trim() || '';
+    const profileName = this.querySelector('[data-claim-profile]')?.value?.trim() || '';
+    const resourceName = this.querySelector('[data-claim-resource]')?.value?.trim() || '';
+    const owner = this.querySelector('[data-claim-owner]')?.value?.trim() || '';
+    const access = this.querySelector('[data-claim-access]')?.value || '';
+    const credentialSecretName = this.querySelector('[data-claim-secret]')?.value?.trim() || '';
+    if (!name) { if (result) result.textContent = '이름을 입력하십시오.'; return; }
+    if (result) result.textContent = '요청 중…';
+    try {
+      const response = await apiFetch('/api/claims', {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-os-idempotency-key': `${SPEC.id}-${crypto.randomUUID?.() || Date.now()}` },
+        body: JSON.stringify({
+          name, requestType,
+          ...(targetName ? { targetRef: { name: targetName, ...(targetNamespace ? { namespace: targetNamespace } : {}) } } : {}),
+          ...(profileName ? { profileName } : {}),
+          parameters: {
+            ...(resourceName ? { database: resourceName, resourceName } : {}),
+            ...(owner ? { owner } : {}),
+            ...(access ? { access } : {}),
+          },
+          ...(credentialSecretName ? { credentialSecretName } : {}),
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
+      if (result) result.textContent = `${name} 요청이 접수되었습니다.`;
+      await this.loadClaims();
+    } catch (error) {
+      if (result) result.textContent = String(error?.message || error);
+    }
+  }
+
+  async loadClaims() {
+    const target = this.querySelector('[data-claim-list]');
+    if (!target) return;
+    try {
+      const response = await apiFetch('/api/claims', { cache: 'no-store' });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
+      const items = Array.isArray(body.items) ? body.items : [];
+      target.innerHTML = items.length ? items.map((item) => `<tr><td><code>${esc(item.metadata?.name)}</code></td><td>${esc(item.spec?.request?.type || '-')}</td><td>${statePill(item.status?.phase === 'Bound' ? 'ok' : 'warn', item.status?.phase || 'Pending')}</td><td><code>${esc(item.status?.bindingRef?.name || '-')}</code></td></tr>`).join('') : '<tr><td colspan="4">등록된 요청이 없습니다.</td></tr>';
+    } catch (error) {
+      target.innerHTML = `<tr><td colspan="4">${esc(error?.message || error)}</td></tr>`;
+    }
   }
 
   upgrade() {
@@ -171,6 +236,7 @@ class FoundationPluginElement extends HTMLElement {
       this.querySelectorAll('[data-runtime-api]').forEach((node) => { node.innerHTML = statePill('ok', 'Ready'); });
       const operand = this.querySelector('[data-operand-state]');
       if (operand) operand.textContent = `${(plan.operands || []).length}개 operand 계획 확인`;
+      await this.loadClaims();
     } catch (error) {
       this.querySelectorAll('[data-runtime-api]').forEach((node) => { node.innerHTML = statePill('warn', 'Unavailable'); node.title = String(error); });
     }

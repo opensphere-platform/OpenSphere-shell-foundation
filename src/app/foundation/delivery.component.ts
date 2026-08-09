@@ -42,14 +42,14 @@ export class FoundationDeliveryComponent {
   readonly vr = inject(ViewRouter);
   readonly argocd: DeliveryEngine = {
     id:'argocd', name:'Argo CD / ApplicationSet', provider:'argo-cd.readthedocs.io', version:'GitOps',
-    logo:'argocd', mono:'CD', category:'delivery.gitops',
+    logo:'argocd', mono:'CD', category:'delivery.gitops', liveKey:'argocd',
     role:'Git repository의 서명된 desired state를 target cluster에 동기화하는 Foundation의 기본 write-path.',
     wiring:'PFS 모듈이 아니며 Foundation Control Plane의 배포 경로로 동작합니다.',
-    lifecycle:'Phase 1', lifecycleClass:'label-info',
+    lifecycle:'Managed', lifecycleClass:'label-success',
   };
   readonly crossplane: DeliveryEngine = {
     id:'crossplane', name:'Crossplane', provider:'crossplane.io (CNCF)', version:'v2.3.3',
-    logo:'crossplane-non-typo', mono:'X', category:'delivery.adapter',
+    logo:'crossplane-non-typo', mono:'X', category:'delivery.adapter', liveKey:'crossplane',
     role:'외부 managed resource와 Provider가 강한 영역을 위한 선택적 provisioning adapter.',
     wiring:'GitOps 기본 경로를 대체하지 않으며 승인된 Provider만 사용합니다.',
     lifecycle:'Runtime', lifecycleClass:'label-success',

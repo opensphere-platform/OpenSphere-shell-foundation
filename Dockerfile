@@ -6,7 +6,7 @@
 FROM docker.io/library/node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm install --no-audit --no-fund
+RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY angular.json tsconfig.json tsconfig.app.json ./
 COPY src ./src
 RUN npx ng build --configuration production
@@ -15,14 +15,22 @@ FROM docker.io/library/node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c
 ARG OS_MODULE_DESCRIPTOR
 ARG OS_MODULE_SIGNATURE
 ARG OS_RELEASE_TAG
+ARG OS_SOURCE_REVISION
 ARG OS_MODULE_KEY_ID=opensphere-plugins-v4
 LABEL org.opencontainers.image.title="OpenSphere Platform Foundation Service Stack" \
       org.opencontainers.image.version=$OS_RELEASE_TAG \
+      org.opencontainers.image.revision=$OS_SOURCE_REVISION \
       org.opencontainers.image.source="https://github.com/opensphere-platform/OpenSphere-shell-foundation" \
+      io.opensphere.channel="edge" \
       io.opensphere.compatibility-version="0.2.1" \
       io.opensphere.module.descriptor=$OS_MODULE_DESCRIPTOR \
       io.opensphere.module.descriptor.signature=$OS_MODULE_SIGNATURE \
-      io.opensphere.module.descriptor.key-id=$OS_MODULE_KEY_ID
+      io.opensphere.module.descriptor.key-id=$OS_MODULE_KEY_ID \
+      io.opensphere.release-tag=$OS_RELEASE_TAG \
+      io.opensphere.source-revision=$OS_SOURCE_REVISION \
+      opensphere.io/build-authority="localhost" \
+      opensphere.io/ga-eligible="false" \
+      opensphere.io/release-class="pre-ga"
 RUN apk upgrade --no-cache
 WORKDIR /app
 RUN npm install --omit=dev --no-audit --no-fund --no-save ws@8.21.0 mongodb@7.5.0 pg@8.22.0 \

@@ -175,9 +175,9 @@ func buildOPABundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructured
 
 func keycloakParams(fm *unstructured.Unstructured) identityEngineOpts {
 	o := identityEngineOpts{
-		version: "26.0", profile: "development", resourceProfile: "small", replicas: 1,
+		version: "26.0", profile: "production", resourceProfile: "small", replicas: 1,
 		cpuRequest: "250m", memoryRequest: "512Mi", cpuLimit: "1", memoryLimit: "1536Mi",
-		ingressMode: "cluster-internal", databaseMode: "embedded-h2",
+		ingressMode: "cluster-internal", databaseMode: "managed-postgres",
 	}
 	p, _, _ := unstructured.NestedMap(fm.Object, "spec", "parameters", "identityEngines", "keycloak")
 	if p == nil {
@@ -203,11 +203,11 @@ func keycloakParams(fm *unstructured.Unstructured) identityEngineOpts {
 	if o.replicas > 5 {
 		o.replicas = 5
 	}
-	// The currently verified bundle runs Keycloak with the embedded H2 store.
-	// H2 cannot provide a shared durable store, so advertising multiple replicas
-	// would create an invalid topology even if Kubernetes accepts the Deployment.
-	if o.databaseMode == "embedded-h2" {
-		o.replicas = 1
+	// The Foundation bundle has one supported durable database contract.  An
+	// arbitrary value must not silently switch Keycloak back to a development
+	// store or an unverified external database.
+	if o.databaseMode != "managed-postgres" {
+		o.databaseMode = "managed-postgres"
 	}
 	o.monitoring = pBool(p, "monitoring", false)
 	return o
@@ -448,11 +448,24 @@ type bundleSpec struct {
 }
 
 var bundles = map[string]bundleSpec{
+	"delivery": {
+		model: "delivery", slice: "D-6", deployName: "external-delivery-operators",
+		image:    externalOperatorVersion,
+		build:    buildDeliveryBundle,
+		observe:  observeDelivery,
+		ready:    deliveryReady,
+		gone:     deliveryGone,
+		engines:  []string{"argocd", "crossplane"},
+		endpoint: deliveryEndpoint,
+		probe:    deliveryProbe,
+	},
 	"observability": {
 		model: "observability", slice: "D-1", deployName: collectorName,
 		image:    func(c *config) string { return c.collectorImage },
 		build:    buildObservabilityBundle,
 		observe:  observeObservability,
+		ready:    observabilityReady,
+		engines:  []string{"otel", "tempo", "loki", "grafana-operator"},
 		endpoint: func(c *config) string { return "http://" + collectorSvcDNS(c.managedNS) + ":4317" },
 		probe:    func(c *config) string { return collectorSvcDNS(c.managedNS) + ":4317" },
 	},
@@ -479,5 +492,38 @@ var bundles = map[string]bundleSpec{
 		endpointFM: dataEndpoint, // 설치 NS의 -rw 서비스
 		engines:    []string{"postgres", "psmdb", "valkey", "rustfs", "opensearch"},
 		probeFM:    dataProbe,
+	},
+	"ai": {
+		model: "ai", slice: "D-4", deployName: liteLLMName,
+		image:    func(c *config) string { return c.litellmImage },
+		build:    buildAIBundle,
+		observe:  observeAI,
+		ready:    aiReady,
+		gone:     aiGone,
+		engines:  []string{"litellm", "langfuse"},
+		endpoint: aiEndpoint,
+		probe:    aiProbe,
+	},
+	"communication": {
+		model: "communication", slice: "D-5", deployName: novuAPIName,
+		image:    func(c *config) string { return c.novuAPIImage },
+		build:    buildCommunicationBundle,
+		observe:  observeCommunication,
+		ready:    communicationReady,
+		gone:     communicationGone,
+		engines:  []string{"stalwart", "novu", "mattermost"},
+		endpoint: communicationEndpoint,
+		probe:    communicationProbe,
+	},
+	"backup": {
+		model: "backup", slice: "D-6", deployName: backupOperatorName,
+		image:    func(*config) string { return "opensphere-backup+velero:discovered" },
+		build:    buildBackupBundle,
+		observe:  observeBackup,
+		ready:    backupReady,
+		gone:     backupGone,
+		engines:  []string{"ptm"},
+		endpoint: backupEndpoint,
+		probe:    backupProbe,
 	},
 }

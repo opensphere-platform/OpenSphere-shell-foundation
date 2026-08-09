@@ -23,9 +23,9 @@ const DOMAIN_ICON: Record<string, any> = {
 interface DomainCard {
   id: string; label: string; icon: any; desc: string; live: boolean;
   count: number; healthy: number; degraded: boolean; modules: string; firstModule: string;
-  opNote?: string;    // 로드맵 도메인 중 실제 설치 진행이 있는 PFS 모듈의 실시간 상태
-  linkModule?: string; // opNote가 있으면 클릭 시 이동할 정식 모듈 경로
-  plannedNote?: string; // live 도메인 안에도 아직 미구현인 엔진이 있을 때(예: Identity의 Syncope) 표시
+  opNote?: string;
+  linkModule?: string;
+  plannedNote?: string;
 }
 
 interface SetupStep {
@@ -37,19 +37,17 @@ interface SetupStep {
   tab?: string;
 }
 
-// CONSTITUTION-0004 §2.0.4 PFS core module 기준 계획 제품명.
-// 아직 capability 서비스(FOUNDATION_PLUGINS)로 등록되지 않은 4개 도메인도 정확한 제품명을 명시한다.
-// liveKey가 있으면 PFS 구현 모듈의 실측 상태를 그대로 반영한다(하드코딩 금지).
-// PFS 정본 멤버는 제품명이 아니라 identity/data/ai/comm/observability/backup capability 모듈이다.
-const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: string; linkModule?: string }> = {
-  ai: { modules: 'LiteLLM · Langfuse · Vector Retrieval' },
-  comm: { modules: 'Stalwart(JMAP) · Novu · Mattermost' },
-  observability: { modules: 'OpenTelemetry Collector · Tempo · Loki · Grafana Operator', liveKey: 'otel', liveLabel: 'OpenTelemetry Collector', linkModule: 'otel' },
-  backup: { modules: 'BackupPolicy · Restore · Object/Volume protection' },
+// PFS 정본 멤버는 제품명이 아니라 identity/data/ai/comm/observability/backup capability다.
+// 각 capability의 실제 Operator/operand probe를 한 곳에서 집계한다.
+const OPERATOR_DOMAINS: Record<string, { modules: string; liveKeys: string[]; linkModule: string }> = {
+  ai: { modules: 'LiteLLM · Langfuse · Vector Retrieval', liveKeys: ['litellm', 'langfuse'], linkModule: 'litellm' },
+  comm: { modules: 'Stalwart(JMAP) · Novu · Mattermost', liveKeys: ['stalwart', 'novu', 'mattermost'], linkModule: 'stalwart' },
+  observability: { modules: 'OpenTelemetry Collector · Tempo · Loki · Grafana Operator', liveKeys: ['otel', 'tempo', 'loki', 'grafana'], linkModule: 'otel' },
+  backup: { modules: 'OpenSphere Backup · Velero · Restore', liveKeys: ['backup'], linkModule: 'ptm' },
 };
 
 // Foundation Overview — subShell home(개요). 정체성(10 Perspective의 기둥) + capability 6-도메인 현황
-// (Data/Identity 가동 · AI/Comm/Observability/Backup 로드맵) + at-a-glance KPI + 시작하기.
+// 6개 capability의 Operator/operand live 상태 + at-a-glance KPI + 시작하기.
 // ※ 소비 엔드포인트·plugin별 상세는 각 모듈 자신의 페이지에 있다(중복이라 별도 Services 메뉴는 폐기, 2026-07-04). 여기는 '한눈에'만.
 @Component({
   selector: 'app-foundation-overview',
@@ -192,13 +190,13 @@ const PLANNED: Record<string, { modules: string; liveKey?: string; liveLabel?: s
     <div class="os-sech">Capability 도메인</div>
     <div class="ov-domains">
       <div class="ov-domain" *ngFor="let d of domains()" [class.ov-domain--planned]="!d.live"
-           [class.ov-domain--clickable]="d.live || d.linkModule" (click)="goDomain(d)">
+           [class.ov-domain--clickable]="true" (click)="goDomain(d)">
         <div class="ov-domain-h">
           <os-cicon [icon]="d.icon" [size]="20"/>
           <span class="ov-domain-name">{{ d.label }}</span>
           <span class="label os-ml-auto"
-                [ngClass]="d.live ? (d.degraded ? 'label-danger' : 'label-success') : (d.opNote?.includes('설치·운영중') ? 'label-info' : '')">
-            {{ d.live ? (d.degraded ? 'Degraded' : 'Live') : (d.opNote?.includes('설치·운영중') ? '일부 가동' : '로드맵') }}
+                [ngClass]="d.degraded ? 'label-danger' : (d.healthy === d.count && d.count > 0 ? 'label-success' : 'label-info')">
+            {{ d.degraded ? 'Degraded' : (d.healthy === d.count && d.count > 0 ? 'Live' : '확인 중') }}
           </span>
         </div>
         <p class="ov-domain-desc">{{ d.desc }}</p>
@@ -385,26 +383,33 @@ export class FoundationOverviewComponent {
         firstModule: list[0]?.view.module ?? 'overview',
       };
     };
-    const planned = (id: string): Omit<DomainCard, 'id' | 'label' | 'icon' | 'desc' | 'live'> => {
-      const p = PLANNED[id];
-      const base = { count: 0, healthy: 0, degraded: false, modules: p.modules, firstModule: 'overview' };
-      if (!p.liveKey) { return base; }
-      const state = this.engines.liveState(p.liveKey);
-      if (state === 'loading') { return base; } // 확인 중엔 아무 것도 단정하지 않음(플리커 방지)
-      const opNote = state === 'ok' ? `${p.liveLabel} 설치·운영중 — PFS 모듈에서 상태 확인` : `${p.liveLabel} 미설치 — PFS 모듈에서 설치 가능`;
-      return { ...base, opNote, linkModule: p.linkModule };
+    const operatorDomain = (id: string): Omit<DomainCard, 'id' | 'label' | 'icon' | 'desc' | 'live'> => {
+      const spec = OPERATOR_DOMAINS[id];
+      const states = spec.liveKeys.map((key) => this.engines.liveState(key));
+      const observed = states.filter((state) => state !== 'loading');
+      const healthy = states.filter((state) => state === 'ok' || state === 'empty').length;
+      const degraded = observed.some((state) => state !== 'ok' && state !== 'empty');
+      return {
+        count: spec.liveKeys.length,
+        healthy,
+        degraded,
+        modules: spec.modules,
+        firstModule: spec.linkModule,
+        linkModule: spec.linkModule,
+        opNote: observed.length === 0 ? '실행 상태 확인 중' : `${healthy}/${spec.liveKeys.length} Operator 대상 확인`,
+      };
     };
     return [
       { id: 'data', label: 'Data', icon: DOMAIN_ICON['data'], desc: '관계형 DB · 검색 · 오브젝트 스토리지', live: true, ...roll('data.') },
       { id: 'identity', label: 'Identity', icon: DOMAIN_ICON['identity'], desc: 'IGA · SSO · 디렉터리 · 정책', live: true, ...roll('identity.') },
-      { id: 'ai', label: 'AI', icon: DOMAIN_ICON['ai'], desc: '모델 서빙 · 추론 · 벡터 메모리', live: false, ...planned('ai') },
-      { id: 'comm', label: 'Comm', icon: DOMAIN_ICON['comm'], desc: '메시징 · 알림 · 협업', live: false, ...planned('comm') },
-      { id: 'observability', label: 'Observability', icon: DOMAIN_ICON['observability'], desc: '메트릭 · 로그 · 트레이스', live: false, ...planned('observability') },
-      { id: 'backup', label: 'Backup', icon: DOMAIN_ICON['backup'], desc: '백업 · 복구 · 보존', live: false, ...planned('backup') },
+      { id: 'ai', label: 'AI', icon: DOMAIN_ICON['ai'], desc: '모델 서빙 · 추론 · 벡터 메모리', live: true, ...operatorDomain('ai') },
+      { id: 'comm', label: 'Comm', icon: DOMAIN_ICON['comm'], desc: '메시징 · 알림 · 협업', live: true, ...operatorDomain('comm') },
+      { id: 'observability', label: 'Observability', icon: DOMAIN_ICON['observability'], desc: '메트릭 · 로그 · 트레이스', live: true, ...operatorDomain('observability') },
+      { id: 'backup', label: 'Backup', icon: DOMAIN_ICON['backup'], desc: '백업 · 복구 · 보존', live: true, ...operatorDomain('backup') },
     ];
   });
 
-  readonly liveDomains = computed(() => this.domains().filter((d) => d.live).length);
+  readonly liveDomains = computed(() => this.domains().filter((d) => d.count > 0 && d.healthy === d.count).length);
 
   go(id: string): void { this.vr.setModule(id); }
   goStep(step: SetupStep): void {

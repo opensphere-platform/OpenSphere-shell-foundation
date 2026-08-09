@@ -76,4 +76,3 @@ func probeTCP(ctx context.Context, hostport string) (int, bool) {
 	}
 	return ms, true
 }
-

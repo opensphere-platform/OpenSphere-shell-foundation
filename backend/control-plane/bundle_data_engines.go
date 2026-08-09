@@ -18,8 +18,8 @@ const (
 	psmdbName        = "foundation-data-mongodb"
 	valkeyName       = "foundation-data-valkey"
 	rustfsName       = "opensphere-rustfs"
-	psmdbBackupImage = "ghcr.io/opensphere-platform/mirror/percona-backup-mongodb:2.15.0@sha256:2c69ec2dbd5be02df31577869df97c72781bf6fe6456471e8087b0e03136f672"
-	psmdbPMMImage    = "ghcr.io/opensphere-platform/mirror/pmm-client:3.8.1@sha256:a92cfb7f912bd85d8245575c3ee5c423664ad2baedb674d159a87b113dbd4de2"
+	psmdbBackupImage = "ghcr.io/opensphere-platform/mirror/percona-backup-mongodb:2.15.0@sha256:12dcba7f1b55e00eb1b49dac51427d942c221b826d621d6bfad926a9d959a7c5"
+	psmdbPMMImage    = "ghcr.io/opensphere-platform/mirror/pmm-client:3.8.1@sha256:ea4061a6d9bd59d9c7aecbe75b91989bbddad55208b898d75064ac436014ca16"
 )
 
 var psmdbGVK = schema.GroupVersionKind{Group: "psmdb.percona.com", Version: "v1", Kind: "PerconaServerMongoDB"}
@@ -117,10 +117,11 @@ func engineService(id, name, ns string, ports []interface{}, owner string) *unst
 
 func engineNetworkPolicy(id, name, ns, owner string, port int64) *unstructured.Unstructured {
 	labels := engineLabels(id, name)
-	allowedNamespaces := map[string]interface{}{"matchExpressions": []interface{}{map[string]interface{}{"key": "kubernetes.io/metadata.name", "operator": "In", "values": []interface{}{ns, "opensphere-console", "monitoring"}}}}
+	platformNamespaces := map[string]interface{}{"matchExpressions": []interface{}{map[string]interface{}{"key": "kubernetes.io/metadata.name", "operator": "In", "values": []interface{}{ns, "opensphere-console", "monitoring"}}}}
+	managedConsumers := map[string]interface{}{"matchLabels": map[string]interface{}{"opensphere.io/managed-by": "foundation", "opensphere.io/purpose": "pfss-service"}}
 	u := &unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": map[string]interface{}{"name": name + "-internal", "namespace": ns},
-		"spec": map[string]interface{}{"podSelector": map[string]interface{}{"matchLabels": labels}, "policyTypes": []interface{}{"Ingress"}, "ingress": []interface{}{map[string]interface{}{"from": []interface{}{map[string]interface{}{"namespaceSelector": allowedNamespaces}}, "ports": []interface{}{map[string]interface{}{"protocol": "TCP", "port": port}}}}},
+		"spec": map[string]interface{}{"podSelector": map[string]interface{}{"matchLabels": labels}, "policyTypes": []interface{}{"Ingress"}, "ingress": []interface{}{map[string]interface{}{"from": []interface{}{map[string]interface{}{"namespaceSelector": platformNamespaces}, map[string]interface{}{"namespaceSelector": managedConsumers}}, "ports": []interface{}{map[string]interface{}{"protocol": "TCP", "port": port}}}}},
 	}}
 	stampLabels(u, "data", owner)
 	markEngine(u, id)
@@ -270,8 +271,9 @@ func valkeyNetworkPolicy(ns, owner string, labels map[string]interface{}, monito
 	if monitoring {
 		ports = append(ports, map[string]interface{}{"protocol": "TCP", "port": int64(9121)})
 	}
-	allowed := map[string]interface{}{"matchExpressions": []interface{}{map[string]interface{}{"key": "kubernetes.io/metadata.name", "operator": "In", "values": []interface{}{ns, "opensphere-console", "monitoring"}}}}
-	u := &unstructured.Unstructured{Object: map[string]interface{}{"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": map[string]interface{}{"name": valkeyName + "-internal", "namespace": ns}, "spec": map[string]interface{}{"podSelector": map[string]interface{}{"matchLabels": labels}, "policyTypes": []interface{}{"Ingress"}, "ingress": []interface{}{map[string]interface{}{"from": []interface{}{map[string]interface{}{"namespaceSelector": allowed}}, "ports": ports}}}}}
+	platformNamespaces := map[string]interface{}{"matchExpressions": []interface{}{map[string]interface{}{"key": "kubernetes.io/metadata.name", "operator": "In", "values": []interface{}{ns, "opensphere-console", "monitoring"}}}}
+	managedConsumers := map[string]interface{}{"matchLabels": map[string]interface{}{"opensphere.io/managed-by": "foundation", "opensphere.io/purpose": "pfss-service"}}
+	u := &unstructured.Unstructured{Object: map[string]interface{}{"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": map[string]interface{}{"name": valkeyName + "-internal", "namespace": ns}, "spec": map[string]interface{}{"podSelector": map[string]interface{}{"matchLabels": labels}, "policyTypes": []interface{}{"Ingress"}, "ingress": []interface{}{map[string]interface{}{"from": []interface{}{map[string]interface{}{"namespaceSelector": platformNamespaces}, map[string]interface{}{"namespaceSelector": managedConsumers}}, "ports": ports}}}}}
 	stampLabels(u, "data", owner)
 	markEngine(u, "valkey")
 	return u
@@ -303,6 +305,7 @@ func buildRustFSBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstructu
 		"env": []interface{}{
 			map[string]interface{}{"name": "RUSTFS_VOLUMES", "value": "/data"}, map[string]interface{}{"name": "RUSTFS_ADDRESS", "value": "0.0.0.0:9000"}, map[string]interface{}{"name": "RUSTFS_CONSOLE_ADDRESS", "value": "0.0.0.0:9001"}, map[string]interface{}{"name": "RUSTFS_CONSOLE_ENABLE", "value": "true"},
 			map[string]interface{}{"name": "RUSTFS_ACCESS_KEY", "valueFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": o.authSecret, "key": "access_key"}}}, map[string]interface{}{"name": "RUSTFS_SECRET_KEY", "valueFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": o.authSecret, "key": "secret_key"}}},
+			map[string]interface{}{"name": "RUSTFS_RPC_SECRET", "valueFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": o.authSecret, "key": "rpc_secret"}}},
 		},
 		"startupProbe":   map[string]interface{}{"tcpSocket": map[string]interface{}{"port": "s3"}, "periodSeconds": int64(5), "failureThreshold": int64(36)},
 		"readinessProbe": map[string]interface{}{"tcpSocket": map[string]interface{}{"port": "s3"}, "periodSeconds": int64(8), "failureThreshold": int64(3)},

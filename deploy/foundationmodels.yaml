@@ -1,4 +1,9 @@
-# Foundation 모듈 수명주기 정본 — FoundationModel CR (감사 시정 S4 → 2026-07-06 도메인 단위로 정정).
+# Foundation 모듈 최초 bootstrap 정본 — FoundationModel CR (감사 시정 S4 → 2026-07-06 도메인 단위로 정정).
+#
+# 중요: 이 파일을 운영 클러스터에 반복 `kubectl apply`하지 않는다. engines와
+# 상세 parameters는 Console/운영자가 소유하므로 재적용하면 설정을 역진시킬 수
+# 있다. 설치·업그레이드에서는 `node tools/initialize-foundation-models.mjs`를
+# 사용하며, 이 도구는 없는 모델만 create하고 기존 모델은 그대로 보존한다.
 #
 # ⚠️ 의미론(2026-07-06 정정): FoundationModel은 **도메인(모델) 단위**다 — reconciler(backend/control-plane,
 #   reconcile_model.go)가 spec.model로 번들을 디스패치하고 metadata.name을 owner 라벨(회수 셀렉터)로 쓰므로
@@ -38,8 +43,9 @@ spec:
       keycloak: disabled
       samba: disabled
       syncope: disabled
+      opa: disabled
 ---
-# ── data 모듈 (엔진은 개별 plugin 화면에서 계획·활성화) ──
+# ── data 모듈 (PostgreSQL=StackGres, MongoDB=Percona Operator, 나머지=Foundation Operator) ──
 apiVersion: foundation.opensphere.io/v1alpha1
 kind: FoundationModel
 metadata:
@@ -54,6 +60,73 @@ spec:
       valkey: disabled
       opensearch: disabled
       rustfs: disabled
+---
+# ── AI 기반 서비스 (LiteLLM route + Langfuse LLM observability) ──
+apiVersion: foundation.opensphere.io/v1alpha1
+kind: FoundationModel
+metadata:
+  name: ai
+spec:
+  model: ai
+  desiredState: Disabled
+  parameters:
+    engines:
+      litellm: disabled
+      langfuse: disabled
+---
+# ── Communication 기반 서비스 ──
+apiVersion: foundation.opensphere.io/v1alpha1
+kind: FoundationModel
+metadata:
+  name: communication
+spec:
+  model: communication
+  desiredState: Disabled
+  parameters:
+    engines:
+      stalwart: disabled
+      novu: disabled
+      mattermost: disabled
+---
+# ── Observability 기반 서비스 ──
+apiVersion: foundation.opensphere.io/v1alpha1
+kind: FoundationModel
+metadata:
+  name: observability
+spec:
+  model: observability
+  desiredState: Installed
+  parameters:
+    engines:
+      otel: enabled
+      tempo: disabled
+      loki: disabled
+      grafana-operator: disabled
+---
+# ── Backup / Restore 기반 서비스 ──
+apiVersion: foundation.opensphere.io/v1alpha1
+kind: FoundationModel
+metadata:
+  name: backup
+spec:
+  model: backup
+  desiredState: Disabled
+  parameters:
+    engines:
+      ptm: disabled
+---
+# ── Platform delivery 기반 서비스 ──
+apiVersion: foundation.opensphere.io/v1alpha1
+kind: FoundationModel
+metadata:
+  name: delivery
+spec:
+  model: delivery
+  desiredState: Installed
+  parameters:
+    engines:
+      argocd: enabled
+      crossplane: enabled
 ---
 # ── identity 모듈 자기기술(FoundationModuleDescriptor) — "모듈이 자기 자신을 설명한다"(FS-구축계획서 §9.4) ──
 # 감사(2026-07-06) F1 갭의 첫 착수: descriptor CR을 클러스터에 선언(현재 UI는 개수·이름 관찰, 후속: registry hydrate).

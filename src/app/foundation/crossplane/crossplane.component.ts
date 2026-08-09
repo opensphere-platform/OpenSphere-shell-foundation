@@ -213,7 +213,7 @@ export class CrossplaneComponent {
       description: 'GitOps와 병행하는 선택적 provisioning adapter. 호스트 코어와 Provider 운영 경계를 분리합니다.',
       lifecycle: this.svc.phaseLabel(),
       lifecycleClass: this.svc.phaseClass(),
-      version: this.svc.workloads()[0]?.image || 'v2.3.3 planned',
+      version: this.svc.workloads()[0]?.image || 'v2.3.3',
       profile: 'optional-adapter',
       namespace: 'crossplane-system',
     };

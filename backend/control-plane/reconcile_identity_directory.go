@@ -149,7 +149,9 @@ func (r *identityDirectoryReconciler) buildBinding(claim *unstructured.Unstructu
 		"protocol":  identityDirectoryProto,
 		"url":       identityDirectoryURL(r.cfg.managedNS),
 	}, "spec", "endpointRef")
-	_ = unstructured.SetNestedMap(b.Object, map[string]interface{}{"name": identityDirectorySecret, "namespace": r.cfg.managedNS}, "spec", "secretRef")
+	// Shared bindings expose only the endpoint. The domain administrator
+	// bootstrap Secret is control-plane authority and must never be projected to
+	// consumers; scoped Access claims receive their own credential Secret.
 	_ = unstructured.SetNestedMap(b.Object, map[string]interface{}{"name": identityDirectoryName, "namespace": r.cfg.managedNS}, "spec", "policyRef")
 	return b
 }

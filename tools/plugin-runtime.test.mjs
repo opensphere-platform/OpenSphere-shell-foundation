@@ -67,7 +67,11 @@ test('Foundation child runtime exposes an authenticated, fail-closed control bou
     installer: 'foundation-model', namespace: 'opensphere-foundation', capability: 'test.capability',
     operands: ['mirror/test:edge'],
     operandPlan: [{ name: 'test', channel: 'edge', version: '1.2.3', image: 'ghcr.io/opensphere-platform/mirror/test:1.2.3' }],
-    control: { model: 'test', engineId: 'test', parameterPath: 'dataEngines.test', reconciler: 'implemented' },
+    control: {
+      model: 'test', engineId: 'test', parameterPath: 'dataEngines.test', reconciler: 'implemented',
+      operatorDriver: 'test-operator', nativeResource: 'example.test/Test',
+      requestTypes: ['Instance', 'Access'], requestModes: { Instance: 'managed', Access: 'pending' }, capabilities: ['test'],
+    },
   }));
 
   const pluginPort = await freePort();
@@ -144,4 +148,39 @@ test('Foundation child runtime exposes an authenticated, fail-closed control bou
   assert.equal(patch.spec.parameters.engines.test, 'enabled');
   assert.equal(patch.spec.parameters.dataEngines.test.replicas, 2);
   assert.equal(patch.spec.parameters.dataEngines.test.credentialSecretName, 'test-secret');
+
+  const anonymousClaim = await request('anonymous claim', `http://127.0.0.1:${pluginPort}/api/claims`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'test-instance', requestType: 'Instance' }),
+  });
+  assert.equal(anonymousClaim.status, 401);
+
+  const unsupportedClaim = await request('unsupported claim', `http://127.0.0.1:${pluginPort}/api/claims`, {
+    method: 'POST',
+    headers: { authorization: 'Bearer test', 'content-type': 'application/json', 'x-os-idempotency-key': 'test-claim-invalid' },
+    body: JSON.stringify({ name: 'test-instance', requestType: 'Bucket' }),
+  });
+  assert.equal(unsupportedClaim.status, 400);
+
+  const pendingClaim = await request('pending claim', `http://127.0.0.1:${pluginPort}/api/claims`, {
+    method: 'POST',
+    headers: { authorization: 'Bearer test', 'content-type': 'application/json', 'x-os-idempotency-key': 'test-claim-pending' },
+    body: JSON.stringify({ name: 'test-access', requestType: 'Access' }),
+  });
+  assert.equal(pendingClaim.status, 409);
+  assert.equal((await pendingClaim.json()).error, 'RequestDriverNotReady');
+
+  const acceptedClaim = await request('accepted claim', `http://127.0.0.1:${pluginPort}/api/claims`, {
+    method: 'POST',
+    headers: { authorization: 'Bearer test', 'content-type': 'application/json', 'x-os-idempotency-key': 'test-claim-1' },
+    body: JSON.stringify({ name: 'test-instance', requestType: 'Instance', parameters: { replicas: 2 } }),
+  });
+  assert.equal(acceptedClaim.status, 202);
+  const claimWrite = received.find((entry) => entry.method === 'POST' && entry.url.includes('/foundationclaims'));
+  assert.ok(claimWrite, 'runtime must create a FoundationClaim through the Foundation host');
+  const claim = JSON.parse(claimWrite.body);
+  assert.equal(claim.spec.model, 'test');
+  assert.equal(claim.spec.module, 'test-plugin');
+  assert.equal(claim.spec.request.type, 'Instance');
+  assert.equal(claim.spec.parameters.replicas, 2);
 });

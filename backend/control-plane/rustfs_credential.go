@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,11 +28,20 @@ func (r *modelReconciler) ensureRustFSCredential(ctx context.Context, fm *unstru
 	secret := gvkObj(coreSecretGVK)
 	err := r.direct.Get(ctx, types.NamespacedName{Namespace: ns, Name: opts.authSecret}, secret)
 	if err == nil {
-		for _, key := range []string{"access_key", "secret_key"} {
+		values := map[string]string{}
+		for _, key := range []string{"access_key", "secret_key", "rpc_secret"} {
 			value, found, nestedErr := unstructured.NestedString(secret.Object, "data", key)
 			if nestedErr != nil || !found || value == "" {
 				return "", fmt.Errorf("Secret %s/%s exists but data.%s is missing", ns, opts.authSecret, key)
 			}
+			decoded, decodeErr := base64.StdEncoding.DecodeString(value)
+			if decodeErr != nil || len(decoded) < 24 {
+				return "", fmt.Errorf("Secret %s/%s data.%s must be a base64-encoded value of at least 24 bytes", ns, opts.authSecret, key)
+			}
+			values[key] = string(decoded)
+		}
+		if values["secret_key"] == values["rpc_secret"] {
+			return "", fmt.Errorf("Secret %s/%s must use distinct secret_key and rpc_secret values", ns, opts.authSecret)
 		}
 		return secret.GetResourceVersion(), nil
 	}

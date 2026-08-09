@@ -34,7 +34,7 @@ func TestOPAIsExplicitOptIn(t *testing.T) {
 
 func TestOPABundleIsProductionFailClosedAndMonitored(t *testing.T) {
 	fm := opaFoundationModel("enabled")
-	cfg := &config{managedNS: "opensphere-foundation", opaImage: "ghcr.io/opensphere-platform/mirror/opa@sha256:3ece20d3a58eb4051db71c0b84fc962bca2a6f9aa74ee8ea3d027d693fdc2d1a", opaControlImage: "ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:test"}
+	cfg := &config{managedNS: "opensphere-foundation", opaImage: "ghcr.io/opensphere-platform/mirror/opa@sha256:57f7d06808fff6de3ea1d698e6430990973ca1370be0e54975f0083d615521da", opaControlImage: "ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:test"}
 	objs, err := buildOPABundle(cfg, fm)
 	if err != nil {
 		t.Fatal(err)
