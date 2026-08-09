@@ -191,14 +191,34 @@ func (r *postgresClaimReconciler) applyPostgresResource(ctx context.Context, cla
 		return true, false, applyObj(ctx, r.direct, desired)
 	}
 	object := renderCrossplaneObject(claim, desired)
-	if err := applyObj(ctx, r.direct, object); err != nil {
-		return false, true, err
-	}
 	current := gvkObj(crossplaneObjectGVK)
 	if err := r.direct.Get(ctx, types.NamespacedName{Namespace: object.GetNamespace(), Name: object.GetName()}, current); err != nil {
-		return false, true, client.IgnoreNotFound(err)
+		if apierrors.IsNotFound(err) {
+			return false, true, applyObj(ctx, r.direct, object)
+		}
+		return false, true, err
+	}
+	if !crossplaneObjectStateEqual(current, object) {
+		if err := applyObj(ctx, r.direct, object); err != nil {
+			return false, true, err
+		}
 	}
 	return crossplaneManagedObjectReady(current), true, nil
+}
+
+func crossplaneObjectStateEqual(current, desired *unstructured.Unstructured) bool {
+	currentSpec, _, _ := unstructured.NestedMap(current.Object, "spec")
+	desiredSpec, _, _ := unstructured.NestedMap(desired.Object, "spec")
+	if !reflect.DeepEqual(currentSpec, desiredSpec) {
+		return false
+	}
+	currentLabels := current.GetLabels()
+	for key, value := range desired.GetLabels() {
+		if currentLabels[key] != value {
+			return false
+		}
+	}
+	return true
 }
 
 func renderCrossplaneObject(claim, desired *unstructured.Unstructured) *unstructured.Unstructured {
@@ -738,16 +758,20 @@ func stackGresBootstrapStatus(cluster *unstructured.Unstructured) (ready, failed
 func setPostgresCondition(o *unstructured.Unstructured, conditionType, status, reason, message string) {
 	lastTransitionTime := time.Now().UTC().Format(time.RFC3339)
 	conditions, _, _ := unstructured.NestedSlice(o.Object, "status", "conditions")
+	next := make([]interface{}, 0, len(conditions)+1)
 	for _, item := range conditions {
 		condition, ok := item.(map[string]interface{})
-		if !ok || condition["type"] != conditionType || condition["status"] != status {
+		if !ok || condition["type"] != conditionType {
+			next = append(next, item)
 			continue
 		}
-		if previous, ok := condition["lastTransitionTime"].(string); ok && previous != "" {
-			lastTransitionTime = previous
+		if condition["status"] == status {
+			if previous, ok := condition["lastTransitionTime"].(string); ok && previous != "" {
+				lastTransitionTime = previous
+			}
 		}
-		break
 	}
 	condition := map[string]interface{}{"type": conditionType, "status": status, "reason": reason, "message": message, "lastTransitionTime": lastTransitionTime}
-	_ = unstructured.SetNestedSlice(o.Object, []interface{}{condition}, "status", "conditions")
+	next = append(next, condition)
+	_ = unstructured.SetNestedSlice(o.Object, next, "status", "conditions")
 }
