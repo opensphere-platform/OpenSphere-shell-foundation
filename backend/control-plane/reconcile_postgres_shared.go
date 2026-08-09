@@ -31,7 +31,7 @@ func postgresSharedApplyVersion(mode string) int64 {
 	return 1
 }
 
-func postgresSharedRevokeVersion(mode string) int64 { return postgresSharedApplyVersion(mode) + 1 }
+func postgresSharedRevokeVersion(mode string) int64 { return 3 }
 
 type postgresTarget struct {
 	Claim       *unstructured.Unstructured
@@ -215,6 +215,7 @@ func renderSharedPostgresResources(claim *unstructured.Unstructured, target post
 	escapedOwner := strings.ReplaceAll(owner, "'", "''")
 	roleSQL := fmt.Sprintf("DO $opensphere$\nBEGIN\n  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '%s') THEN\n    ALTER ROLE %s LOGIN PASSWORD '%s' CONNECTION LIMIT %d;\n  ELSE\n    CREATE ROLE %s LOGIN PASSWORD '%s' CONNECTION LIMIT %d;\n  END IF;\nEND\n$opensphere$;\n", escapedOwner, quotePostgresIdentifier(owner), escapedPassword, connectionLimit, quotePostgresIdentifier(owner), escapedPassword, connectionLimit)
 	actionSQL := ""
+	finalizeSQL := "SELECT 1;\n"
 	if mode == postgresModeSharedDatabase {
 		actionSQL = fmt.Sprintf("CREATE DATABASE %s OWNER %s;\n", quotePostgresIdentifier(database), quotePostgresIdentifier(owner))
 	} else if access == "ReadOnly" {
@@ -229,9 +230,10 @@ func renderSharedPostgresResources(claim *unstructured.Unstructured, target post
 		if mode == postgresModeSharedDatabase {
 			policy, _, _ := unstructured.NestedString(claim.Object, "spec", "deletionPolicy")
 			if policy == "Delete" {
-				actionSQL = fmt.Sprintf("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '%s' AND pid <> pg_backend_pid();\nDROP DATABASE IF EXISTS %s;\nDROP ROLE IF EXISTS %s;\n", strings.ReplaceAll(database, "'", "''"), quotePostgresIdentifier(database), quotePostgresIdentifier(owner))
+				actionSQL = fmt.Sprintf("DROP DATABASE IF EXISTS %s WITH (FORCE);\n", quotePostgresIdentifier(database))
+				finalizeSQL = fmt.Sprintf("DROP ROLE IF EXISTS %s;\n", quotePostgresIdentifier(owner))
 			} else {
-				actionSQL = fmt.Sprintf("ALTER DATABASE %s OWNER TO postgres;\nDROP ROLE IF EXISTS %s;\n", quotePostgresIdentifier(database), quotePostgresIdentifier(owner))
+				actionSQL = "SELECT 1;\n"
 			}
 		} else {
 			actionSQL = fmt.Sprintf("REVOKE ALL PRIVILEGES ON DATABASE %s FROM %s;\nREASSIGN OWNED BY %s TO postgres;\nDROP OWNED BY %s;\nDROP ROLE IF EXISTS %s;\n", quotePostgresIdentifier(database), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner))
@@ -240,7 +242,7 @@ func renderSharedPostgresResources(claim *unstructured.Unstructured, target post
 
 	secret := object(schema.GroupVersionKind{Version: "v1", Kind: "Secret"}, target.Namespace, stem+"-sql")
 	secret.Object["type"] = "Opaque"
-	secret.Object["stringData"] = map[string]interface{}{"role.sql": roleSQL, "action.sql": actionSQL}
+	secret.Object["stringData"] = map[string]interface{}{"role.sql": roleSQL, "action.sql": actionSQL, "finalize.sql": finalizeSQL}
 	stampSharedPostgresLabels(secret, claim)
 
 	script := object(sgScriptGVK, target.Namespace, stem)
@@ -248,12 +250,16 @@ func renderSharedPostgresResources(claim *unstructured.Unstructured, target post
 	if mode == postgresModeDatabaseAccess || cleanup && mode == postgresModeDatabaseAccess {
 		action["database"] = database
 	}
+	scripts := []interface{}{
+		map[string]interface{}{"id": int64(1), "version": version, "name": "apply-login-contract", "retryOnError": true, "scriptFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": secret.GetName(), "key": "role.sql"}}},
+		action,
+	}
+	if cleanup && mode == postgresModeSharedDatabase {
+		scripts = append(scripts, map[string]interface{}{"id": int64(3), "version": version, "name": "finalize-database-contract", "retryOnError": true, "scriptFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": secret.GetName(), "key": "finalize.sql"}}})
+	}
 	script.Object["spec"] = map[string]interface{}{
 		"managedVersions": false,
-		"scripts": []interface{}{
-			map[string]interface{}{"id": int64(1), "version": version, "name": "apply-login-contract", "retryOnError": true, "scriptFrom": map[string]interface{}{"secretKeyRef": map[string]interface{}{"name": secret.GetName(), "key": "role.sql"}}},
-			action,
-		},
+		"scripts":         scripts,
 	}
 	stampSharedPostgresLabels(script, claim)
 	labels := script.GetLabels()
