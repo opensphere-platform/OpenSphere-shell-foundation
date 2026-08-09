@@ -29,7 +29,7 @@ spec:
       containers:
         - name: manager
           # image-source: ghcr-mirror(ok, 자체빌드) — OPA production supply-chain 지원 edge exact digest
-          image: ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:8637296b8974f20c91f9a5f8fb383d1903dd53d629342e16e6aa574712c84a36
+          image: ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:40bbc53b9ab5a3071c42684bba4417ce97457c15afd134bb90977ec2e30efa2a
           imagePullPolicy: IfNotPresent
           args:
             - --managed-namespace=opensphere-foundation
@@ -59,10 +59,10 @@ spec:
             - --mattermost-image=ghcr.io/opensphere-platform/mirror/mattermost-team-edition@sha256:1c538cf33c2144ba2c825571cd414aaaebf8d8c231d4b18081b811cd0ca0ef2a
             - --velero-image=ghcr.io/opensphere-platform/mirror/velero@sha256:37396519f399536e5f01427d723565ae69294ec3fb5625cf1c87c09eaa9de16b
             - --opa-image=ghcr.io/opensphere-platform/mirror/opa@sha256:57f7d06808fff6de3ea1d698e6430990973ca1370be0e54975f0083d615521da
-            - --opa-control-image=ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:618f765e95441ca69987f53aeed4278fbeddb2bd89d36a91ad43f23706187e8e
+            - --opa-control-image=ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:40bbc53b9ab5a3071c42684bba4417ce97457c15afd134bb90977ec2e30efa2a
             # image-source: GHCR mirror, origin=apache/syncope:4.0.7 linux/amd64
             - --syncope-image=ghcr.io/opensphere-platform/mirror/syncope@sha256:970ecea41b897656063eed5b1a8b6637ec84fa8543340831a9f1bbf767f2a2f9
-            - --syncope-monitor-image=ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:618f765e95441ca69987f53aeed4278fbeddb2bd89d36a91ad43f23706187e8e
+            - --syncope-monitor-image=ghcr.io/opensphere-platform/opensphere-foundation-control-plane@sha256:40bbc53b9ab5a3071c42684bba4417ce97457c15afd134bb90977ec2e30efa2a
             - --default-storage-class=standard
           env:
             - name: FOUNDATION_DIRECT_APPLY
