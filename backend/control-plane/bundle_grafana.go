@@ -94,6 +94,15 @@ func buildGrafanaBundle(cfg *config, fm *unstructured.Unstructured) []*unstructu
 func grafanaObjectReady(grafana *unstructured.Unstructured) bool {
 	stage, _, _ := unstructured.NestedString(grafana.Object, "status", "stage")
 	stageStatus, _, _ := unstructured.NestedString(grafana.Object, "status", "stageStatus")
-	replicas, _, _ := unstructured.NestedInt64(grafana.Object, "status", "replicas")
-	return stage == "complete" && stageStatus == "success" && replicas > 0
+	if stage != "complete" || stageStatus != "success" {
+		return false
+	}
+	conditions, _, _ := unstructured.NestedSlice(grafana.Object, "status", "conditions")
+	for _, item := range conditions {
+		condition, ok := item.(map[string]interface{})
+		if ok && condition["type"] == "GrafanaReady" && condition["status"] == "True" {
+			return true
+		}
+	}
+	return false
 }

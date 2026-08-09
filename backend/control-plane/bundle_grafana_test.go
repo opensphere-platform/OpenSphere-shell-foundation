@@ -37,12 +37,20 @@ func TestGrafanaBundleUsesOperatorCRAndCanonicalOperandMirror(t *testing.T) {
 
 func TestGrafanaReadinessRequiresSuccessfulCurrentInstance(t *testing.T) {
 	grafana := object(grafanaGVK, "opensphere-foundation", grafanaName)
-	grafana.Object["status"] = map[string]interface{}{"stage": "complete", "stageStatus": "success", "replicas": int64(1)}
+	grafana.Object["status"] = map[string]interface{}{
+		"stage": "complete", "stageStatus": "success",
+		"conditions": []interface{}{map[string]interface{}{"type": "GrafanaReady", "status": "True"}},
+	}
 	if !grafanaObjectReady(grafana) {
 		t.Fatal("successful Grafana instance was not ready")
 	}
 	grafana.Object["status"].(map[string]interface{})["stageStatus"] = "failed"
 	if grafanaObjectReady(grafana) {
 		t.Fatal("failed Grafana instance reported ready")
+	}
+	grafana.Object["status"].(map[string]interface{})["stageStatus"] = "success"
+	grafana.Object["status"].(map[string]interface{})["conditions"] = []interface{}{map[string]interface{}{"type": "GrafanaReady", "status": "False"}}
+	if grafanaObjectReady(grafana) {
+		t.Fatal("GrafanaReady=False reported ready")
 	}
 }

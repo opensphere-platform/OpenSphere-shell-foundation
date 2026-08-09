@@ -61,6 +61,21 @@ func TestObservabilityStoresCarryIngressPolicies(t *testing.T) {
 	}
 }
 
+func TestTempoThreeConfigurationUsesSupportedRootFields(t *testing.T) {
+	cfg := &config{managedNS: "opensphere-foundation", tempoImage: "tempo:test"}
+	for _, object := range buildTempoBundle(cfg, observabilityModel(nil)) {
+		if object.GetKind() != "ConfigMap" || object.GetName() != tempoName+"-config" {
+			continue
+		}
+		value, _, _ := unstructured.NestedString(object.Object, "data", "tempo.yaml")
+		if strings.Contains(value, "\ncompactor:") {
+			t.Fatalf("Tempo 3 monolithic config contains removed root compactor field:\n%s", value)
+		}
+		return
+	}
+	t.Fatal("Tempo configuration ConfigMap was not generated")
+}
+
 func TestObservabilityBundleGatesEnginesIndependently(t *testing.T) {
 	cfg := &config{managedNS: "opensphere-foundation", collectorImage: "otel:test", tempoImage: "tempo:test", lokiImage: "loki:test", observabilityGatewayImage: "gateway:test"}
 	objects, err := buildObservabilityBundle(cfg, observabilityModel(map[string]interface{}{"otel": "disabled", "tempo": "enabled", "loki": "enabled", "grafana-operator": "disabled"}))

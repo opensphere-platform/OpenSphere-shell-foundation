@@ -125,8 +125,6 @@ storage:
     backend: local
     wal: { path: /var/tempo/wal }
     local: { path: /var/tempo/traces }
-compactor:
-  compaction: { block_retention: 168h }
 `
 	ports := []interface{}{map[string]interface{}{"name": "http", "containerPort": int64(3200)}, map[string]interface{}{"name": "otlp-grpc", "containerPort": int64(4317)}, map[string]interface{}{"name": "otlp-http", "containerPort": int64(4318)}}
 	return []*unstructured.Unstructured{

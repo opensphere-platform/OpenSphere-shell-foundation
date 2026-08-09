@@ -14,6 +14,7 @@
     "verify:plugin-catalog": "node tools/verify-foundation-plugin-catalog.mjs",
     "test:plugin-runtime": "node --test tools/plugin-runtime.test.mjs",
     "test:server-auth": "node --test test/server-auth.test.js",
+    "test:control-plane-rbac": "node --test test/control-plane-rbac.test.js",
     "test:platform-delivery": "node --test test/platform-delivery.test.js",
     "test:opensearch-hosting": "node --test test/opensearch-hosting.test.js",
     "test:postgres-admin": "node --test test/postgres-admin.test.js",
