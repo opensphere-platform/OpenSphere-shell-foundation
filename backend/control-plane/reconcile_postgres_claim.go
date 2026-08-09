@@ -207,10 +207,16 @@ func (r *postgresClaimReconciler) applyPostgresResource(ctx context.Context, cla
 }
 
 func crossplaneObjectStateEqual(current, desired *unstructured.Unstructured) bool {
-	currentSpec, _, _ := unstructured.NestedMap(current.Object, "spec")
-	desiredSpec, _, _ := unstructured.NestedMap(desired.Object, "spec")
-	if !reflect.DeepEqual(currentSpec, desiredSpec) {
-		return false
+	for _, path := range [][]string{
+		{"spec", "forProvider"},
+		{"spec", "managementPolicies"},
+		{"spec", "providerConfigRef"},
+	} {
+		currentValue, _, _ := unstructured.NestedFieldCopy(current.Object, path...)
+		desiredValue, _, _ := unstructured.NestedFieldCopy(desired.Object, path...)
+		if !reflect.DeepEqual(currentValue, desiredValue) {
+			return false
+		}
 	}
 	currentLabels := current.GetLabels()
 	for key, value := range desired.GetLabels() {

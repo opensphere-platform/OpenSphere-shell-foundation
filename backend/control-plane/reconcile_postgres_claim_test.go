@@ -355,6 +355,30 @@ func TestCrossplaneBridgeRequiresReadyAndSynced(t *testing.T) {
 	}
 }
 
+func TestCrossplaneObjectStateIgnoresProviderDefaults(t *testing.T) {
+	desired := renderCrossplaneObject(testPostgresClaim(), object(sgClusterGVK, "opensphere-foundation", "pgc-orders"))
+	current := desired.DeepCopy()
+	_ = unstructured.SetNestedMap(current.Object, map[string]interface{}{"policy": "SuccessfulCreate"}, "spec", "readiness")
+	_ = unstructured.SetNestedField(current.Object, false, "spec", "watch")
+	if !crossplaneObjectStateEqual(current, desired) {
+		t.Fatal("provider defaulted fields caused false Crossplane Object drift")
+	}
+	_ = unstructured.SetNestedSlice(current.Object, []interface{}{"Observe"}, "spec", "managementPolicies")
+	if crossplaneObjectStateEqual(current, desired) {
+		t.Fatal("owned management policy drift was ignored")
+	}
+}
+
+func TestPostgresConditionsPreserveIndependentBridgeState(t *testing.T) {
+	claim := testPostgresClaim()
+	setPostgresCondition(claim, "CrossplaneBridge", "True", "CrossplaneConnected", "connected")
+	setPostgresCondition(claim, "Ready", "True", "ClusterReady", "ready")
+	conditions, _, _ := unstructured.NestedSlice(claim.Object, "status", "conditions")
+	if len(conditions) != 2 {
+		t.Fatalf("conditions=%v", conditions)
+	}
+}
+
 func TestPostgresManagedStateIgnoresStackGresDefaultsAndStatus(t *testing.T) {
 	desired := gvkObj(sgClusterGVK)
 	desired.SetLabels(map[string]string{"app.kubernetes.io/managed-by": cpManagedBy})
