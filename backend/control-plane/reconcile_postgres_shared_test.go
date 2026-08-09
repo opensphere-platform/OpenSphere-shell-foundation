@@ -93,7 +93,7 @@ func TestManagedSQLStatusRequiresRequestedVersion(t *testing.T) {
 	cluster.Object["status"] = map[string]interface{}{"managedSql": map[string]interface{}{"scripts": []interface{}{
 		map[string]interface{}{"id": id, "completedAt": "2026-08-10T00:00:00Z", "scripts": []interface{}{map[string]interface{}{"id": int64(1), "version": int64(1)}, map[string]interface{}{"id": int64(2), "version": int64(1)}}},
 	}}}
-	ready, failed, _ := stackGresManagedSQLStatus(cluster, id, postgresSharedRevokeVersion)
+	ready, failed, _ := stackGresManagedSQLStatus(cluster, id, postgresSharedRevokeVersion(postgresModeDatabaseAccess))
 	if ready || failed {
 		t.Fatalf("stale managed SQL version accepted: ready=%v failed=%v", ready, failed)
 	}

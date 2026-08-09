@@ -19,12 +19,19 @@ import (
 )
 
 const (
-	postgresModeDedicated       = "Dedicated"
-	postgresModeSharedDatabase  = "SharedDatabase"
-	postgresModeDatabaseAccess  = "DatabaseAccess"
-	postgresSharedApplyVersion  = int64(2)
-	postgresSharedRevokeVersion = int64(3)
+	postgresModeDedicated      = "Dedicated"
+	postgresModeSharedDatabase = "SharedDatabase"
+	postgresModeDatabaseAccess = "DatabaseAccess"
 )
+
+func postgresSharedApplyVersion(mode string) int64 {
+	if mode == postgresModeDatabaseAccess {
+		return 2
+	}
+	return 1
+}
+
+func postgresSharedRevokeVersion(mode string) int64 { return postgresSharedApplyVersion(mode) + 1 }
 
 type postgresTarget struct {
 	Claim       *unstructured.Unstructured
@@ -97,7 +104,7 @@ func (r *postgresClaimReconciler) reconcileSharedPostgresClaim(ctx context.Conte
 	clusterErr := r.direct.Get(ctx, types.NamespacedName{Namespace: target.Namespace, Name: target.ClusterName}, cluster)
 	sqlReady, sqlFailed, sqlMessage := false, false, "StackGres가 데이터베이스 요청을 적용하고 있습니다"
 	if clusterErr == nil {
-		sqlReady, sqlFailed, sqlMessage = stackGresManagedSQLStatus(cluster, scriptID, postgresSharedApplyVersion)
+		sqlReady, sqlFailed, sqlMessage = stackGresManagedSQLStatus(cluster, scriptID, postgresSharedApplyVersion(mode))
 	}
 	if sqlFailed {
 		return r.setSharedPostgresStatus(ctx, claim, target, "Failed", "False", "DatabaseRequestFailed", sqlMessage, bridgeTotal, bridgeReady)
@@ -215,9 +222,9 @@ func renderSharedPostgresResources(claim *unstructured.Unstructured, target post
 	} else {
 		actionSQL = fmt.Sprintf("GRANT CONNECT ON DATABASE %s TO %s;\nGRANT USAGE, CREATE ON SCHEMA public TO %s;\nGRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public TO %s;\nGRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO %s;\nALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLES TO %s;\nALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO %s;\n", quotePostgresIdentifier(database), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(owner), quotePostgresIdentifier(databaseOwner), quotePostgresIdentifier(owner), quotePostgresIdentifier(databaseOwner), quotePostgresIdentifier(owner))
 	}
-	version := postgresSharedApplyVersion
+	version := postgresSharedApplyVersion(mode)
 	if cleanup {
-		version = postgresSharedRevokeVersion
+		version = postgresSharedRevokeVersion(mode)
 		roleSQL = fmt.Sprintf("ALTER ROLE %s NOLOGIN;\n", quotePostgresIdentifier(owner))
 		if mode == postgresModeSharedDatabase {
 			policy, _, _ := unstructured.NestedString(claim.Object, "spec", "deletionPolicy")
@@ -456,7 +463,7 @@ func (r *postgresClaimReconciler) releaseSharedPostgresClaim(ctx context.Context
 	if err := r.direct.Get(ctx, types.NamespacedName{Namespace: target.Namespace, Name: target.ClusterName}, cluster); err != nil {
 		return reconcile.Result{}, err
 	}
-	ready, failed, message := stackGresManagedSQLStatus(cluster, scriptID, postgresSharedRevokeVersion)
+	ready, failed, message := stackGresManagedSQLStatus(cluster, scriptID, postgresSharedRevokeVersion(postgresClaimMode(claim)))
 	if failed {
 		return reconcile.Result{}, fmt.Errorf("PostgreSQL 연결 회수 실패: %s", message)
 	}
