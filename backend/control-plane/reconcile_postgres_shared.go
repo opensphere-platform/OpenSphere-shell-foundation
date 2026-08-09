@@ -298,7 +298,31 @@ func sharedPostgresScriptID(claim *unstructured.Unstructured) int64 {
 }
 
 func (r *postgresClaimReconciler) postgresManagedSQLRefs(ctx context.Context, target types.NamespacedName, clusterName, exclude string) ([]interface{}, error) {
-	refs := []interface{}{map[string]interface{}{"id": int64(1), "sgScript": clusterName + "-bootstrap"}}
+	refs := make([]interface{}, 0)
+	bootstrapName := clusterName + "-bootstrap"
+	defaultName := clusterName + "-default"
+	seen := map[string]bool{}
+	cluster := gvkObj(sgClusterGVK)
+	if err := r.direct.Get(ctx, types.NamespacedName{Namespace: target.Namespace, Name: clusterName}, cluster); err == nil {
+		current, _, _ := unstructured.NestedSlice(cluster.Object, "spec", "managedSql", "scripts")
+		for _, item := range current {
+			entry, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			scriptName := fmt.Sprint(entry["sgScript"])
+			if scriptName != bootstrapName && scriptName != defaultName {
+				continue
+			}
+			refs = append(refs, entry)
+			seen[scriptName] = true
+		}
+	} else if !apierrors.IsNotFound(err) {
+		return nil, err
+	}
+	if !seen[bootstrapName] {
+		refs = append(refs, map[string]interface{}{"id": int64(1), "sgScript": bootstrapName})
+	}
 	claims := &unstructured.UnstructuredList{}
 	claims.SetGroupVersionKind(schema.GroupVersionKind{Group: postgresClaimGVK.Group, Version: postgresClaimGVK.Version, Kind: "PostgresClaimList"})
 	if err := r.direct.List(ctx, claims); err != nil {
@@ -319,7 +343,15 @@ func (r *postgresClaimReconciler) postgresManagedSQLRefs(ctx context.Context, ta
 		if name != target.Name || ns != target.Namespace {
 			continue
 		}
-		managed = append(managed, managedRef{id: sharedPostgresScriptID(candidate), script: sharedPostgresResourceStem(candidate)})
+		scriptName := sharedPostgresResourceStem(candidate)
+		script := object(sgScriptGVK, target.Namespace, scriptName)
+		if err := r.direct.Get(ctx, types.NamespacedName{Namespace: target.Namespace, Name: scriptName}, script); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return nil, err
+		}
+		managed = append(managed, managedRef{id: sharedPostgresScriptID(candidate), script: scriptName})
 	}
 	sort.Slice(managed, func(i, j int) bool { return managed[i].id < managed[j].id })
 	for _, ref := range managed {
