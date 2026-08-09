@@ -1,4 +1,5 @@
-# PostgreSQL Fleet northbound contracts. Every claim provisions one isolated StackGres cluster.
+# PostgreSQL Fleet northbound contract. A claim can allocate a dedicated instance,
+# a database on a managed instance, or a scoped login to an existing database.
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -35,7 +36,23 @@ spec:
                     name: { type: string }
                 isolation:
                   type: string
-                  enum: [Dedicated]
+                  default: Dedicated
+                  enum: [Dedicated, SharedDatabase, DatabaseAccess]
+                clusterRef:
+                  type: object
+                  description: Dedicated PostgresClaim used by SharedDatabase and DatabaseAccess requests.
+                  required: [name, namespace]
+                  properties:
+                    name: { type: string }
+                    namespace: { type: string }
+                access:
+                  type: string
+                  description: Database privilege contract. SharedDatabase uses Owner; DatabaseAccess uses ReadOnly or ReadWrite.
+                  enum: [Owner, ReadOnly, ReadWrite]
+                connectionLimit:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000
                 storage:
                   type: object
                   properties:

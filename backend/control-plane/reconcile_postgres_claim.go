@@ -67,6 +67,10 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 	if claim.GetDeletionTimestamp() != nil {
 		return r.release(ctx, claim)
 	}
+	mode := postgresClaimMode(claim)
+	if mode != "Dedicated" {
+		return r.reconcileSharedPostgresClaim(ctx, claim, mode)
+	}
 	managed, err := r.isPostgresFleetNamespace(ctx, claim.GetNamespace())
 	if err != nil {
 		return reconcile.Result{}, err
@@ -109,6 +113,11 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 		return r.reject(ctx, nn, "InvalidProfileReference", err.Error())
 	}
 	resources := renderPostgresResources(claim, plan, profileRefs, password)
+	managedSQLRefs, err := r.postgresManagedSQLRefs(ctx, nn, postgresClusterName(claim), "")
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	setRenderedClusterManagedSQL(resources, managedSQLRefs)
 	bridgeTotal, bridgeReady := 0, 0
 	for _, resource := range resources {
 		ready, bridged, err := r.applyPostgresResource(ctx, claim, resource)
@@ -235,7 +244,7 @@ func renderCrossplaneObject(claim, desired *unstructured.Unstructured) *unstruct
 	object.SetLabels(labels)
 	policy, _, _ := unstructured.NestedString(claim.Object, "spec", "deletionPolicy")
 	managementPolicies := []interface{}{"Observe", "Create", "Update", "LateInitialize"}
-	if policy == "Delete" {
+	if policy == "Delete" || desired.GetLabels()["provisioning.opensphere.io/transient"] == "true" {
 		managementPolicies = []interface{}{"*"}
 	}
 	object.Object["spec"] = map[string]interface{}{
@@ -423,6 +432,9 @@ func (r *postgresClaimReconciler) ensureApplicationSecret(ctx context.Context, c
 }
 
 func (r *postgresClaimReconciler) release(ctx context.Context, claim *unstructured.Unstructured) (reconcile.Result, error) {
+	if postgresClaimMode(claim) != "Dedicated" {
+		return r.releaseSharedPostgresClaim(ctx, claim)
+	}
 	policy, _, _ := unstructured.NestedString(claim.Object, "spec", "deletionPolicy")
 	if err := r.direct.DeleteAllOf(ctx, gvkObj(crossplaneObjectGVK), client.InNamespace(claim.GetNamespace()), client.MatchingLabels{"provisioning.opensphere.io/postgres-claim": claim.GetName()}); err != nil && !apierrors.IsNotFound(err) {
 		return reconcile.Result{}, err
@@ -499,6 +511,22 @@ func validatePostgresClaim(claim *unstructured.Unstructured) error {
 		if value != "" && !postgresIdentifier.MatchString(value) {
 			return fmt.Errorf("spec.profileRefs.%s is not a supported Kubernetes resource name", field)
 		}
+	}
+	mode := postgresClaimMode(claim)
+	switch mode {
+	case postgresModeDedicated:
+		if name, _, _ := unstructured.NestedString(claim.Object, "spec", "planRef", "name"); name == "" {
+			return fmt.Errorf("spec.planRef.name is required for Dedicated claims")
+		}
+	case postgresModeSharedDatabase, postgresModeDatabaseAccess:
+		if name, _, _ := unstructured.NestedString(claim.Object, "spec", "clusterRef", "name"); name == "" {
+			return fmt.Errorf("spec.clusterRef.name is required for %s claims", mode)
+		}
+		if namespace, _, _ := unstructured.NestedString(claim.Object, "spec", "clusterRef", "namespace"); namespace == "" {
+			return fmt.Errorf("spec.clusterRef.namespace is required for %s claims", mode)
+		}
+	default:
+		return fmt.Errorf("spec.isolation %q is not supported", mode)
 	}
 	return nil
 }
