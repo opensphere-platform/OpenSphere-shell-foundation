@@ -89,7 +89,6 @@ spec:
                   items:
                     type: object
                     required: [name]
-                    additionalProperties: false
                     properties:
                       name: { type: string, pattern: '^[A-Za-z_][A-Za-z0-9_$-]{0,62}$' }
                       version: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$' }
