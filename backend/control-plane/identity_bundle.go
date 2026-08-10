@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 //go:embed identity_bundle.yaml
@@ -84,6 +85,7 @@ type identityEngineOpts struct {
 	version, profile, resourceProfile                string
 	cpuRequest, memoryRequest, cpuLimit, memoryLimit string
 	ingressMode, databaseMode, databasePlan          string
+	databaseTargetClaim                              string
 	replicas                                         int64
 	monitoring                                       bool
 }
@@ -177,7 +179,7 @@ func keycloakParams(fm *unstructured.Unstructured) identityEngineOpts {
 	o := identityEngineOpts{
 		version: "26.0", profile: "production", resourceProfile: "small", replicas: 1,
 		cpuRequest: "250m", memoryRequest: "512Mi", cpuLimit: "1", memoryLimit: "1536Mi",
-		ingressMode: "cluster-internal", databaseMode: "managed-postgres", databasePlan: "postgresql-dev-single",
+		ingressMode: "cluster-internal", databaseMode: "dedicated", databasePlan: "postgresql-dev-single",
 	}
 	p, _, _ := unstructured.NestedMap(fm.Object, "spec", "parameters", "identityEngines", "keycloak")
 	if p == nil {
@@ -197,6 +199,7 @@ func keycloakParams(fm *unstructured.Unstructured) identityEngineOpts {
 	o.ingressMode = pStr(p, "ingressMode", o.ingressMode)
 	o.databaseMode = pStr(p, "databaseMode", o.databaseMode)
 	o.databasePlan = pStr(p, "databasePlan", o.databasePlan)
+	o.databaseTargetClaim = strings.TrimSpace(pStr(p, "databaseTargetClaim", ""))
 	o.replicas = pInt(p, "replicas", o.replicas)
 	if o.replicas < 1 {
 		o.replicas = 1
@@ -204,11 +207,13 @@ func keycloakParams(fm *unstructured.Unstructured) identityEngineOpts {
 	if o.replicas > 5 {
 		o.replicas = 5
 	}
-	// The Foundation bundle has one supported durable database contract.  An
-	// arbitrary value must not silently switch Keycloak back to a development
-	// store or an unverified external database.
-	if o.databaseMode != "managed-postgres" {
-		o.databaseMode = "managed-postgres"
+	// managed-postgres was the legacy spelling for a new dedicated PFSS
+	// instance. Preserve existing FoundationModel declarations during upgrade.
+	if o.databaseMode == "managed-postgres" {
+		o.databaseMode = "dedicated"
+	}
+	if o.databaseMode != "dedicated" && o.databaseMode != "existing-instance" {
+		o.databaseMode = "dedicated"
 	}
 	switch o.databasePlan {
 	case "postgresql-dev-single", "postgresql-compact-2", "postgresql-prod-ha-pitr":
@@ -219,16 +224,44 @@ func keycloakParams(fm *unstructured.Unstructured) identityEngineOpts {
 	return o
 }
 
-func applyKeycloakParams(objs []*unstructured.Unstructured, cfg *config, fm *unstructured.Unstructured) {
+func applyKeycloakParams(objs []*unstructured.Unstructured, cfg *config, fm *unstructured.Unstructured) error {
 	o := keycloakParams(fm)
+	if o.databaseMode == "existing-instance" {
+		if o.databaseTargetClaim == "" {
+			return fmt.Errorf("Keycloak existing-instance database mode requires databaseTargetClaim")
+		}
+		if errs := validation.IsDNS1123Subdomain(o.databaseTargetClaim); len(errs) > 0 {
+			return fmt.Errorf("invalid Keycloak databaseTargetClaim %q: %s", o.databaseTargetClaim, strings.Join(errs, "; "))
+		}
+	}
+	bindingName := "pgc-foundation-identity-keycloak-pg-binding"
+	if o.databaseMode == "existing-instance" {
+		claim := object(postgresClaimGVK, cfg.managedNS, "foundation-identity-keycloak-pg")
+		bindingName = sharedPostgresResourceStem(claim) + "-binding"
+	}
 	for _, obj := range objs {
 		if obj.GetKind() == "PostgresClaim" && obj.GetName() == "foundation-identity-keycloak-pg" {
-			_ = unstructured.SetNestedField(obj.Object, o.databasePlan, "spec", "planRef", "name")
+			if o.databaseMode == "existing-instance" {
+				_ = unstructured.SetNestedField(obj.Object, postgresModeSharedDatabase, "spec", "isolation")
+				_ = unstructured.SetNestedMap(obj.Object, map[string]interface{}{"name": o.databaseTargetClaim, "namespace": cfg.managedNS}, "spec", "clusterRef")
+				_ = unstructured.SetNestedField(obj.Object, "Owner", "spec", "access")
+				unstructured.RemoveNestedField(obj.Object, "spec", "planRef")
+			} else {
+				_ = unstructured.SetNestedField(obj.Object, postgresModeDedicated, "spec", "isolation")
+				_ = unstructured.SetNestedField(obj.Object, o.databasePlan, "spec", "planRef", "name")
+				unstructured.RemoveNestedField(obj.Object, "spec", "clusterRef")
+				unstructured.RemoveNestedField(obj.Object, "spec", "access")
+			}
 			annotations := obj.GetAnnotations()
 			if annotations == nil {
 				annotations = map[string]string{}
 			}
 			annotations["foundation.opensphere.io/database-mode"] = o.databaseMode
+			if o.databaseTargetClaim != "" {
+				annotations["foundation.opensphere.io/database-target-claim"] = o.databaseTargetClaim
+			} else {
+				delete(annotations, "foundation.opensphere.io/database-target-claim")
+			}
 			obj.SetAnnotations(annotations)
 			continue
 		}
@@ -249,6 +282,21 @@ func applyKeycloakParams(objs []*unstructured.Unstructured, cfg *config, fm *uns
 			"requests": map[string]interface{}{"cpu": o.cpuRequest, "memory": o.memoryRequest},
 			"limits":   map[string]interface{}{"cpu": o.cpuLimit, "memory": o.memoryLimit},
 		}
+		if env, found, _ := unstructured.NestedSlice(container, "env"); found {
+			for i := range env {
+				entry, ok := env[i].(map[string]interface{})
+				if !ok {
+					continue
+				}
+				name, _ := entry["name"].(string)
+				if name != "KC_DB_URL_HOST" && name != "KC_DB_URL_PORT" && name != "KC_DB_URL_DATABASE" && name != "KC_DB_USERNAME" && name != "KC_DB_PASSWORD" {
+					continue
+				}
+				_ = unstructured.SetNestedField(entry, bindingName, "valueFrom", "secretKeyRef", "name")
+				env[i] = entry
+			}
+			container["env"] = env
+		}
 		containers[0] = container
 		_ = unstructured.SetNestedSlice(obj.Object, containers, "spec", "template", "spec", "containers")
 		annotations := obj.GetAnnotations()
@@ -259,8 +307,15 @@ func applyKeycloakParams(objs []*unstructured.Unstructured, cfg *config, fm *uns
 		annotations["foundation.opensphere.io/monitoring"] = boolStr(o.monitoring)
 		annotations["foundation.opensphere.io/ingress-mode"] = o.ingressMode
 		annotations["foundation.opensphere.io/database-plan"] = o.databasePlan
+		annotations["foundation.opensphere.io/database-mode"] = o.databaseMode
+		if o.databaseTargetClaim != "" {
+			annotations["foundation.opensphere.io/database-target-claim"] = o.databaseTargetClaim
+		} else {
+			delete(annotations, "foundation.opensphere.io/database-target-claim")
+		}
 		obj.SetAnnotations(annotations)
 	}
+	return nil
 }
 
 // engineEnabled — 엔진별 설치옵션(FoundationModel.spec.parameters.engines.<engine>). 기본 enabled;
@@ -279,7 +334,9 @@ func buildIdentityBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstruc
 	if err != nil {
 		return nil, err
 	}
-	applyKeycloakParams(objs, cfg, fm)
+	if err := applyKeycloakParams(objs, cfg, fm); err != nil {
+		return nil, err
+	}
 	out := objs[:0]
 	for _, o := range objs {
 		if !engineEnabled(fm, "keycloak") && (strings.HasPrefix(o.GetName(), keycloakName) || o.GetLabels()[lblEngine] == "keycloak") {

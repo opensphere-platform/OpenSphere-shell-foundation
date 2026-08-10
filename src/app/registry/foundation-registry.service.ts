@@ -94,8 +94,9 @@ export interface IdentityEngineInstallParameters {
   memoryLimit: string;
   monitoring: boolean;
   ingressMode: 'cluster-internal' | 'private-ingress';
-  databaseMode: 'managed-postgres';
+  databaseMode: 'dedicated' | 'existing-instance';
   databasePlan: 'postgresql-dev-single' | 'postgresql-compact-2' | 'postgresql-prod-ha-pitr';
+  databaseTargetClaim: string;
 }
 
 export interface OpaInstallParameters {

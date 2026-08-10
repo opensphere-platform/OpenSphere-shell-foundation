@@ -126,7 +126,7 @@ func TestKeycloakBundleUsesManagedPostgresAndExternalAdminSecret(t *testing.T) {
 		containers, _, _ := unstructured.NestedSlice(object.Object, "spec", "template", "spec", "containers")
 		encoded, _ := json.Marshal(containers[0])
 		text := string(encoded)
-		for _, expected := range []string{`"start"`, "KC_DB_URL", "pgc-foundation-identity-keycloak-pg-binding", keycloakAdminSecretName, `"containerPort":9000`, `"path":"/health/started"`, `"path":"/health/ready"`, `"path":"/health/live"`} {
+		for _, expected := range []string{`"start"`, "KC_DB_URL_HOST", "KC_DB_URL_PORT", "KC_DB_URL_DATABASE", "pgc-foundation-identity-keycloak-pg-binding", keycloakAdminSecretName, `"containerPort":9000`, `"path":"/health/started"`, `"path":"/health/ready"`, `"path":"/health/live"`} {
 			if !strings.Contains(text, expected) {
 				t.Errorf("Keycloak deployment is missing %q: %s", expected, text)
 			}
@@ -142,6 +142,60 @@ func TestKeycloakBundleUsesManagedPostgresAndExternalAdminSecret(t *testing.T) {
 	}
 	if !seenClaim || !seenRealm || !seenDeployment {
 		t.Fatalf("bundle missing claim=%v realm=%v deployment=%v", seenClaim, seenRealm, seenDeployment)
+	}
+}
+
+func TestKeycloakBundleCanUseExistingPostgresInstance(t *testing.T) {
+	fm := gvkObj(fmGVK)
+	fm.SetName("identity")
+	fm.Object["spec"] = map[string]interface{}{"parameters": map[string]interface{}{
+		"engines": map[string]interface{}{"keycloak": "enabled", "samba": "disabled", "opa": "disabled", "syncope": "disabled"},
+		"identityEngines": map[string]interface{}{"keycloak": map[string]interface{}{
+			"databaseMode": "existing-instance", "databaseTargetClaim": "foundation-data-pg",
+		}},
+	}}
+	objects, err := buildIdentityBundle(&config{managedNS: "opensphere-foundation", keycloakImage: "mirror/keycloak:26.0"}, fm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindingName := sharedPostgresResourceStem(object(postgresClaimGVK, "opensphere-foundation", "foundation-identity-keycloak-pg")) + "-binding"
+	seenClaim, seenDeployment := false, false
+	for _, item := range objects {
+		switch {
+		case item.GetKind() == "PostgresClaim" && item.GetName() == "foundation-identity-keycloak-pg":
+			seenClaim = true
+			isolation, _, _ := unstructured.NestedString(item.Object, "spec", "isolation")
+			target, _, _ := unstructured.NestedString(item.Object, "spec", "clusterRef", "name")
+			access, _, _ := unstructured.NestedString(item.Object, "spec", "access")
+			if isolation != postgresModeSharedDatabase || target != "foundation-data-pg" || access != "Owner" {
+				t.Fatalf("existing PostgreSQL contract was not rendered: %#v", item.Object["spec"])
+			}
+			if _, found, _ := unstructured.NestedMap(item.Object, "spec", "planRef"); found {
+				t.Fatal("SharedDatabase Keycloak claim must not provision a new plan")
+			}
+		case item.GetKind() == "Deployment" && item.GetName() == keycloakName:
+			seenDeployment = true
+			containers, _, _ := unstructured.NestedSlice(item.Object, "spec", "template", "spec", "containers")
+			encoded, _ := json.Marshal(containers[0])
+			if !strings.Contains(string(encoded), bindingName) {
+				t.Fatalf("Keycloak does not consume the shared binding %q: %s", bindingName, encoded)
+			}
+		}
+	}
+	if !seenClaim || !seenDeployment {
+		t.Fatalf("existing-instance bundle missing claim=%v deployment=%v", seenClaim, seenDeployment)
+	}
+}
+
+func TestKeycloakExistingPostgresRequiresTarget(t *testing.T) {
+	fm := gvkObj(fmGVK)
+	fm.SetName("identity")
+	fm.Object["spec"] = map[string]interface{}{"parameters": map[string]interface{}{
+		"engines":         map[string]interface{}{"keycloak": "enabled", "samba": "disabled", "opa": "disabled", "syncope": "disabled"},
+		"identityEngines": map[string]interface{}{"keycloak": map[string]interface{}{"databaseMode": "existing-instance"}},
+	}}
+	if _, err := buildIdentityBundle(&config{managedNS: "opensphere-foundation", keycloakImage: "mirror/keycloak:26.0"}, fm); err == nil || !strings.Contains(err.Error(), "databaseTargetClaim") {
+		t.Fatalf("missing existing PostgreSQL target was not rejected: %v", err)
 	}
 }
 
