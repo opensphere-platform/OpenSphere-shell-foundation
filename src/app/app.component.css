@@ -462,7 +462,7 @@ pg-metric { display: block; height: 100%; }
   .pgp-panel:last-child { grid-column: 1 / -1; min-height: auto; }
   .pgp-form-grid, .pgp-check-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pgp-install-box { grid-template-columns: 1fr; align-items: start; }
-  .pgp-page-frame .pfs-plugin-release { grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(24rem, 2.5fr); }
+  .pgp-page-frame .pfs-plugin-release { grid-template-columns: repeat(4, minmax(0, 1fr)); justify-self: end; width: 100%; }
   .pgp-empty-state { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {

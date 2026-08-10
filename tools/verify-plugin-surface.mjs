@@ -17,6 +17,7 @@ const manifestVersion = JSON.parse(read('ui-shell/ui-shell.manifest.source.json'
 const packageYaml = read('uipluginpackage.yaml');
 const dockerfile = read('Dockerfile');
 const packageFoundationPlugin = read('tools/package-foundation-plugin.mjs');
+const appStyles = read('src/app/app.component.css');
 assert.equal(manifestVersion, packageVersion, 'ui-shell manifest와 package.json 버전이 다릅니다.');
 assert.equal(lockVersion, packageVersion, 'package-lock.json과 package.json 버전이 다릅니다.');
 assert.match(packageYaml, new RegExp(`\\n  version: ${packageVersion.replaceAll('.', '\\.')}(?:\\r?\\n)`), 'UIPluginPackage 버전이 package.json과 다릅니다.');
@@ -27,6 +28,11 @@ assert.match(
   packageFoundationPlugin,
   /observability:\s*\{[\s\S]*reason:\s*'Runtime health and load metrics only'/,
   '독립 plugin manifest와 UIPluginPackage의 observability 계약이 달라 ContributionDrift가 발생할 수 있습니다.',
+);
+assert.doesNotMatch(
+  appStyles,
+  /\.pgp-page-frame \.pfs-plugin-release \{ grid-template-columns: repeat\(3,[^}]*minmax\(24rem/,
+  '반응형 PFSS 릴리스 메타가 Namespace 최소 폭 때문에 헤더 밖으로 밀려납니다.',
 );
 
 const surfaces = [
