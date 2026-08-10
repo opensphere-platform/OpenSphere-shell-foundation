@@ -107,6 +107,9 @@ assert.match(runtimeTemplate, /MANAGEMENT_ICONS\.provisioning/, '독립 plugin r
 assert.match(runtimeTemplate, /MANAGEMENT_ICONS\.operator/, '독립 plugin runtime Operator 아이콘 매핑 누락');
 assert.match(runtimeTemplate, /\.pfss-op-meta\{[^}]*justify-content:flex-end;[^}]*justify-self:end;/, '독립 plugin runtime 릴리스 메타 우측 정렬 계약 누락');
 assert.doesNotMatch(runtimeTemplate, /\.pfss-op-meta\{justify-content:flex-start/, '반응형 구간에서 릴리스 메타가 좌측 정렬로 역진했습니다.');
+assert.match(runtimeTemplate, /\.pfss-op-head\{[^}]*height:auto!important;[^}]*background:#fff;[^}]*color:#161616;/, '독립 plugin runtime header가 Host header 색상·높이 규칙에서 격리되지 않았습니다.');
+assert.match(runtimeTemplate, /@media\(max-width:1180px\)\{[^}]*[\s\S]{0,500}\.pfss-op-brand\{padding-right:0;padding-top:2\.25rem\}/, '독립 plugin runtime의 관리 아이콘과 브랜드가 좁은 폭에서 겹칩니다.');
+assert.match(sharedOperatorShell, /@media \(max-width: 760px\)[\s\S]{0,120}\.pfs-plugin-brand \{ padding-top: 2\.25rem; \}/, '공통 PFSS header의 관리 아이콘과 브랜드가 좁은 폭에서 겹칩니다.');
 assert.doesNotMatch(runtimeTemplate, /[☷▤⊞⚙]/, '독립 plugin runtime에 임의 문자 아이콘이 남아 있습니다.');
 assert.match(runtimeTemplate, /Symbol\.for\(`opensphere\.plugin\.foundation\.\$\{SPEC\.id\}\.runtime`\)/, '독립 plugin runtime 재활성화 context slot 누락');
 assert.match(runtimeTemplate, /RUNTIME\.apiFetch/, '독립 plugin runtime Host API capability 배선 누락');

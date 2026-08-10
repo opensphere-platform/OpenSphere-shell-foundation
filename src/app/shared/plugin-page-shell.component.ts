@@ -143,6 +143,9 @@ export function pfsPluginTabs(domainLabel: string): PluginPageTab[] {
     }
     .pfs-operator-actions button:hover,
     .pfs-operator-actions button:focus-visible { background: #f4eafa; }
+    @media (max-width: 760px) {
+      .pfs-plugin-brand { padding-top: 2.25rem; }
+    }
   `],
 })
 export class PluginPageHeaderComponent {
