@@ -31,8 +31,8 @@ const ICON: Record<string, any> = {
   identity: UserMultiple16, users: UserMultiple16, key: Password16,
 };
 
-interface NavChild { id: string; name: string; planned?: boolean; module?: string; tab?: string }
-interface NavGroup { id: string; label: string; iconKey: string; children: NavChild[]; planned?: boolean }
+interface NavChild { id: string; name: string; module?: string; tab?: string }
+interface NavGroup { id: string; label: string; iconKey: string; children: NavChild[] }
 
 const CATALOG_MODULES = new Set([
   'syncope', 'opa', 'litellm', 'langfuse', 'stalwart', 'novu', 'mattermost',
@@ -75,7 +75,6 @@ const CATALOG_MODULES = new Set([
     }
     .cm-brand { display: flex; align-items: center; gap: 0.4rem; min-height: 3.05rem; padding: 0.55rem 0.9rem; border-bottom: 1px solid #e0e0e0; }
     .cm-brand strong { font-size: 0.875rem; font-weight: 600; color: #161616; }
-    .cm-roadmap-tag { font-size: 0.68rem; color: #8c8c8c; font-weight: 400; margin-left: 4px; }
 
     /* Main Shell의 content-area가 유일한 page scroll owner다. Guest가 viewport 높이와
        overflow를 다시 소유하면 문서/guest 이중 스크롤이 생긴다. */
@@ -129,17 +128,17 @@ const CATALOG_MODULES = new Set([
         <clr-vertical-nav-group [clrVerticalNavGroupExpanded]="vr.module()==='delivery' || isOpen('delivery')" (clrVerticalNavGroupExpandedChange)="setOpen('delivery', $event)">
           <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['control']" [size]="16" />Platform Delivery
           <clr-vertical-nav-group-children>
-            <a *ngFor="let c of deliveryNav" clrVerticalNavLink [class.active]="childActive(c)" (click)="goChild(c)" (keydown.enter)="goChild(c)">{{c.name}}<span class="cm-roadmap-tag" *ngIf="c.planned"> Phase 1</span></a>
+            <a *ngFor="let c of deliveryNav" clrVerticalNavLink [class.active]="childActive(c)" (click)="goChild(c)" (keydown.enter)="goChild(c)">{{c.name}}</a>
           </clr-vertical-nav-group-children>
         </clr-vertical-nav-group>
 
         <clr-vertical-nav-group *ngFor="let g of groups()"
             [clrVerticalNavGroupExpanded]="isOpen(g.id)" (clrVerticalNavGroupExpandedChange)="setOpen(g.id, $event)">
-          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON[g.iconKey]" [size]="16" />{{ g.label }}<span class="cm-roadmap-tag" *ngIf="g.planned"> 예정</span>
+          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON[g.iconKey]" [size]="16" />{{ g.label }}
           <clr-vertical-nav-group-children>
             <!-- 깊이 1(그룹 자식)은 아이콘 없이 들여쓴 텍스트 — shell-template/AI Hub 표준(아이콘=깊이 0만). -->
             <a *ngFor="let c of g.children" clrVerticalNavLink
-               [class.active]="childActive(c)" (click)="goChild(c)" (keydown.enter)="goChild(c)">{{ c.name }}<span class="cm-roadmap-tag" *ngIf="c.planned"> Phase 1</span></a>
+               [class.active]="childActive(c)" (click)="goChild(c)" (keydown.enter)="goChild(c)">{{ c.name }}</a>
           </clr-vertical-nav-group-children>
         </clr-vertical-nav-group>
       </clr-vertical-nav>
@@ -202,25 +201,25 @@ export class AppComponent implements OnInit, OnDestroy {
   readonly ICON = ICON;
   readonly deliveryNav: NavChild[] = [
     {id:'delivery-overview',name:'개요',module:'delivery',tab:'overview'},
-    {id:'argocd',name:'Argo CD',planned:true,module:'delivery',tab:'argocd'},
+    {id:'argocd',name:'Argo CD',module:'delivery',tab:'argocd'},
     {id:'crossplane',name:'Crossplane',module:'delivery',tab:'crossplane'},
   ];
 
   private readonly openState = signal<Record<string, boolean>>({ data: true, identity: true });
 
-  /** 설치 전 관리도 lifecycle의 일부다. 모든 PFS 섹터를 상시 노출하고 미구현 모듈은 Phase 1 표면으로 진입시킨다. */
+  /** 설치 전 관리도 lifecycle의 일부다. 모든 PFS 섹터를 상시 노출하고 각 Operator 표면으로 진입시킨다. */
   readonly groups = computed<NavGroup[]>(() => {
     const pick = (prefix: string): NavChild[] => this.reg.all
       .filter((p) => p.capability.startsWith(prefix))
       .map((p) => ({ id:this.routeId(p.id), name:p.name }));
-    const catalog = (id:string,name:string,phase1=true):NavChild => ({id,name,planned:phase1});
+    const catalog = (id:string,name:string):NavChild => ({id,name});
     return [
       { id:'identity', label:'Identity', iconKey:'identity', children:pick('identity.') },
       { id:'data', label:'Data', iconKey:'data', children:pick('data.') },
-      { id:'ai', label:'AI / Retrieval', iconKey:'search', planned:true, children:[catalog('litellm','LiteLLM'),catalog('langfuse','Langfuse')] },
-      { id:'comm', label:'Communication', iconKey:'users', planned:true, children:[catalog('stalwart','Stalwart'),catalog('novu','Novu'),catalog('mattermost','Mattermost')] },
-      { id:'observability', label:'Observability', iconKey:'control', children:[catalog('otel','OpenTelemetry Collector',false),catalog('tempo','Grafana Tempo'),catalog('loki','Grafana Loki'),catalog('grafana-operator','Grafana Operator')] },
-      { id:'backup', label:'Backup / Restore', iconKey:'storage', planned:true, children:[catalog('ptm','.ptm')] },
+      { id:'ai', label:'AI / Retrieval', iconKey:'search', children:[catalog('litellm','LiteLLM'),catalog('langfuse','Langfuse')] },
+      { id:'comm', label:'Communication', iconKey:'users', children:[catalog('stalwart','Stalwart'),catalog('novu','Novu'),catalog('mattermost','Mattermost')] },
+      { id:'observability', label:'Observability', iconKey:'control', children:[catalog('otel','OpenTelemetry Collector'),catalog('tempo','Grafana Tempo'),catalog('loki','Grafana Loki'),catalog('grafana-operator','Grafana Operator')] },
+      { id:'backup', label:'Backup / Restore', iconKey:'storage', children:[catalog('ptm','.ptm')] },
     ];
   });
 
