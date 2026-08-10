@@ -1,7 +1,7 @@
-# OpenSphere Stalwart 플러그인 계획 및 운영 안내서
+# OpenSphere Stalwart Operator 운영 안내서
 
 ## 1. 상태와 역할
-현재 Phase 1입니다. SMTP/JMAP 기반 메일과 relay capability입니다.
+Operator 계약이 등록되어 있으며 현재 lifecycle은 FoundationModel의 desired/observed 상태로 결정됩니다. SMTP/JMAP 기반 메일과 relay capability입니다.
 
 ## 2. 전제조건
 DNS/MX 운영권, TLS certificate, S3 또는 영구 스토리지와 Identity federation이 필요합니다.
@@ -17,4 +17,3 @@ queue, delivery failure, mailbox storage, 인증, DNS 검사와 이벤트를 실
 
 ## 6. 참고
 - https://stalw.art/docs/
-

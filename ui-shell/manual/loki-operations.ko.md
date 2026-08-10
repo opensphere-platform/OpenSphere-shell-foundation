@@ -1,7 +1,7 @@
-# OpenSphere Grafana Loki 플러그인 계획 및 운영 안내서
+# OpenSphere Grafana Loki Operator 운영 안내서
 
 ## 1. 상태와 역할
-현재 Phase 1입니다. Foundation 로그의 저장·조회 capability입니다.
+Operator 계약이 등록되어 있으며 현재 lifecycle은 FoundationModel의 desired/observed 상태로 결정됩니다. Foundation 로그의 저장·조회 capability입니다.
 
 ## 2. 전제조건
 OpenTelemetry Collector, S3 capability, tenant와 민감정보 정책이 필요합니다.
@@ -17,4 +17,3 @@ LogQueryBinding과 데이터 보호 경계가 준비되기 전 설치는 잠깁�
 
 ## 6. 참고
 - https://grafana.com/docs/loki/latest/
-

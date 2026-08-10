@@ -1,7 +1,7 @@
-# OpenSphere Mattermost 플러그인 계획 및 운영 안내서
+# OpenSphere Mattermost Operator 운영 안내서
 
 ## 1. 상태와 역할
-현재 Phase 1입니다. workspace 협업, bot과 ChatOps 채널 capability입니다.
+Operator 계약이 등록되어 있으며 현재 lifecycle은 FoundationModel의 desired/observed 상태로 결정됩니다. workspace 협업, bot과 ChatOps 채널 capability입니다.
 
 ## 2. 전제조건
 PostgreSQL, S3, OIDC와 Ingress 정책이 필요합니다.
@@ -17,4 +17,3 @@ WorkspaceClaim과 storage/identity binding이 준비되기 전 설치는 잠깁�
 
 ## 6. 참고
 - https://docs.mattermost.com/
-

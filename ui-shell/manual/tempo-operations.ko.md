@@ -1,7 +1,7 @@
-# OpenSphere Grafana Tempo 플러그인 계획 및 운영 안내서
+# OpenSphere Grafana Tempo Operator 운영 안내서
 
 ## 1. 상태와 역할
-현재 Phase 1입니다. 분산 trace 저장·조회 capability이며 OpenTelemetry Collector의 trace exporter를 소비합니다.
+Operator 계약이 등록되어 있으며 현재 lifecycle은 FoundationModel의 desired/observed 상태로 결정됩니다. 분산 trace 저장·조회 capability이며 OpenTelemetry Collector의 trace exporter를 소비합니다.
 
 ## 2. 전제조건
 OpenTelemetry Collector, S3 capability와 HIS Shared Observability 연계가 필요합니다.
@@ -17,4 +17,3 @@ TraceQueryBinding과 S3 보호 경계가 준비되기 전 설치는 잠깁니다
 
 ## 6. 참고
 - https://grafana.com/docs/tempo/latest/
-

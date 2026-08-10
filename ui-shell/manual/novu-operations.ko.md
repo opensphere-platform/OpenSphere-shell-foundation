@@ -1,7 +1,7 @@
-# OpenSphere Novu 플러그인 계획 및 운영 안내서
+# OpenSphere Novu Operator 운영 안내서
 
 ## 1. 상태와 역할
-현재 Phase 1입니다. email, push, chat provider를 통합하는 notification orchestration capability입니다.
+Operator 계약이 등록되어 있으며 현재 lifecycle은 FoundationModel의 desired/observed 상태로 결정됩니다. email, push, chat provider를 통합하는 notification orchestration capability입니다.
 
 ## 2. 전제조건
 PostgreSQL, Valkey, provider credential Secret과 OIDC가 필요합니다.
@@ -17,4 +17,3 @@ NotificationClaim과 provider binding, rollback 증거가 준비되기 전 설�
 
 ## 6. 참고
 - https://docs.novu.co/
-

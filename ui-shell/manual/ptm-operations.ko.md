@@ -1,7 +1,7 @@
-# OpenSphere .ptm 보호 플러그인 계획 및 운영 안내서
+# OpenSphere Backup Operator 운영 안내서
 
 ## 1. 상태와 역할
-현재 Phase 1입니다. Velero를 실행 기반으로 PFS 데이터의 BackupPolicy, BackupRun과 RestoreRequest를 관리합니다.
+Operator 계약이 등록되어 있으며 현재 lifecycle은 FoundationModel의 desired/observed 상태로 결정됩니다. Velero를 실행 기반으로 PFS 데이터의 BackupPolicy, BackupRun과 RestoreRequest를 관리합니다.
 
 ## 2. 전제조건
 S3 capability, CSI snapshot, 영구 감사와 복구 승인 정책이 필요합니다.
@@ -17,4 +17,3 @@ ProtectionBinding과 승인 workflow가 준비되기 전 설치는 잠깁니다.
 
 ## 6. 참고
 - https://velero.io/docs/
-

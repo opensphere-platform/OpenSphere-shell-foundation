@@ -1,7 +1,7 @@
-# OpenSphere Grafana Operator 플러그인 계획 및 운영 안내서
+# OpenSphere Grafana Operator 운영 안내서
 
 ## 1. 상태와 역할
-현재 Phase 1입니다. Grafana instance, datasource, dashboard와 folder/team mapping을 선언형으로 관리합니다.
+Operator 계약이 등록되어 있으며 현재 lifecycle은 FoundationModel의 desired/observed 상태로 결정됩니다. Grafana instance, datasource, dashboard와 folder/team mapping을 선언형으로 관리합니다.
 
 ## 2. 전제조건
 HIS Prometheus, Tempo/Loki datasource, OIDC와 Ingress 정책이 필요합니다.
@@ -17,4 +17,3 @@ DashboardClaim과 datasource binding이 준비되기 전 설치는 잠깁니다.
 
 ## 6. 참고
 - https://grafana.github.io/grafana-operator/docs/
-

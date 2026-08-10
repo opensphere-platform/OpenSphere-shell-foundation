@@ -1,7 +1,7 @@
-# OpenSphere LiteLLM 플러그인 계획 및 운영 안내서
+# OpenSphere LiteLLM Operator 운영 안내서
 
 ## 1. 상태와 역할
-현재 Phase 1입니다. 다중 LLM provider의 model/embedding route, 예산과 rate policy를 제공하는 model gateway입니다.
+Operator 계약이 등록되어 있으며 현재 lifecycle은 FoundationModel의 desired/observed 상태로 결정됩니다. 다중 LLM provider의 model/embedding route, 예산과 rate policy를 제공하는 model gateway입니다.
 
 ## 2. 전제조건
 provider credential Secret, PostgreSQL, OpenSearch vector capability, OAA Gateway 계약이 필요합니다.
@@ -17,4 +17,3 @@ reconciler, credential binding과 비용 감사가 준비되기 전 설치는 �
 
 ## 6. 참고
 - https://docs.litellm.ai/
-
