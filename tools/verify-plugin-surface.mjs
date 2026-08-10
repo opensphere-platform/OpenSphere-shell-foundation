@@ -192,7 +192,7 @@ assert.equal((registry.match(/surface: PG_SURFACE/g) || []).length, registryIds.
 assert.match(registry, /view: \{ module: 'directory' \}/, 'Directory Services 정식 route 누락');
 assert.match(registry, /activation: \{ packageId: 'directory', element: 'osp-directory' \}/, 'Directory Services package activation 계약 누락');
 
-// PFS 모듈 카탈로그는 목록 화면일 뿐 URL 부모가 아니다. 각 plugin은 PostgreSQL과
+// PFSS 모듈 카탈로그는 목록 화면일 뿐 URL 부모가 아니다. 각 plugin은 PostgreSQL과
 // 동일하게 /pfss/<plugin>을 정식 주소로 소유한다.
 const directRouteIds = ['syncope', 'opa', 'litellm', 'langfuse', 'stalwart', 'novu', 'mattermost', 'otel', 'tempo', 'loki', 'grafana-operator', 'ptm'];
 const routerSource = read('src/app/view-router.ts');

@@ -7,7 +7,7 @@ package main
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
-// HostRequirements — PFS 모듈이 Host Infrastructure Service Stack에 요구하는 자원.
+// HostRequirements — PFSS 모듈이 Host Infrastructure Service Stack에 요구하는 자원.
 type HostRequirements struct {
 	// StorageClass — PVC가 참조할 HIS StorageClass 이름.
 	StorageClass string

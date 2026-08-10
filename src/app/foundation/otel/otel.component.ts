@@ -15,7 +15,7 @@ const LOGO = 'https://logos.opl.io.kr/i/opentelemetry-non-typo';
   standalone: true,
   imports: [CommonModule, ClarityModule, CarbonIcon, PluginPageHeaderComponent, PluginTabsComponent],
   template: `
-    <button class="btn btn-sm btn-link rm-back" type="button" (click)="back()">← PFS 모듈</button>
+    <button class="btn btn-sm btn-link rm-back" type="button" (click)="back()">← PFSS 모듈</button>
     <section class="pgp-page-frame" aria-label="OpenTelemetry Collector plugin 개요와 메뉴"><osp-plugin-page-header [model]="headerModel()" headingId="otel-plugin-title" (managementSelected)="select($event)" /><osp-plugin-tabs [tabs]="tabs" [active]="active()" ariaLabel="OpenTelemetry Collector 관리 메뉴" (selected)="select($event)" /></section>
 
     <ng-container *ngIf="active()==='overview'">

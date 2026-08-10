@@ -96,7 +96,7 @@ import { PluginPageHeaderComponent, PluginPageHeaderModel } from '../shared/plug
       <p>
         Foundation subShell 화면과 실제 PFS Control Plane은 서로 다른 상태입니다.
         필수 CRD, controller, RBAC와 owner workload가 모두 설치되고 실측 Ready가 되기 전에는
-        PFS 모듈 설치나 Claim 생성을 시작할 수 없습니다.
+        PFSS 모듈 설치나 Claim 생성을 시작할 수 없습니다.
       </p>
       <p>
         현재 화면은 누락된 구성과 복구 대상을 읽기 전용으로 보고합니다. 브라우저에서 Kubernetes CRD를 직접 생성하지 않습니다.
@@ -188,7 +188,7 @@ export class ControlPlaneComponent {
     const blocked = this.svc.blockers().length;
     return {
       name: 'Control Plane', logo: '', monogram: 'CP', capability: 'platform.authority',
-      description: 'PFS 모듈 사이의 Claim, Binding, reconciler와 GitOps/Crossplane write-path 상태를 관리합니다.',
+      description: 'PFSS 모듈 사이의 Claim, Binding, reconciler와 GitOps/Crossplane write-path 상태를 관리합니다.',
       lifecycle: blocked ? 'Blocked' : 'Ready', lifecycleClass: blocked ? 'label-danger' : 'label-success',
       version: 'contract v1', profile: 'authoritative', namespace: 'opensphere-system',
     };

@@ -86,7 +86,7 @@ const OBSERVATION_ID: Record<string, string> = {
           <strong>capability 모듈</strong>을 설치·운영하고, 다른 subShell이 소비할 백킹서비스를 호스팅합니다.
         </p>
         <div class="ov-hero-actions">
-          <button class="btn btn-primary" (click)="go('modules')">PFS 모듈 관리</button>
+          <button class="btn btn-primary" (click)="go('modules')">PFSS 모듈 관리</button>
         </div>
       </div>
       <div class="ov-hero-stat">
@@ -260,7 +260,7 @@ const OBSERVATION_ID: Record<string, string> = {
       </div>
       <div class="ov-empty" *ngIf="installedPlugins().length === 0">
         <ng-container *ngIf="reg.modelsLoaded() === 'ok'; else registryUnavailable">
-          선언된 PFS plugin이 없습니다. <button class="btn btn-link" type="button" (click)="go('modules')">PFS 모듈</button>에서 설치할 모듈을 선택하세요.
+          선언된 PFSS plugin이 없습니다. <button class="btn btn-link" type="button" (click)="go('modules')">PFSS 모듈</button>에서 설치할 모듈을 선택하세요.
         </ng-container>
         <ng-template #registryUnavailable>
           Foundation Control Plane과 FoundationModel API가 준비되지 않아 설치 모듈을 판정할 수 없습니다.
@@ -287,7 +287,7 @@ export class FoundationOverviewComponent {
     },
     {
       n: '1',
-      title: 'PFS 모듈 선언',
+      title: 'PFSS 모듈 선언',
       body: 'OpenSearch, PostgreSQL(StackGres) 같은 capability 구현 엔진을 설치 선언합니다.',
       action: 'Engines',
       module: 'modules',

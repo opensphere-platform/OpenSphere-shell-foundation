@@ -128,7 +128,7 @@ const CONTRACTS = [
     crd: 'foundationmoduledescriptors.foundation.opensphere.io',
     scope: 'module catalog',
     required: true,
-    message: '서명된 PFS 모듈 schema와 dependency DAG 계약',
+    message: '서명된 PFSS 모듈 schema와 dependency DAG 계약',
   },
   {
     id: 'foundation-claim',

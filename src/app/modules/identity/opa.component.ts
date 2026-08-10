@@ -23,7 +23,7 @@ const DEFAULT_FORM: OpaInstallParameters = {
   standalone: true,
   imports: [CommonModule, FormsModule, ClarityModule, CarbonIcon, PluginPageHeaderComponent, PluginTabsComponent, CarbonLineChart],
   template: `
-    <a class="vl-back" (click)="back()" (keydown.enter)="back()" role="button" tabindex="0"><os-cicon [icon]="iBack" [size]="16" /> PFS 모듈</a>
+    <a class="vl-back" (click)="back()" (keydown.enter)="back()" role="button" tabindex="0"><os-cicon [icon]="iBack" [size]="16" /> PFSS 모듈</a>
     <section class="pgp-page-frame" aria-label="OPA plugin 개요와 메뉴">
       <osp-plugin-page-header [model]="headerModel()" headingId="opa-plugin-title" (managementSelected)="openTab($event)" />
       <osp-plugin-tabs [tabs]="tabsForUi()" [active]="tab()" ariaLabel="OPA plugin 메뉴" (selected)="openTab($event)" />

@@ -117,7 +117,7 @@ class FoundationPluginElement extends HTMLElement {
     const isManagement = MANAGEMENT_VIEWS.some(([id]) => id === active);
     const tabs = RUNTIME_TABS.map(([id, label]) => `<button type="button" class="pfss-op-tab${active === id ? ' active' : ''}" role="tab" aria-selected="${active === id}" data-tab="${id}">${esc(label)}</button>`).join('');
     const logoFallback = SPEC.displayName.split(/[\s-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-    this.innerHTML = `<button class="btn btn-sm btn-link" type="button" data-back>← PFS 모듈</button>
+    this.innerHTML = `<button class="btn btn-sm btn-link" type="button" data-back>← PFSS 모듈</button>
       <style>${OPERATOR_SHELL_CSS}</style>
       <section class="pfss-op-shell" aria-label="${esc(SPEC.displayName)} Operator 작업 영역">
         <header class="pfss-op-head" aria-labelledby="${esc(SPEC.id)}-title">

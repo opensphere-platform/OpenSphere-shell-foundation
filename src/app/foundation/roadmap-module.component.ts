@@ -132,7 +132,7 @@ const DEFINITIONS: Record<string, Partial<RoadmapDefinition>> = {
   standalone: true,
   imports: [CommonModule, ClarityModule, PluginPageHeaderComponent, PluginTabsComponent],
   template: `
-    <button class="btn btn-sm btn-link rm-back" type="button" (click)="back()">← PFS 모듈</button>
+    <button class="btn btn-sm btn-link rm-back" type="button" (click)="back()">← PFSS 모듈</button>
     <section class="pgp-page-frame" [attr.aria-label]="module.name + ' plugin 개요와 메뉴'">
       <osp-plugin-page-header [model]="headerModel()" [headingId]="module.id + '-plugin-title'" (managementSelected)="select($event)" />
       <osp-plugin-tabs [tabs]="tabs" [active]="active()" [ariaLabel]="module.name + ' 관리 메뉴'" (selected)="select($event)" />

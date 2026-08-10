@@ -44,7 +44,7 @@ export class FoundationDeliveryComponent {
     id:'argocd', name:'Argo CD / ApplicationSet', provider:'argo-cd.readthedocs.io', version:'GitOps',
     logo:'argocd', mono:'CD', category:'delivery.gitops', liveKey:'argocd',
     role:'Git repository의 서명된 desired state를 target cluster에 동기화하는 Foundation의 기본 write-path.',
-    wiring:'PFS 모듈이 아니며 Foundation Control Plane의 배포 경로로 동작합니다.',
+    wiring:'PFSS 모듈이 아니며 Foundation Control Plane의 배포 경로로 동작합니다.',
     lifecycle:'Managed', lifecycleClass:'label-success',
   };
   readonly crossplane: DeliveryEngine = {

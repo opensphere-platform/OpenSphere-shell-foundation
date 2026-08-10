@@ -47,7 +47,7 @@ interface EngineSection {
 
 const LOGO_BASE = 'https://logos.opl.io.kr/i';
 
-// PFS 모듈 카탈로그 — CONSTITUTION-0004 §2.0.4의 6개 capability별 운영 엔진을 배치한다.
+// PFSS 모듈 카탈로그 — CONSTITUTION-0004 §2.0.4의 6개 capability별 운영 엔진을 배치한다.
 // identity/data/ai/comm/observability/backup만 PFS capability로 관리한다. Delivery는 별도 Platform Delivery 화면이 소유한다.
 @Component({
   selector: 'app-foundation-engines',
@@ -267,7 +267,7 @@ export class FoundationEnginesComponent {
     {
       id: 'otel', name: 'OpenTelemetry Collector', provider: 'opentelemetry.io (CNCF)', version: 'v0.111.0', logo: 'opentelemetry-non-typo', mono: 'O', detail: true,
       category: 'observability', impl: 'real', liveKey: 'otel',
-      role: '각 PFS 모듈이 보내는 지표·로그·추적을 받아 승인된 HIS/PFS 관측 backend로 전달하는 중앙 수집기.',
+      role: '각 PFSS 모듈이 보내는 지표·로그·추적을 받아 승인된 HIS/PFSS 관측 backend로 전달하는 중앙 수집기.',
       wiring: '카드를 클릭하면 전용 페이지에서 버전 선택·설치·상태를 관리한다.',
     },
     {

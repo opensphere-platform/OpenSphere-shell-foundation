@@ -39,7 +39,7 @@ const ENGINE_AUTHORITY: Record<string, EngineAuthority> = {
   backup: { model: 'backup', engine: 'ptm', observation: 'ptm_operator_up' },
 };
 
-// PFS 모듈 카탈로그의 런타임 상태 정본은 FoundationModel이다.
+// PFSS 모듈 카탈로그의 런타임 상태 정본은 FoundationModel이다.
 // Deployment/CRD가 남아 있다는 사실은 설치 의도나 준비 상태가 아니므로 직접 existence probe로 Live를 만들지 않는다.
 @Injectable({ providedIn: 'root' })
 export class EnginesService {

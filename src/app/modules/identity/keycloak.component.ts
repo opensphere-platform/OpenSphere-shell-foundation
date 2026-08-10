@@ -34,7 +34,7 @@ const DEFAULT_FORM: KeycloakForm = {
     @media(max-width:900px){.kc-grid,.kc-runtime-context,.kc-profile-grid{grid-template-columns:1fr}.kc-runtime-context>div{border-right:0;border-bottom:1px solid var(--os-border)}.kc-runtime-context>div:last-child{border-bottom:0}.kc-management-scope{align-items:flex-start;flex-direction:column}}
   `],
   template: `
-    <a class="vl-back" (click)="back()" (keydown.enter)="back()" role="button" tabindex="0"><os-cicon [icon]="iBack" [size]="16" /> PFS 모듈</a>
+    <a class="vl-back" (click)="back()" (keydown.enter)="back()" role="button" tabindex="0"><os-cicon [icon]="iBack" [size]="16" /> PFSS 모듈</a>
     <section class="pgp-page-frame" aria-label="Keycloak plugin 개요와 메뉴">
       <osp-plugin-page-header [model]="headerModel()" headingId="keycloak-plugin-title" (managementSelected)="openTab($event)">
         <div pluginHeaderContext class="kc-header-context" aria-label="Keycloak 운영 컨텍스트">

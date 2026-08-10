@@ -1,13 +1,24 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 const root = path.resolve(import.meta.dirname, '..');
+
+test('Foundation exposes the canonical PFSS module label', async () => {
+  const [app, pluginTemplate] = await Promise.all([
+    readFile(path.join(root, 'src', 'app', 'app.component.ts'), 'utf8'),
+    readFile(path.join(root, 'plugins', 'runtime', 'ui-shell.plugin.template.js'), 'utf8'),
+  ]);
+  assert.match(app, /PFSS 모듈/);
+  assert.match(pluginTemplate, /PFSS 모듈/);
+  assert.doesNotMatch(app, /PFS 모듈/);
+  assert.doesNotMatch(pluginTemplate, /PFS 모듈/);
+});
 
 const listen = (server) => new Promise((resolve, reject) => {
   server.once('error', reject);

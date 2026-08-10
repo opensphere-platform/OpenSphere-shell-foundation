@@ -118,7 +118,7 @@ const CATALOG_MODULES = new Set([
           <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['overview']" [size]="16" />Overview
         </a>
         <a clrVerticalNavLink [class.active]="vr.module() === 'modules'" (click)="go('modules')" (keydown.enter)="go('modules')">
-          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['modules']" [size]="16" />PFS 모듈
+          <os-cicon clrVerticalNavIcon class="os-tree-ic" [icon]="ICON['modules']" [size]="16" />PFSS 모듈
         </a>
 
         <a clrVerticalNavLink [class.active]="vr.module() === 'control-plane'" (click)="go('control-plane')" (keydown.enter)="go('control-plane')">
@@ -183,7 +183,7 @@ const CATALOG_MODULES = new Set([
           </clr-alert>
         </section>
         <clr-alert *ngIf="disabledModule()" clrAlertType="warning" [clrAlertClosable]="false">
-          <clr-alert-item><span class="alert-text">이 plugin은 비활성 상태입니다. PFS 모듈 화면에서 설치 상태를 확인하세요.</span></clr-alert-item>
+          <clr-alert-item><span class="alert-text">이 plugin은 비활성 상태입니다. PFSS 모듈 화면에서 설치 상태를 확인하세요.</span></clr-alert-item>
         </clr-alert>
         <clr-alert *ngIf="unknownModule()" clrAlertType="warning" [clrAlertClosable]="false">
           <clr-alert-item>
@@ -292,7 +292,7 @@ export class AppComponent implements OnInit, OnDestroy {
   /** 로드맵 모듈(AI/Comm) 페이지에 넘길 메타 — 해당 모듈이 아니면 undefined(placeholder 미표시). */
   private label(id: string): string {
     if (id === 'overview') return 'Overview';
-    if (id === 'modules') return 'PFS 모듈';
+    if (id === 'modules') return 'PFSS 모듈';
     if (id === 'control-plane') return 'Control Plane';
     if (id === 'delivery') return 'Platform Delivery';
     const p = this.reg.all.find((x) => x.id === this.pluginId(id));
