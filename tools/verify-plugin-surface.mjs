@@ -57,6 +57,16 @@ for (const [name, file] of surfaces) {
   }
 }
 
+const keycloakSurface = read('src/app/modules/identity/keycloak.component.ts');
+assert.match(keycloakSurface, /pluginHeaderContext[\s\S]*Keycloak 운영 컨텍스트/, 'Keycloak: Namespace·서비스 header context 누락');
+assert.match(keycloakSurface, /managedFleet\s*:\s*true/, 'Keycloak: PostgreSQL 기준 Fleet 관리 action 누락');
+assert.match(keycloakSurface, /\*ngIf="exists\(\)&&!isManagementView\(\)"/, 'Keycloak: 서비스가 없거나 관리 view일 때 운영 탭을 숨기는 계약 누락');
+assert.match(keycloakSurface, /관리 워크스페이스/, 'Keycloak: 관리 view와 운영 view 구분 누락');
+assert.match(keycloakSurface, /Profile Catalog/, 'Keycloak: 재사용 Profile 관리 surface 누락');
+assert.match(keycloakSurface, /Keycloak 서비스 생성/, 'Keycloak: Provisioning surface 누락');
+assert.match(keycloakSurface, /IdentityServiceClaim[\s\S]*Foundation Control Plane[\s\S]*Keycloak/, 'Keycloak: 요청-배정-실행 provisioning bridge 누락');
+assert.match(keycloakSurface, /Keycloak Service Fleet/, 'Keycloak: 관리 서비스 Fleet 누락');
+
 const sharedShell = read('src/app/shared/plugin-page-shell.component.ts');
 const canonicalTabs = ['overview', 'monitoring', 'topology', 'domain', 'backups', 'upgrade', 'events', 'documentation'];
 for (const tab of canonicalTabs) {
