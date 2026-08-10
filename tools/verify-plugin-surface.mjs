@@ -88,6 +88,7 @@ assert.match(runtimeTemplate, /MANAGEMENT_ICONS\.fleet/, '독립 plugin runtime 
 assert.match(runtimeTemplate, /MANAGEMENT_ICONS\.profiles/, '독립 plugin runtime Profiles 아이콘 매핑 누락');
 assert.match(runtimeTemplate, /MANAGEMENT_ICONS\.provisioning/, '독립 plugin runtime Provisioning 아이콘 매핑 누락');
 assert.match(runtimeTemplate, /MANAGEMENT_ICONS\.operator/, '독립 plugin runtime Operator 아이콘 매핑 누락');
+assert.match(runtimeTemplate, /\.pfss-op-meta\{[^}]*justify-content:flex-end;[^}]*justify-self:end;/, '독립 plugin runtime 릴리스 메타 우측 정렬 계약 누락');
 assert.doesNotMatch(runtimeTemplate, /[☷▤⊞⚙]/, '독립 plugin runtime에 임의 문자 아이콘이 남아 있습니다.');
 assert.match(runtimeTemplate, /Symbol\.for\(`opensphere\.plugin\.foundation\.\$\{SPEC\.id\}\.runtime`\)/, '독립 plugin runtime 재활성화 context slot 누락');
 assert.match(runtimeTemplate, /RUNTIME\.apiFetch/, '독립 plugin runtime Host API capability 배선 누락');
