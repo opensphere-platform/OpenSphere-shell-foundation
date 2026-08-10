@@ -275,6 +275,19 @@ test('Foundation overview consumes the canonical PFS establishment status instea
   assert.doesNotMatch(overview, /method:\s*'(?:POST|PUT|PATCH|DELETE)'/);
 });
 
+test('Foundation overview derives capability state from FoundationModel desired and observed authority', () => {
+  const registry = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'registry', 'foundation-registry.service.ts'), 'utf8');
+  const overview = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'foundation', 'overview.component.ts'), 'utf8');
+  assert.match(registry, /phase:\s*String\(item\?\.status\?\.phase/);
+  assert.match(registry, /operatorDeployed:\s*item\?\.status\?\.operator\?\.deployed === true/);
+  assert.match(registry, /observed:\s*\(Array\.isArray\(item\?\.status\?\.observed\)/);
+  assert.match(overview, /state\.desired !== 'Installed'/);
+  assert.match(overview, /state\.phase === 'Disabled'/);
+  assert.match(overview, /state\.observed\.some/);
+  assert.match(overview, /active === 0\) \{ return 'ready'; \}/);
+  assert.doesNotMatch(overview, /state === 'empty'/);
+});
+
 test('typed IdentityDirectory owner input cannot carry parameters or credential material', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   const create = source.slice(source.indexOf('async function identityDirectoryClaimCreate'), source.indexOf('async function identityDirectoryClaimRelease'));

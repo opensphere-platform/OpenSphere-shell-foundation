@@ -11,7 +11,24 @@ import { apiBase, hostFetch, writeHeaders } from '../api-base';
 // FoundationModel CR(foundation.opensphere.io/v1alpha1, Cluster-scope) — 수명주기의 클러스터 정본.
 const FM_PATH = 'apis/foundation.opensphere.io/v1alpha1/foundationmodels';
 type EngineState = 'Installed' | 'Disabled';
-interface DomainCRView { desired: string; engines: Record<string, string>; parameters: Record<string, unknown> }
+export interface FoundationDomainObservation {
+  id: string;
+  healthy: boolean;
+  value: string;
+  source: string;
+  note?: string;
+}
+
+export interface FoundationDomainState {
+  desired: string;
+  phase: string;
+  engines: Record<string, string>;
+  parameters: Record<string, unknown>;
+  operatorDeployed: boolean;
+  operatorVersion: string;
+  observed: FoundationDomainObservation[];
+  observedAt: string;
+}
 
 export interface PostgresInstallParameters {
   instances: number;
@@ -129,7 +146,7 @@ export class FoundationRegistryService {
   readonly all: HostedPlugin[] = FOUNDATION_PLUGINS;
 
   // 도메인 CR hydrate 상태 — null=아직 미로드(첫 응답 전 플리커 방지를 위해 낙관 Enabled 표시), 이후 CR 기준.
-  private readonly domains = signal<Record<string, DomainCRView> | null>(null);
+  private readonly domains = signal<Record<string, FoundationDomainState> | null>(null);
   readonly modelsLoaded = signal<'loading' | 'ok' | 'noperm' | 'error'>('loading');
   readonly lastError = signal<string>('');
   private fmTimer: ReturnType<typeof setInterval> | undefined;
@@ -147,14 +164,28 @@ export class FoundationRegistryService {
       if (res.status === 403) { this.modelsLoaded.set('noperm'); return; } // 마지막 값 유지(fail-open 읽기)
       if (!res.ok) { this.modelsLoaded.set('error'); return; }
       const body = await res.json();
-      const map: Record<string, DomainCRView> = {};
+      const map: Record<string, FoundationDomainState> = {};
       for (const item of body?.items ?? []) {
         const n = item?.metadata?.name;
         if (typeof n !== 'string') { continue; }
         map[n] = {
           desired: String(item?.spec?.desiredState ?? ''),
+          phase: String(item?.status?.phase ?? ''),
           engines: (item?.spec?.parameters?.['engines'] as Record<string, string>) ?? {},
           parameters: (item?.spec?.parameters as Record<string, unknown>) ?? {},
+          operatorDeployed: item?.status?.operator?.deployed === true,
+          operatorVersion: String(item?.status?.operator?.version ?? ''),
+          observed: (Array.isArray(item?.status?.observed) ? item.status.observed : []).flatMap((entry: any) => {
+            if (!entry || typeof entry.id !== 'string') { return []; }
+            return [{
+              id: entry.id,
+              healthy: entry.healthy === true,
+              value: String(entry.value ?? ''),
+              source: String(entry.source ?? ''),
+              note: typeof entry.note === 'string' ? entry.note : undefined,
+            }];
+          }),
+          observedAt: String(item?.status?.observedAt ?? ''),
         };
       }
       this.domains.set(map);
@@ -170,6 +201,11 @@ export class FoundationRegistryService {
     if (!d) { return '미등록'; }
     if (d.desired !== 'Installed') { return 'Disabled'; } // 도메인 자체 Disabled → 소속 엔진 전부
     return d.engines[id] === 'enabled' ? 'Installed' : 'Disabled';
+  }
+
+  /** Overview와 Control Plane 화면이 소비하는 도메인 desired/observed 정본. */
+  domainState(name: string): FoundationDomainState | null {
+    return this.domains()?.[name] ?? null;
   }
 
   isEnabled(id: string): boolean {

@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, inject } from '@angular/core';
-import { FoundationRegistryService } from '../registry/foundation-registry.service';
-import { EnginesService } from './engines.service';
+import { FoundationDomainState, FoundationRegistryService } from '../registry/foundation-registry.service';
 import { HisRequirementItem, HisRequirementsService, HisState } from './his-requirements.service';
 import { ControlPlaneService } from './control-plane.service';
 import { ViewRouter } from '../view-router';
@@ -21,11 +20,12 @@ const DOMAIN_ICON: Record<string, any> = {
 };
 
 interface DomainCard {
-  id: string; label: string; icon: any; desc: string; live: boolean;
-  count: number; healthy: number; degraded: boolean; modules: string; firstModule: string;
+  id: string; label: string; icon: any; desc: string;
+  count: number; active: number; healthy: number;
+  status: 'loading' | 'disabled' | 'progressing' | 'ready' | 'live' | 'degraded';
+  modules: string; firstModule: string;
   opNote?: string;
   linkModule?: string;
-  plannedNote?: string;
 }
 
 interface SetupStep {
@@ -39,11 +39,33 @@ interface SetupStep {
 
 // PFS 정본 멤버는 제품명이 아니라 identity/data/ai/comm/observability/backup capability다.
 // 각 capability의 실제 Operator/operand probe를 한 곳에서 집계한다.
-const OPERATOR_DOMAINS: Record<string, { modules: string; liveKeys: string[]; linkModule: string }> = {
-  ai: { modules: 'LiteLLM · Langfuse · Vector Retrieval', liveKeys: ['litellm', 'langfuse'], linkModule: 'litellm' },
-  comm: { modules: 'Stalwart(JMAP) · Novu · Mattermost', liveKeys: ['stalwart', 'novu', 'mattermost'], linkModule: 'stalwart' },
-  observability: { modules: 'OpenTelemetry Collector · Tempo · Loki · Grafana Operator', liveKeys: ['otel', 'tempo', 'loki', 'grafana'], linkModule: 'otel' },
-  backup: { modules: 'OpenSphere Backup · Velero · Restore', liveKeys: ['backup'], linkModule: 'ptm' },
+const OPERATOR_DOMAINS: Record<string, { model: string; modules: string; engineIds: string[]; linkModule: string }> = {
+  ai: { model: 'ai', modules: 'LiteLLM · Langfuse', engineIds: ['litellm', 'langfuse'], linkModule: 'litellm' },
+  comm: { model: 'communication', modules: 'Stalwart(JMAP) · Novu · Mattermost', engineIds: ['stalwart', 'novu', 'mattermost'], linkModule: 'stalwart' },
+  observability: { model: 'observability', modules: 'OpenTelemetry Collector · Tempo · Loki · Grafana Operator', engineIds: ['otel', 'tempo', 'loki', 'grafana'], linkModule: 'otel' },
+  backup: { model: 'backup', modules: 'OpenSphere Backup · Velero · Restore', engineIds: ['ptm'], linkModule: 'ptm' },
+};
+
+const OBSERVATION_ID: Record<string, string> = {
+  postgres: 'pg_up',
+  psmdb: 'psmdb_up',
+  valkey: 'valkey_up',
+  opensearch: 'opensearch_up',
+  rustfs: 'rustfs_up',
+  keycloak: 'keycloak_up',
+  samba: 'samba_up',
+  syncope: 'syncope_up',
+  opa: 'opa_up',
+  litellm: 'litellm_up',
+  langfuse: 'langfuse_up',
+  stalwart: 'stalwart_up',
+  novu: 'novu_up',
+  mattermost: 'mattermost_up',
+  otel: 'collector_up',
+  tempo: 'tempo_up',
+  loki: 'loki_up',
+  grafana: 'grafana_up',
+  ptm: 'ptm_operator_up',
 };
 
 // Foundation Overview — subShell home(개요). 정체성(10 Perspective의 기둥) + capability 6-도메인 현황
@@ -189,23 +211,18 @@ const OPERATOR_DOMAINS: Record<string, { modules: string; liveKeys: string[]; li
     <!-- Capability 6-도메인 현황 -->
     <div class="os-sech">Capability 도메인</div>
     <div class="ov-domains">
-      <div class="ov-domain" *ngFor="let d of domains()" [class.ov-domain--planned]="!d.live"
+      <div class="ov-domain" *ngFor="let d of domains()" [class.ov-domain--planned]="d.status === 'disabled'"
            [class.ov-domain--clickable]="true" (click)="goDomain(d)">
         <div class="ov-domain-h">
           <os-cicon [icon]="d.icon" [size]="20"/>
           <span class="ov-domain-name">{{ d.label }}</span>
-          <span class="label os-ml-auto"
-                [ngClass]="d.degraded ? 'label-danger' : (d.healthy === d.count && d.count > 0 ? 'label-success' : 'label-info')">
-            {{ d.degraded ? 'Degraded' : (d.healthy === d.count && d.count > 0 ? 'Live' : '확인 중') }}
+          <span class="label os-ml-auto" [ngClass]="domainStatusPill(d)">
+            {{ domainStatusLabel(d) }}
           </span>
         </div>
         <p class="ov-domain-desc">{{ d.desc }}</p>
-        <div class="ov-domain-foot" *ngIf="d.live">
-          <span class="ov-domain-count">{{ d.healthy }}/{{ d.count }} 모듈 정상</span>
-          <span class="ov-domain-mods">{{ d.modules }}</span>
-          <span class="ov-domain-opnote" *ngIf="d.plannedNote">{{ d.plannedNote }}</span>
-        </div>
-        <div class="ov-domain-foot ov-domain-foot--planned" *ngIf="!d.live">
+        <div class="ov-domain-foot">
+          <span class="ov-domain-count">{{ d.active }}/{{ d.count }} 활성 · {{ d.healthy }}/{{ d.active }} 정상</span>
           <span class="ov-domain-mods">{{ d.modules }}</span>
           <span class="ov-domain-opnote" *ngIf="d.opNote">{{ d.opNote }}</span>
         </div>
@@ -254,7 +271,6 @@ const OPERATOR_DOMAINS: Record<string, { modules: string; liveKeys: string[]; li
 })
 export class FoundationOverviewComponent {
   readonly reg = inject(FoundationRegistryService);
-  readonly engines = inject(EnginesService);
   readonly his = inject(HisRequirementsService);
   readonly cp = inject(ControlPlaneService);
   private vr = inject(ViewRouter);
@@ -293,7 +309,7 @@ export class FoundationOverviewComponent {
     },
   ];
 
-  ngOnInit(): void { this.engines.start(); this.his.start(); this.cp.start(); }
+  ngOnInit(): void { this.his.start(); this.cp.start(); }
 
   readonly controlPlaneReady = computed(() =>
     this.cp.workloads().some((item) => item.id === 'foundation-control-plane' && item.state === 'pass'),
@@ -372,44 +388,98 @@ export class FoundationOverviewComponent {
   );
 
   readonly domains = computed<DomainCard[]>(() => {
-    const roll = (prefix: string): Omit<DomainCard, 'id' | 'label' | 'icon' | 'desc' | 'live'> => {
-      const list = this.reg.all.filter((p) => p.capability.startsWith(prefix));
-      const hs = list.map((p) => this.reg.health(p));
+    const modelDomain = (model: string): Omit<DomainCard, 'id' | 'label' | 'icon' | 'desc'> => {
+      const list = this.reg.all.filter((p) => p.model === model);
+      const state = this.reg.domainState(model);
+      const activeIds = this.activeEngineIds(state, list.map((p) => p.id));
+      const healthy = activeIds.filter((id) => this.observedHealthy(state, id)).length;
       return {
         count: list.length,
-        healthy: hs.filter((h) => h.phase === 'ok').length,
-        degraded: hs.some((h) => h.phase === 'bad'),
+        active: activeIds.length,
+        healthy,
+        status: this.domainStatus(state, activeIds.length, healthy),
         modules: list.map((p) => p.name).join(' · '),
         firstModule: list[0]?.view.module ?? 'overview',
+        opNote: this.domainEvidenceNote(state),
       };
     };
-    const operatorDomain = (id: string): Omit<DomainCard, 'id' | 'label' | 'icon' | 'desc' | 'live'> => {
+    const operatorDomain = (id: string): Omit<DomainCard, 'id' | 'label' | 'icon' | 'desc'> => {
       const spec = OPERATOR_DOMAINS[id];
-      const states = spec.liveKeys.map((key) => this.engines.liveState(key));
-      const observed = states.filter((state) => state !== 'loading');
-      const healthy = states.filter((state) => state === 'ok' || state === 'empty').length;
-      const degraded = observed.some((state) => state !== 'ok' && state !== 'empty');
+      const state = this.reg.domainState(spec.model);
+      const activeIds = this.activeEngineIds(state, spec.engineIds);
+      const healthy = activeIds.filter((engineId) => this.observedHealthy(state, engineId)).length;
       return {
-        count: spec.liveKeys.length,
+        count: spec.engineIds.length,
+        active: activeIds.length,
         healthy,
-        degraded,
+        status: this.domainStatus(state, activeIds.length, healthy),
         modules: spec.modules,
         firstModule: spec.linkModule,
         linkModule: spec.linkModule,
-        opNote: observed.length === 0 ? '실행 상태 확인 중' : `${healthy}/${spec.liveKeys.length} Operator 대상 확인`,
+        opNote: this.domainEvidenceNote(state),
       };
     };
     return [
-      { id: 'data', label: 'Data', icon: DOMAIN_ICON['data'], desc: '관계형 DB · 검색 · 오브젝트 스토리지', live: true, ...roll('data.') },
-      { id: 'identity', label: 'Identity', icon: DOMAIN_ICON['identity'], desc: 'IGA · SSO · 디렉터리 · 정책', live: true, ...roll('identity.') },
-      { id: 'ai', label: 'AI', icon: DOMAIN_ICON['ai'], desc: '모델 서빙 · 추론 · 벡터 메모리', live: true, ...operatorDomain('ai') },
-      { id: 'comm', label: 'Comm', icon: DOMAIN_ICON['comm'], desc: '메시징 · 알림 · 협업', live: true, ...operatorDomain('comm') },
-      { id: 'observability', label: 'Observability', icon: DOMAIN_ICON['observability'], desc: '메트릭 · 로그 · 트레이스', live: true, ...operatorDomain('observability') },
-      { id: 'backup', label: 'Backup', icon: DOMAIN_ICON['backup'], desc: '백업 · 복구 · 보존', live: true, ...operatorDomain('backup') },
+      { id: 'data', label: 'Data', icon: DOMAIN_ICON['data'], desc: '관계형 DB · 검색 · 오브젝트 스토리지', ...modelDomain('data') },
+      { id: 'identity', label: 'Identity', icon: DOMAIN_ICON['identity'], desc: 'IGA · SSO · 디렉터리 · 정책', ...modelDomain('identity') },
+      { id: 'ai', label: 'AI', icon: DOMAIN_ICON['ai'], desc: '모델 서빙 · 추론 · 벡터 메모리', ...operatorDomain('ai') },
+      { id: 'comm', label: 'Comm', icon: DOMAIN_ICON['comm'], desc: '메시징 · 알림 · 협업', ...operatorDomain('comm') },
+      { id: 'observability', label: 'Observability', icon: DOMAIN_ICON['observability'], desc: '메트릭 · 로그 · 트레이스', ...operatorDomain('observability') },
+      { id: 'backup', label: 'Backup', icon: DOMAIN_ICON['backup'], desc: '백업 · 복구 · 보존', ...operatorDomain('backup') },
     ];
   });
 
-  readonly liveDomains = computed(() => this.domains().filter((d) => d.count > 0 && d.healthy === d.count).length);
+  readonly liveDomains = computed(() => this.domains().filter((d) => d.status === 'live').length);
+
+  private activeEngineIds(state: FoundationDomainState | null, engineIds: string[]): string[] {
+    if (!state || state.desired !== 'Installed') { return []; }
+    const configured = Object.keys(state.engines);
+    if (configured.length === 0) { return engineIds; }
+    return engineIds.filter((id) => state.engines[id] === 'enabled');
+  }
+
+  private observedHealthy(state: FoundationDomainState | null, engineId: string): boolean {
+    if (!state) { return false; }
+    const observationId = OBSERVATION_ID[engineId] ?? `${engineId}_up`;
+    return state.observed.some((item) => item.id === observationId && item.healthy);
+  }
+
+  private domainStatus(
+    state: FoundationDomainState | null,
+    active: number,
+    healthy: number,
+  ): DomainCard['status'] {
+    if (!state) { return 'loading'; }
+    if (state.desired !== 'Installed' || state.phase === 'Disabled') { return 'disabled'; }
+    if (['Failed', 'Blocked', 'Degraded'].includes(state.phase)) { return 'degraded'; }
+    if (state.phase !== 'Installed') { return 'progressing'; }
+    if (!state.operatorDeployed) { return 'degraded'; }
+    if (active === 0) { return 'ready'; }
+    return healthy === active ? 'live' : 'degraded';
+  }
+
+  private domainEvidenceNote(state: FoundationDomainState | null): string {
+    if (!state) { return 'FoundationModel 상태 확인 중'; }
+    if (state.desired !== 'Installed' || state.phase === 'Disabled') { return 'FoundationModel에서 비활성'; }
+    if (!state.operatorDeployed) { return 'Operator 제어 계층 미확인'; }
+    const version = state.operatorVersion ? ` · ${state.operatorVersion}` : '';
+    return `Operator Ready${version}`;
+  }
+
+  domainStatusLabel(d: DomainCard): string {
+    const labels: Record<DomainCard['status'], string> = {
+      loading: '확인 중', disabled: 'Disabled', progressing: 'Progressing',
+      ready: 'Ready', live: 'Live', degraded: 'Degraded',
+    };
+    return labels[d.status];
+  }
+
+  domainStatusPill(d: DomainCard): string {
+    if (d.status === 'live') { return 'label-success'; }
+    if (d.status === 'degraded') { return 'label-danger'; }
+    if (d.status === 'disabled') { return ''; }
+    return 'label-info';
+  }
 
   go(id: string): void { this.vr.setModule(id); }
   goStep(step: SetupStep): void {
@@ -418,8 +488,7 @@ export class FoundationOverviewComponent {
     if (step.tab) { this.vr.setTab(step.tab); }
   }
   goDomain(d: DomainCard): void {
-    if (d.live) { this.go(d.firstModule); return; }
-    if (d.linkModule) { this.vr.setModule(d.linkModule); }
+    this.go(d.linkModule || d.firstModule);
   }
   openPlugin(p: HostedPlugin): void { this.vr.setModule(p.view.module); }
   preparePlugin(p: HostedPlugin): void {
