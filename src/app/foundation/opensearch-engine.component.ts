@@ -265,12 +265,16 @@ export class OpenSearchEngineComponent {
     const s = this.svc.liveState('opensearch');
     if (s === 'ok') { return 'label-success'; }
     if (s === 'loading') { return ''; }
-    if (s === 'nocrd') { return 'label-warning'; }
+    if (s === 'disabled') { return ''; }
+    if (s === 'progressing' || s === 'nocrd') { return 'label-warning'; }
     return 'label-danger';
   }
 
   liveLabel(): string {
     const s = this.svc.liveState('opensearch');
-    return { loading: 'Checking', ok: 'Workload found', empty: 'Workload found', nocrd: 'Not prepared', noperm: 'No permission', error: 'Lookup failed' }[s];
+    return {
+      loading: 'Checking', ok: 'Ready', disabled: 'Disabled', progressing: 'Progressing',
+      degraded: 'Degraded', nocrd: 'Not prepared', noperm: 'No permission', error: 'Lookup failed',
+    }[s];
   }
 }

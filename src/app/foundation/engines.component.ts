@@ -167,12 +167,16 @@ export class FoundationEnginesComponent {
     const s = this.svc.liveState(key);
     if (s === 'ok') { return 'label-success'; }
     if (s === 'loading') { return ''; }
-    if (s === 'nocrd') { return 'label-warning'; }
+    if (s === 'disabled') { return ''; }
+    if (s === 'progressing' || s === 'nocrd') { return 'label-warning'; }
     return 'label-danger';
   }
   liveLabel(key: string): string {
     const s = this.svc.liveState(key);
-    return { loading: '확인 중…', ok: 'Live', empty: 'Live', nocrd: '미배치', noperm: '권한 없음', error: '조회 실패' }[s];
+    return {
+      loading: '확인 중…', ok: 'Live', disabled: 'Disabled', progressing: 'Progressing',
+      degraded: 'Degraded', nocrd: '미배치', noperm: '권한 없음', error: '조회 실패',
+    }[s];
   }
 
   readonly cards: EngineCard[] = [

@@ -220,20 +220,24 @@ export class RoadmapModuleComponent {
   }
   runtimeLabel(): string {
     const state = this.engines.liveState(this.module.liveKey);
-    return ({ loading: '확인 중', ok: 'Ready', empty: 'Ready', nocrd: '미배치', noperm: '권한 없음', error: '조회 실패' })[state];
+    return ({
+      loading: '확인 중', ok: 'Ready', disabled: 'Disabled', progressing: 'Progressing',
+      degraded: 'Degraded', nocrd: '미배치', noperm: '권한 없음', error: '조회 실패',
+    })[state];
   }
   runtimePill(): string {
     const state = this.engines.liveState(this.module.liveKey);
-    if (state === 'ok' || state === 'empty') { return 'label-success'; }
+    if (state === 'ok') { return 'label-success'; }
     if (state === 'loading') { return 'label-info'; }
-    if (state === 'nocrd') { return 'label-warning'; }
+    if (state === 'disabled') { return ''; }
+    if (state === 'progressing' || state === 'nocrd') { return 'label-warning'; }
     return 'label-danger';
   }
   runtimeAlertType(): 'success' | 'info' | 'warning' | 'danger' {
     const state = this.engines.liveState(this.module.liveKey);
-    if (state === 'ok' || state === 'empty') { return 'success'; }
-    if (state === 'loading') { return 'info'; }
-    if (state === 'nocrd') { return 'warning'; }
+    if (state === 'ok') { return 'success'; }
+    if (state === 'loading' || state === 'disabled') { return 'info'; }
+    if (state === 'progressing' || state === 'nocrd') { return 'warning'; }
     return 'danger';
   }
   select(tab: string): void {

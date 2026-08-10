@@ -8,7 +8,7 @@ const controls = JSON.parse(readFileSync(resolve(root, 'plugins/control-contract
 const engineSurface = readFileSync(resolve(root, 'src/app/foundation/engines.component.ts'), 'utf8');
 const operatorSurface = readFileSync(resolve(root, 'src/app/foundation/roadmap-module.component.ts'), 'utf8');
 const overviewSurface = readFileSync(resolve(root, 'src/app/foundation/overview.component.ts'), 'utf8');
-const engineProbes = readFileSync(resolve(root, 'src/app/foundation/engines.service.ts'), 'utf8');
+const engineAuthority = readFileSync(resolve(root, 'src/app/foundation/engines.service.ts'), 'utf8');
 if (catalog.schemaVersion !== 1 || catalog.hostRef !== 'foundation') throw new Error('invalid Foundation plugin catalog header');
 if (!Array.isArray(catalog.plugins) || catalog.plugins.length !== 18) throw new Error(`expected 18 Foundation-bundled plugins; PostgreSQL, OpenSearch and directory are separately governed, got ${catalog.plugins?.length}`);
 const ids = new Set();
@@ -112,9 +112,12 @@ for (const id of expectedEngineCards) {
   const card = engineSurface.match(new RegExp(`id:\\s*'${id}'[\\s\\S]*?category:\\s*'[^']+'[\\s\\S]*?impl:\\s*'([^']+)'[\\s\\S]*?liveKey:\\s*'([^']*)'`));
   if (!card) throw new Error(`${id} is missing from the PFS module surface`);
   if (card[1] !== 'real') throw new Error(`${id} regressed to non-Operator implementation state ${card[1]}`);
-  if (!card[2]) throw new Error(`${id} must expose a live Operator/operand probe`);
-  if (!engineProbes.includes(`this.probe('${card[2]}',`)) throw new Error(`${id} live probe ${card[2]} is not wired`);
+  if (!card[2]) throw new Error(`${id} must expose a FoundationModel runtime authority key`);
+  if (!engineAuthority.includes(`${card[2]}: { model:`)) throw new Error(`${id} runtime authority ${card[2]} is not wired`);
 }
+if (!engineAuthority.includes('FoundationRegistryService')) throw new Error('PFS runtime state must consume the FoundationModel registry authority');
+if (!engineAuthority.includes('domain.observed.find')) throw new Error('PFS runtime state must consume reconciler observations');
+if (/existsState|this\.probe\(|api\/k8s/.test(engineAuthority)) throw new Error('PFS catalog must not derive Live from Kubernetes object existence');
 for (const retired of ['Phase 1 관리 표면', 'reconciler 구현 후 활성화', '아직 설치되지 않았습니다']) {
   if (operatorSurface.includes(retired)) throw new Error(`operator surface regressed to retired placeholder copy: ${retired}`);
 }

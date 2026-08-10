@@ -288,6 +288,19 @@ test('Foundation overview derives capability state from FoundationModel desired 
   assert.doesNotMatch(overview, /state === 'empty'/);
 });
 
+test('PFS module catalog uses FoundationModel authority and never equates leftover objects with Live', () => {
+  const service = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'foundation', 'engines.service.ts'), 'utf8');
+  const catalog = fs.readFileSync(path.join(__dirname, '..', 'src', 'app', 'foundation', 'engines.component.ts'), 'utf8');
+  assert.match(service, /FoundationRegistryService/);
+  assert.match(service, /domain\.desired !== 'Installed'/);
+  assert.match(service, /domain\.engines\[authority\.engine\] !== 'enabled'/);
+  assert.match(service, /domain\.observed\.find/);
+  assert.doesNotMatch(service, /existsState|api\/k8s|deployments\//);
+  assert.match(catalog, /disabled: 'Disabled'/);
+  assert.match(catalog, /degraded: 'Degraded'/);
+  assert.doesNotMatch(catalog, /empty: 'Live'/);
+});
+
 test('typed IdentityDirectory owner input cannot carry parameters or credential material', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   const create = source.slice(source.indexOf('async function identityDirectoryClaimCreate'), source.indexOf('async function identityDirectoryClaimRelease'));
