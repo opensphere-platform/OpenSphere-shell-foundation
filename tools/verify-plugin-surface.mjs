@@ -35,18 +35,21 @@ for (const [name, file] of surfaces) {
   assert.match(source, /pgp-page-frame/, `${name}: PostgreSQL 공통 page frame 누락`);
   assert.match(source, /osp-plugin-page-header/, `${name}: 공통 header 누락`);
   assert.match(source, /osp-plugin-tabs/, `${name}: 공통 tabs 누락`);
-  for (const capability of ['overview', 'topology', 'events', 'upgrade', 'documentation']) {
+  for (const capability of ['overview', 'monitoring', 'topology', 'events', 'upgrade', 'documentation']) {
     assert.match(source, new RegExp(`['\"]${capability}['\"]`), `${name}: ${capability} surface 누락`);
   }
 }
 
 const sharedShell = read('src/app/shared/plugin-page-shell.component.ts');
-const canonicalTabs = ['overview', 'operator', 'cluster', 'topology', 'config', 'domain', 'backups', 'events', 'claims', 'upgrade', 'documentation'];
+const canonicalTabs = ['overview', 'monitoring', 'topology', 'domain', 'backups', 'upgrade', 'events', 'documentation'];
 for (const tab of canonicalTabs) {
   assert.match(sharedShell, new RegExp(`id: ['\"]${tab}['\"]`), `공통 11탭 계약: ${tab} 누락`);
 }
-for (const label of ['Operator', 'Cluster plan', 'Configuration', 'Backups', 'Claims']) {
+for (const label of ['Overview', 'Monitoring', 'Topology', 'Data Protection', 'Operations', 'Events', 'Documentation']) {
   assert.match(sharedShell, new RegExp(`label: ['\"]${label}['\"]`), `공통 11탭 계약: ${label} 라벨 누락`);
+}
+for (const action of ['Fleet', 'Profiles', 'Provisioning', 'Operator']) {
+  assert.match(sharedShell, new RegExp(`title=['\"]${action}['\"]`), `공통 management action 누락: ${action}`);
 }
 for (const contract of [/role="tablist"/, /role="tab"/, /aria-selected/, /tabindex/, /ArrowRight/, /ArrowLeft/, /Home/, /End/]) {
   assert.match(sharedShell, contract, `공통 탭 접근성·키보드 계약 누락: ${contract}`);
@@ -61,13 +64,13 @@ for (const tab of canonicalTabs) {
 }
 
 // 독립 서명 child plugin은 활성화 뒤 Foundation의 계획 표면을 대체한다.
-// 따라서 runtime template도 설치 전 Angular 표면과 같은 11탭 계약을 유지해야 하며,
+// 따라서 runtime template도 설치 전 Angular 표면과 같은 runtime/management 분리 계약을 유지해야 하며,
 // Extension Host 재로드 후 stale context를 잡지 않도록 공유 runtime slot을 사용한다.
 const runtimeTemplate = read('plugins/runtime/ui-shell.plugin.template.js');
-for (const tab of canonicalTabs) {
-  assert.match(runtimeTemplate, new RegExp(`\\['${tab}',`), `독립 plugin runtime 11탭 계약: ${tab} 누락`);
+for (const tab of ['overview', 'monitoring', 'topology', 'domain', 'protection', 'operations', 'events', 'documentation']) {
+  assert.match(runtimeTemplate, new RegExp(`\\['${tab}',`), `독립 plugin runtime 탭 계약: ${tab} 누락`);
 }
-for (const contract of [/pgp-page-frame/, /pfs-plugin-head/, /pfs-plugin-tabs/, /pgp-steps/, /pgp-dashboard/]) {
+for (const contract of [/pfss-op-shell/, /pfss-op-head/, /pfss-op-tabs/, /pfss-op-actions/, /pgp-dashboard/]) {
   assert.match(runtimeTemplate, contract, `독립 plugin runtime PostgreSQL surface 누락: ${contract}`);
 }
 assert.match(runtimeTemplate, /Symbol\.for\(`opensphere\.plugin\.foundation\.\$\{SPEC\.id\}\.runtime`\)/, '독립 plugin runtime 재활성화 context slot 누락');
@@ -107,9 +110,13 @@ for (const file of [
 const samba = readDirectory('ui-shell/ui-shell.plugin.js');
 assert.match(samba, /pgp-page-frame/, 'Samba-AD: PostgreSQL 공통 page frame 누락');
 assert.match(samba, /pfs-plugin-head/, 'Samba-AD: 공통 header 누락');
-assert.match(samba, /pfs-plugin-tabs/, 'Samba-AD: 공통 tabs 누락');
-for (const capability of ['overview', 'operator', 'cluster', 'topology', 'configuration', 'directory', 'backups', 'events', 'claims', 'upgrade', 'documentation']) {
+assert.match(samba, /pfs-plugin-tabs/, 'Samba-AD: 공통 runtime tabs 누락');
+assert.match(samba, /pfss-op-actions/, 'Samba-AD: 관리 action 누락');
+for (const capability of ['overview', 'monitoring', 'topology', 'directory', 'backups', 'upgrade', 'events', 'documentation']) {
   assert.match(samba, new RegExp(`['"]${capability}['"]`), `Samba-AD: ${capability} surface 누락`);
+}
+for (const capability of ['operator', 'cluster', 'configuration', 'claims']) {
+  assert.match(samba, new RegExp(`data-sc-tab=['"]${capability}['"]`), `Samba-AD: ${capability} 관리 action 누락`);
 }
 
 const registry = read('src/app/registry/plugins.registry.ts');

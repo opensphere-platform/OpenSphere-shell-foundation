@@ -23,7 +23,7 @@ const DEFAULT_FORM: SyncopeInstallParameters = {
   imports: [CommonModule, FormsModule, ClarityModule, CarbonIcon, PluginPageHeaderComponent, PluginTabsComponent, CarbonLineChart],
   template: `
     <a class="vl-back" (click)="back()" (keydown.enter)="back()" role="button" tabindex="0"><os-cicon [icon]="iBack" [size]="16" /> PFS 모듈</a>
-    <section class="sy-frame"><osp-plugin-page-header [model]="headerModel()" headingId="syncope-plugin-title" /><osp-plugin-tabs [tabs]="tabsForUi()" [active]="tab()" ariaLabel="Apache Syncope plugin 메뉴" (selected)="openTab($event)" /></section>
+    <section class="sy-frame"><osp-plugin-page-header [model]="headerModel()" headingId="syncope-plugin-title" (managementSelected)="openTab($event)" /><osp-plugin-tabs [tabs]="tabsForUi()" [active]="tab()" ariaLabel="Apache Syncope plugin 메뉴" (selected)="openTab($event)" /></section>
 
     <ng-container *ngIf="tab()==='overview'">
       <section class="sy-steps">
@@ -91,7 +91,7 @@ export class SyncopeComponent implements OnInit, OnDestroy {
   readonly form = signal<SyncopeInstallParameters>({ ...DEFAULT_FORM }); readonly applying = signal(false); readonly progress = signal(0); readonly logs = signal<string[]>([]);
   readonly tab = computed(() => this.router.tab()); readonly exists = computed(() => this.svc.state() === 'ok');
   readonly headerModel = computed<PluginPageHeaderModel>(() => ({ name: 'Apache Syncope', logo: 'https://logos.opl.io.kr/i/apache-2', monogram: 'SY', capability: 'identity.iga.syncope', description: 'Workforce IGA 단일 권위, SCIM provisioning, connector와 durable audit를 운영합니다.', lifecycle: this.svc.productionReady() ? 'Production Ready' : this.svc.ready() ? 'Production gates pending' : this.exists() ? 'Progressing' : 'Not installed', lifecycleClass: this.svc.productionReady() ? 'label-success' : 'label-warning', version: '4.0.7', profile: 'production · HA', namespace: 'opensphere-foundation' }));
-  private readonly tabs: PluginPageTab[] = (() => { const tabs = pfsPluginTabs('Users & Groups'); tabs.splice(1, 0, { id: 'monitoring', label: 'Monitoring' }); return tabs; })();
+  private readonly tabs: PluginPageTab[] = pfsPluginTabs('Users & Groups');
   ngOnInit(): void { this.svc.start(); this.metrics.start(); const cfg = (this.registry.parametersOf('syncope') as any)?.identityEngines?.syncope; if (cfg) this.form.update(value => ({ ...value, ...cfg })); }
   ngOnDestroy(): void { this.svc.stop(); this.metrics.stop(); }
   back(): void { this.router.setModule('modules'); this.router.setTab('overview'); }

@@ -20,13 +20,41 @@ const DOMAIN_LABELS = Object.freeze({
   data: 'Databases & Roles',
 });
 
-const TAB_DEFS = Object.freeze([
-  ['overview', 'Overview'], ['operator', 'Operator'], ['cluster', 'Cluster plan'],
-  ['topology', 'Topology'], ['config', 'Configuration'],
+// PostgreSQL PFSS가 확립한 Operator UX 계약:
+// 실행 중인 리소스의 상태 탭과 플랫폼 관리 작업을 같은 레벨에 섞지 않는다.
+const RUNTIME_TABS = Object.freeze([
+  ['overview', 'Overview'], ['monitoring', 'Monitoring'], ['topology', 'Topology'],
   ['domain', DOMAIN_LABELS[SPEC.sector] || 'Resources & Access'],
-  ['backups', 'Backups'], ['events', 'Events'], ['claims', 'Claims'],
-  ['upgrade', 'Upgrade'], ['documentation', 'Documentation'],
+  ['protection', SPEC.sector === 'backup' ? 'Restore Points' : 'Data Protection'],
+  ['operations', 'Operations'], ['events', 'Events'], ['documentation', 'Documentation'],
 ]);
+
+const hasManagedFleet = () => SPEC.control?.requestModes?.Instance === 'managed';
+const MANAGEMENT_VIEWS = Object.freeze([
+  ...(hasManagedFleet() ? [['fleet', 'Fleet', 'M4 5h16M4 12h16M4 19h16']] : []),
+  ['profiles', 'Profiles', 'M6 3h12v18H6zM9 7h6M9 12h6M9 17h4'],
+  ['provisioning', 'Provisioning', 'M12 3v18M3 12h18'],
+  ['operator', 'Operator', 'M12 3l8 4v5c0 5-3.4 8.5-8 9-4.6-.5-8-4-8-9V7z'],
+]);
+
+const LEGACY_VIEW_ALIASES = Object.freeze({
+  cluster: 'fleet', config: 'profiles', claims: 'provisioning',
+  backups: 'protection', upgrade: 'operations',
+});
+
+const OPERATOR_SHELL_CSS = `
+  .pfss-op-shell{position:relative;min-width:0;background:#fff;border:1px solid #d7d7d7;margin-top:.35rem}
+  .pfss-op-head{position:relative;display:grid;grid-template-columns:minmax(22rem,1fr) auto;gap:1.25rem;min-height:8.4rem;padding:1.2rem 1.25rem .85rem;box-sizing:border-box}
+  .pfss-op-brand{display:flex;align-items:flex-start;gap:1rem;min-width:0;padding-right:1rem}.pfss-op-logo{width:3.5rem;height:3.5rem;object-fit:contain;flex:0 0 auto}
+  .pfss-op-brand h1{font-size:2rem;line-height:1.05;margin:.2rem 0 .25rem}.pfss-op-brand p{margin:0;max-width:48rem;color:#565656;line-height:1.35}.pfss-op-eyebrow{color:#526eff;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+  .pfss-op-meta{display:flex;align-items:center;justify-content:flex-end;gap:0;min-width:0;padding-top:1.35rem}.pfss-op-meta>div{min-width:6.3rem;padding:0 .8rem;border-left:1px solid #ddd}.pfss-op-meta dt,.pfss-op-context label{font-size:.68rem;color:#666}.pfss-op-meta dd{margin:.32rem 0 0;white-space:nowrap}
+  .pfss-op-actions{position:absolute;right:1rem;top:.7rem;display:flex;gap:.2rem;z-index:2}.pfss-op-action{display:grid;place-items:center;width:2rem;height:2rem;border:0;background:transparent;color:#7b1fa2;cursor:pointer}.pfss-op-action:hover,.pfss-op-action.active{background:#f4eafa}.pfss-op-action.active{box-shadow:inset 0 -2px #f47b20}.pfss-op-action svg{width:1rem;height:1rem;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .pfss-op-context{display:flex;align-items:flex-end;justify-content:flex-end;gap:.75rem;padding-right:.15rem}.pfss-op-context>div{width:13.75rem}.pfss-op-context select{width:100%;height:2rem;border:0;border-bottom:1px solid #6f7d85;background:#fff}
+  .pfss-op-tabs{display:flex;gap:0;border-top:1px solid #eee;border-bottom:1px solid #d7d7d7;overflow-x:auto}.pfss-op-tab{border:0;background:#fff;padding:.72rem 1rem;color:#7b1fa2;white-space:nowrap;cursor:pointer}.pfss-op-tab.active{font-weight:700;box-shadow:inset 0 -2px #526eff}
+  .pfss-op-scope{display:flex;align-items:center;justify-content:space-between;padding:.55rem .9rem;background:#fff7f1;border-top:1px solid #f7c8aa;border-bottom:1px solid #f7c8aa;font-size:.76rem}.pfss-op-scope button{border:0;background:transparent;color:#0072a3;cursor:pointer;font-weight:600}
+  @media(max-width:1180px){.pfss-op-head{grid-template-columns:1fr;padding-top:1.1rem}.pfss-op-meta{justify-content:flex-start;padding-top:.2rem;flex-wrap:wrap}.pfss-op-context{justify-content:flex-start}.pfss-op-actions{right:.7rem}.pfss-op-brand{padding-right:8.5rem}}
+  @media(max-width:720px){.pfss-op-head{padding:.9rem}.pfss-op-brand{padding-right:0;padding-top:2.2rem}.pfss-op-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.pfss-op-context{grid-column:1/-1;flex-wrap:wrap}.pfss-op-context>div{width:100%}}
+`;
 
 function apiFetch(path, init) {
   if (typeof RUNTIME.apiFetch !== 'function') {
@@ -61,7 +89,10 @@ class FoundationPluginElement extends HTMLElement {
     const path = location.pathname;
     if (path === base) return 'overview';
     const child = path.startsWith(`${base}/`) ? path.slice(base.length + 1).split('/')[0] : '';
-    return TAB_DEFS.some(([id]) => id === child) ? child : 'overview';
+    const normalized = LEGACY_VIEW_ALIASES[child] || child;
+    const known = [...RUNTIME_TABS, ...MANAGEMENT_VIEWS].some(([id]) => id === normalized);
+    if (normalized === 'fleet' && !hasManagedFleet()) return 'profiles';
+    return known ? normalized : 'overview';
   }
 
   navigate(tab) {
@@ -73,15 +104,18 @@ class FoundationPluginElement extends HTMLElement {
 
   render() {
     const active = this.activeTab();
-    const tabs = TAB_DEFS.map(([id, label]) => `<button type="button" class="pfs-plugin-tab${active === id ? ' active' : ''}" role="tab" aria-selected="${active === id}" data-tab="${id}">${esc(label)}</button>`).join('');
+    const management = MANAGEMENT_VIEWS.map(([id, label, path]) => `<button type="button" class="pfss-op-action${active === id ? ' active' : ''}" data-tab="${id}" aria-label="${esc(label)}" title="${esc(label)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg></button>`).join('');
+    const isManagement = MANAGEMENT_VIEWS.some(([id]) => id === active);
+    const tabs = RUNTIME_TABS.map(([id, label]) => `<button type="button" class="pfss-op-tab${active === id ? ' active' : ''}" role="tab" aria-selected="${active === id}" data-tab="${id}">${esc(label)}</button>`).join('');
     this.innerHTML = `<button class="btn btn-sm btn-link" type="button" data-back>← PFS 모듈</button>
-      <section class="pgp-page-frame" aria-label="${esc(SPEC.displayName)} plugin 개요와 메뉴">
-        <header class="pfs-plugin-head" aria-labelledby="${esc(SPEC.id)}-title">
-          <img class="pfs-plugin-logo" src="${esc(SPEC.logo)}" alt="${esc(SPEC.displayName)}" width="52" height="52">
-          <div class="pfs-plugin-main"><div class="os-eyebrow">PFS · ${esc(SPEC.capability.toUpperCase())}</div><h1 id="${esc(SPEC.id)}-title">${esc(SPEC.displayName)}</h1><p>${esc(SPEC.description)}</p></div>
-          <dl class="pfs-plugin-facts"><div><dt>Lifecycle</dt><dd>${statePill('ok', 'Package active')}</dd></div><div><dt>Package</dt><dd>${esc(SPEC.version)}</dd></div><div><dt>Channel</dt><dd>${esc(SPEC.channel)}</dd></div><div><dt>Namespace</dt><dd><code>${esc(SPEC.namespace)}</code></dd></div></dl>
+      <style>${OPERATOR_SHELL_CSS}</style>
+      <section class="pfss-op-shell" aria-label="${esc(SPEC.displayName)} Operator 작업 영역">
+        <header class="pfss-op-head" aria-labelledby="${esc(SPEC.id)}-title">
+          <div class="pfss-op-brand"><img class="pfss-op-logo" src="${esc(SPEC.logo)}" alt="${esc(SPEC.displayName)}"><div><div class="pfss-op-eyebrow">PFS · OPERATOR · ${esc(SPEC.capability.toUpperCase())}</div><h1 id="${esc(SPEC.id)}-title">${esc(SPEC.displayName)}</h1><p>${esc(SPEC.description)}</p></div></div>
+          <dl class="pfss-op-meta"><div><dt>Lifecycle</dt><dd>${statePill('ok', 'Ready')}</dd></div><div><dt>Version</dt><dd>${esc(SPEC.version)}</dd></div><div><dt>Profile</dt><dd>${esc(SPEC.control?.operatorDriver || SPEC.channel)}</dd></div><div class="pfss-op-context"><div><label>Namespace</label><select aria-label="Namespace"><option>${esc(SPEC.namespace)}</option></select></div><div><label>${hasManagedFleet() ? 'Instance' : 'Service'}</label><select aria-label="${hasManagedFleet() ? 'Instance' : 'Service'}"><option>${esc(SPEC.displayName)}</option></select></div></div></dl>
+          <div class="pfss-op-actions" aria-label="플랫폼 관리 작업">${management}</div>
         </header>
-        <nav class="pfs-plugin-tabs" role="tablist" aria-label="${esc(SPEC.displayName)} 관리 메뉴">${tabs}</nav>
+        ${isManagement ? `<div class="pfss-op-scope"><span><b>관리 작업</b> · 실행 상태 탭과 분리된 Namespace/플랫폼 설정 영역입니다.</span><button type="button" data-tab="overview">선택한 서비스로 돌아가기</button></div>` : `<nav class="pfss-op-tabs" role="tablist" aria-label="${esc(SPEC.displayName)} 실행 상태 메뉴">${tabs}</nav>`}
       </section>
       <div data-content>${this.renderTab(active)}</div>`;
     this.querySelector('[data-back]')?.addEventListener('click', () => {
@@ -94,29 +128,29 @@ class FoundationPluginElement extends HTMLElement {
 
   renderTab(active) {
     if (active === 'overview') return this.overview();
+    if (active === 'monitoring') return this.monitoring();
     if (active === 'operator') return this.operator();
-    if (active === 'cluster') return this.clusterPlan();
+    if (active === 'fleet') return this.fleet();
     if (active === 'topology') return this.topology();
-    if (active === 'config') return this.configuration();
+    if (active === 'profiles') return this.profiles();
     if (active === 'domain') return this.domainResources();
-    if (active === 'backups') return this.backups();
+    if (active === 'protection') return this.backups();
     if (active === 'events') return this.events();
-    if (active === 'claims') return this.claims();
-    if (active === 'upgrade') return this.upgrade();
+    if (active === 'provisioning') return this.claims();
+    if (active === 'operations') return this.operations();
     return this.documentation();
   }
 
   overview() {
-    return `<section class="pgp-steps" aria-label="${esc(SPEC.displayName)} 실행 단계">
-      <button type="button" class="pgp-step current" data-tab="operator"><span class="pgp-step-n">1</span><span><b>Package 활성</b><small>서명·digest·권한 검증 완료</small></span></button>
-      <button type="button" class="pgp-step" data-tab="cluster"><span class="pgp-step-n">2</span><span><b>Operand 계획</b><small>버전·리소스·스토리지·보호 정책</small></span></button>
-      <button type="button" class="pgp-step" data-tab="topology"><span class="pgp-step-n">3</span><span><b>운영 관리</b><small>전용 reconciler가 제공하는 실상태</small></span></button>
-    </section>
-    <section class="pgp-dashboard">
-      <article class="pgp-panel"><h2>Package readiness</h2><p>활성 package와 Host API 연결 상태입니다.</p><dl class="os-kv"><dt>Signed package</dt><dd>${statePill('ok', 'Activated')}</dd><dt>Host API</dt><dd data-runtime-api>${statePill('info', '확인 중')}</dd><dt>Installer</dt><dd>${esc(SPEC.installer)}</dd><dt>Capability</dt><dd><code>${esc(SPEC.capability)}</code></dd></dl></article>
-      <article class="pgp-panel"><h2>Operand state</h2><p>package 활성과 operand 설치는 별도 상태입니다.</p><strong data-operand-state>설치 상태 확인 필요</strong><p class="os-sub">실제 operand 상태는 Foundation Control Plane의 선언·condition으로 판정합니다.</p><button class="btn btn-sm btn-primary" type="button" data-tab="cluster">Cluster plan 검토</button></article>
-      <article class="pgp-panel"><h2>Operations contract</h2><dl class="os-kv"><dt>Namespace</dt><dd><code>${esc(SPEC.namespace)}</code></dd><dt>Mutable tag apply</dt><dd>금지</dd><dt>Secret ownership</dt><dd>SecretRef only</dd><dt>Manual</dt><dd>${statePill('ok', 'Registered')}</dd></dl></article>
+    return `<section class="pgp-dashboard">
+      <article class="pgp-panel"><h2>서비스 상태</h2><p>선택한 Namespace의 실제 operand와 Host API 상태입니다.</p><dl class="os-kv"><dt>Lifecycle</dt><dd>${statePill('ok', 'Package active')}</dd><dt>Host API</dt><dd data-runtime-api>${statePill('info', '확인 중')}</dd><dt>Runtime</dt><dd data-operand-state>상태 확인 중</dd><dt>Namespace</dt><dd><code>${esc(SPEC.namespace)}</code></dd></dl></article>
+      <article class="pgp-panel"><h2>Operator 연결</h2><p>요청은 공통 Claim으로 받고 제품별 driver가 native resource를 수렴합니다.</p><dl class="os-kv"><dt>Driver</dt><dd>${esc(SPEC.control.operatorDriver)}</dd><dt>Native resource</dt><dd><code>${esc(SPEC.control.nativeResource)}</code></dd><dt>Reconciler</dt><dd>${statePill(SPEC.control.reconciler === 'implemented' ? 'ok' : 'warn', SPEC.control.reconciler)}</dd></dl><button class="btn btn-sm btn-primary" type="button" data-tab="operator">Operator 확인</button></article>
+      <article class="pgp-panel"><h2>소비 계약</h2><p>연결 정보는 FoundationBinding과 SecretRef로만 소비자에게 발급합니다.</p><dl class="os-kv"><dt>Request types</dt><dd>${esc((SPEC.control.requestTypes || []).join(' · '))}</dd><dt>Capabilities</dt><dd>${esc((SPEC.control.capabilities || []).join(' · ') || '—')}</dd><dt>Mutable tags</dt><dd>적용 금지</dd></dl><button class="btn btn-sm" type="button" data-tab="provisioning">요청 관리</button></article>
     </section>`;
+  }
+
+  monitoring() {
+    return `<section class="rm-work"><h2>Monitoring</h2><p>제품별 exporter와 Kubernetes condition을 같은 시간축으로 관찰합니다.</p><div class="pgp-dashboard"><article class="pgp-panel"><h3>Runtime condition</h3><strong data-operand-state>상태 확인 중</strong><p class="os-sub">준비 상태를 임의의 0 값으로 대체하지 않습니다.</p></article><article class="pgp-panel"><h3>Telemetry source</h3><dl class="os-kv"><dt>Operator</dt><dd>${esc(SPEC.control.operatorDriver)}</dd><dt>Namespace</dt><dd><code>${esc(SPEC.namespace)}</code></dd><dt>Samples</dt><dd>${statePill('info', '제품 exporter 계약 확인')}</dd></dl></article><article class="pgp-panel"><h3>Reconciliation</h3><p>Kubernetes Event와 reconciler condition은 실제 제품 API에서만 표시합니다.</p><button class="btn btn-sm" type="button" data-tab="events">Events 확인</button></article></div></section>`;
   }
 
   operator() {
@@ -133,6 +167,12 @@ class FoundationPluginElement extends HTMLElement {
     return `<section class="rm-work"><h2>Cluster plan</h2><div class="rm-form"><label><span>Channel</span><input value="${esc(SPEC.channel)}" disabled></label><label><span>Operator driver</span><input value="${esc(SPEC.control.operatorDriver)}" disabled></label><label><span>Native resource</span><input value="${esc(SPEC.control.nativeResource)}" disabled></label><label><span>Namespace</span><input value="${esc(SPEC.namespace)}" disabled></label></div><table class="table"><thead><tr><th>Operand image</th><th>선언</th><th>적용 정책</th></tr></thead><tbody>${operands}</tbody></table><div class="alert alert-info" role="status"><div class="alert-items"><div class="alert-item"><span class="alert-text">사용자는 FoundationClaim만 제출합니다. 제품별 Operator driver가 승인된 digest의 native resource를 선언하고 FoundationBinding으로 연결을 발급합니다.</span></div></div></div></section>`;
   }
 
+  fleet() {
+    if (!hasManagedFleet()) return this.profiles();
+    const modes = Object.entries(SPEC.control.requestModes || {}).map(([kind, mode]) => `<tr><td>${esc(kind)}</td><td>${statePill(mode === 'pending' ? 'warn' : 'ok', mode)}</td><td>${esc(SPEC.namespace)}</td></tr>`).join('');
+    return `<section class="rm-work"><h2>${esc(SPEC.displayName)} Fleet</h2><p>관리형 인스턴스와 요청 가능 범위를 Namespace 경계로 확인합니다.</p><table class="table"><thead><tr><th>Resource</th><th>Mode</th><th>Namespace</th></tr></thead><tbody>${modes}</tbody></table>${this.clusterPlan()}</section>`;
+  }
+
   topology() {
     const dependencies = SPEC.control.dependencies || [];
     const requestModes = Object.values(SPEC.control.requestModes || {});
@@ -145,6 +185,10 @@ class FoundationPluginElement extends HTMLElement {
   configuration() {
     const dependencies = (SPEC.control.dependencies || []).map((item) => `${item.required ? '필수' : 'Profile'}: ${item.module} / ${item.requestType}`).join(' · ');
     return `<section class="rm-work"><h2>Configuration</h2><dl class="os-kv"><dt>Capability</dt><dd><code>${esc(SPEC.capability)}</code></dd><dt>Namespace</dt><dd><code>${esc(SPEC.namespace)}</code></dd><dt>Operator</dt><dd>${esc(SPEC.control.operatorDriver)}</dd><dt>Native resource</dt><dd><code>${esc(SPEC.control.nativeResource)}</code></dd><dt>Request kinds</dt><dd>${(SPEC.control.requestTypes || []).map((item) => { const mode = SPEC.control.requestModes?.[item] || 'pending'; return statePill(mode === 'pending' ? 'warn' : 'info', `${item} · ${mode}`); }).join(' ')}</dd><dt>Binding capabilities</dt><dd>${(SPEC.control.capabilities || []).map((item) => `<code>${esc(item)}</code>`).join(' · ')}</dd><dt>Dependencies</dt><dd>${dependencies ? esc(dependencies) : '없음'}</dd></dl><p class="os-sub">자격 증명 원문은 입력하지 않고 동일 Namespace의 SecretRef만 참조합니다.</p></section>`;
+  }
+
+  profiles() {
+    return `<section class="rm-work"><h2>Profile Catalog</h2><p>제품별 차이는 Profile과 native resource 설정으로 표현하고 공통 수명주기 계약은 유지합니다.</p>${this.configuration()}</section>`;
   }
 
   domainResources() {
@@ -218,6 +262,10 @@ class FoundationPluginElement extends HTMLElement {
 
   upgrade() {
     return `<section class="rm-work"><h2>Upgrade & rollback</h2><table class="table"><thead><tr><th>Channel</th><th>목적</th><th>승격 조건</th></tr></thead><tbody><tr><td>stable</td><td>운영</td><td>감사·복구 증거</td></tr><tr><td>candidate</td><td>승격 검증</td><td>E2E·호환성·보안 검사</td></tr><tr><td>edge</td><td>개발</td><td>${SPEC.channel === 'edge' ? statePill('ok', '현재 package') : '기능 검증'}</td></tr></tbody></table></section>`;
+  }
+
+  operations() {
+    return `<section class="rm-work"><h2>Operations</h2><p>운영 중 변경, 재조정, 업데이트와 롤백 근거를 한곳에서 확인합니다.</p><dl class="os-kv"><dt>Reconciler</dt><dd>${esc(SPEC.control.reconciler)}</dd><dt>Driver</dt><dd>${esc(SPEC.control.operatorDriver)}</dd><dt>Native resource</dt><dd><code>${esc(SPEC.control.nativeResource)}</code></dd><dt>Apply owner</dt><dd>Foundation Control Plane</dd></dl>${this.upgrade()}</section>`;
   }
 
   documentation() {

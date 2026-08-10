@@ -25,7 +25,7 @@ const DEFAULT_FORM: OpaInstallParameters = {
   template: `
     <a class="vl-back" (click)="back()" (keydown.enter)="back()" role="button" tabindex="0"><os-cicon [icon]="iBack" [size]="16" /> PFS 모듈</a>
     <section class="pgp-page-frame" aria-label="OPA plugin 개요와 메뉴">
-      <osp-plugin-page-header [model]="headerModel()" headingId="opa-plugin-title" />
+      <osp-plugin-page-header [model]="headerModel()" headingId="opa-plugin-title" (managementSelected)="openTab($event)" />
       <osp-plugin-tabs [tabs]="tabsForUi()" [active]="tab()" ariaLabel="OPA plugin 메뉴" (selected)="openTab($event)" />
     </section>
 
@@ -118,7 +118,7 @@ export class OpaComponent implements OnInit, OnDestroy {
 		lifecycleClass: this.productionReady() ? 'label-success' : 'label-warning', version: this.svc.fm()?.spec?.parameters?.identityEngines?.opa?.version || '1.18.2-static',
 		profile: 'production · fail-closed', namespace: 'opensphere-foundation',
   }));
-  private readonly tabs: PluginPageTab[] = (() => { const tabs = pfsPluginTabs('Policies & Decisions'); tabs.splice(1, 0, { id: 'monitoring', label: 'Monitoring' }); return tabs; })();
+  private readonly tabs: PluginPageTab[] = pfsPluginTabs('Policies & Decisions');
 
   ngOnInit(): void { this.svc.start(); this.metrics.start(); this.hydrate(); }
   ngOnDestroy(): void { this.svc.stop(); this.metrics.stop(); }

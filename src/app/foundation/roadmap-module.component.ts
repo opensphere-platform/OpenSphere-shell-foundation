@@ -134,7 +134,7 @@ const DEFINITIONS: Record<string, Partial<RoadmapDefinition>> = {
   template: `
     <button class="btn btn-sm btn-link rm-back" type="button" (click)="back()">← PFS 모듈</button>
     <section class="pgp-page-frame" [attr.aria-label]="module.name + ' plugin 개요와 메뉴'">
-      <osp-plugin-page-header [model]="headerModel()" [headingId]="module.id + '-plugin-title'" />
+      <osp-plugin-page-header [model]="headerModel()" [headingId]="module.id + '-plugin-title'" (managementSelected)="select($event)" />
       <osp-plugin-tabs [tabs]="tabs" [active]="active()" [ariaLabel]="module.name + ' 관리 메뉴'" (selected)="select($event)" />
     </section>
 
@@ -165,6 +165,8 @@ const DEFINITIONS: Record<string, Partial<RoadmapDefinition>> = {
       <div class="rm-form"><label><span>Channel</span><select disabled><option>edge · exact digest</option></select></label><label><span>Profile</span><input [value]="def().profile" disabled /></label><label><span>Namespace</span><input [value]="def().namespace" disabled /></label></div>
       <clr-alert clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item><span class="alert-text">Operator 설치·업데이트는 Platform Release가, operand 설정과 의존성 Claim은 FoundationModel이 소유합니다. 이 페이지는 별도의 우회 설치 경로를 만들지 않습니다.</span></clr-alert-item></clr-alert>
     </section>
+
+    <section class="rm-work" *ngIf="active()==='monitoring'"><h2>Monitoring</h2><p>제품별 exporter와 Kubernetes condition이 준비되기 전에는 합성 수치를 표시하지 않습니다.</p><dl class="os-kv"><dt>Module</dt><dd>{{module.name}}</dd><dt>Profile</dt><dd>{{def().profile}}</dd><dt>Namespace</dt><dd class="os-mono">{{def().namespace}}</dd></dl></section>
 
     <section class="rm-work" *ngIf="active()==='topology'">
       <h2>Topology & workloads</h2><div class="rm-topology"><article *ngFor="let item of def().components"><span class="rm-node">{{item}}</span><span class="label label-success">Managed</span></article></div>

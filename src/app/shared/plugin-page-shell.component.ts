@@ -15,6 +15,7 @@ export interface PluginPageHeaderModel {
   version: string;
   profile: string;
   namespace?: string;
+  managedFleet?: boolean;
 }
 
 export interface PluginPageTab {
@@ -42,23 +43,21 @@ export function deliveryAdminTabs(resourceLabel: string): PluginPageTab[] {
   ];
 }
 
-/** PostgreSQL plugin이 확립한 PFS 상세 화면의 정본 11탭 계약. */
+/** PostgreSQL plugin이 확립한 PFS 상세 화면 계약. 관리 작업은 header action으로 분리한다. */
 export type PfsPluginTabId =
-  | 'overview' | 'operator' | 'cluster' | 'topology' | 'config'
-  | 'domain' | 'backups' | 'events' | 'claims' | 'upgrade' | 'documentation';
+  | 'overview' | 'monitoring' | 'topology' | 'domain' | 'backups'
+  | 'upgrade' | 'events' | 'documentation'
+  | 'operator' | 'cluster' | 'config' | 'claims';
 
 export function pfsPluginTabs(domainLabel: string): PluginPageTab[] {
   return [
     { id: 'overview', label: 'Overview' },
-    { id: 'operator', label: 'Operator' },
-    { id: 'cluster', label: 'Cluster plan' },
+    { id: 'monitoring', label: 'Monitoring' },
     { id: 'topology', label: 'Topology' },
-    { id: 'config', label: 'Configuration' },
     { id: 'domain', label: domainLabel },
-    { id: 'backups', label: 'Backups' },
+    { id: 'backups', label: 'Data Protection' },
+    { id: 'upgrade', label: 'Operations' },
     { id: 'events', label: 'Events' },
-    { id: 'claims', label: 'Claims' },
-    { id: 'upgrade', label: 'Upgrade' },
     { id: 'documentation', label: 'Documentation' },
   ];
 }
@@ -96,6 +95,12 @@ export function pfsPluginTabs(domainLabel: string): PluginPageTab[] {
         <div *ngIf="model.namespace"><dt>Namespace</dt><dd class="os-mono">{{ model.namespace }}</dd></div>
         <ng-content select="[pluginHeaderContext]" />
       </dl>
+      <nav class="pfs-operator-actions" aria-label="플랫폼 관리 작업">
+        <button *ngIf="model.managedFleet" type="button" title="Fleet" aria-label="Fleet" (click)="managementSelected.emit('cluster')">☷</button>
+        <button type="button" title="Profiles" aria-label="Profiles" (click)="managementSelected.emit('config')">▤</button>
+        <button type="button" title="Provisioning" aria-label="Provisioning" (click)="managementSelected.emit('claims')">⊞</button>
+        <button type="button" title="Operator" aria-label="Operator" (click)="managementSelected.emit('operator')">⚙</button>
+      </nav>
     </section>
   `,
   styles: [`
@@ -114,11 +119,31 @@ export function pfsPluginTabs(domainLabel: string): PluginPageTab[] {
       object-fit: contain;
       flex: 0 0 auto;
     }
+    .pfs-plugin-head { position: relative; }
+    .pfs-operator-actions {
+      position: absolute;
+      right: .8rem;
+      top: .55rem;
+      display: flex;
+      gap: .15rem;
+    }
+    .pfs-operator-actions button {
+      width: 2rem;
+      height: 2rem;
+      border: 0;
+      background: transparent;
+      color: #7b1fa2;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    .pfs-operator-actions button:hover,
+    .pfs-operator-actions button:focus-visible { background: #f4eafa; }
   `],
 })
 export class PluginPageHeaderComponent {
   @Input({ required: true }) model!: PluginPageHeaderModel;
   @Input() headingId = 'pfs-plugin-page-title';
+  @Output() readonly managementSelected = new EventEmitter<PfsPluginTabId>();
 }
 
 @Component({
