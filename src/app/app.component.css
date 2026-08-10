@@ -363,10 +363,10 @@ pg-metric { display: block; height: 100%; }
 
 /* PostgreSQL pilot: identity, release metadata, and local navigation are one page surface. */
 .pgp-page-frame { margin: 0 0 18px; overflow: hidden; background: #fff; border: 0; box-shadow: none; }
-.pgp-page-frame .pfs-plugin-head { min-height: 6rem; margin: 0; padding: 14px 10px 16px; border: 0; }
+.pgp-page-frame .pfs-plugin-head { grid-template-columns: minmax(24rem, 1fr) minmax(0, 60%); min-height: 6rem; margin: 0; padding: 14px 10px 16px; border: 0; }
 .pgp-page-frame .pfs-plugin-logo { border: 0; border-radius: 0; background: transparent; }
 .pgp-page-frame .pfs-plugin-logo img { width: 55px; height: 55px; }
-.pgp-page-frame .pfs-plugin-release { grid-template-columns: minmax(5.5rem, 0.65fr) minmax(5rem, 0.6fr) minmax(10rem, 1.2fr) minmax(27rem, 2.8fr); }
+.pgp-page-frame .pfs-plugin-release { grid-template-columns: minmax(5.5rem, 0.65fr) minmax(5rem, 0.6fr) minmax(10rem, 1.2fr) minmax(0, 2.8fr); justify-self: end; width: 100%; }
 .pgp-page-frame .pfs-plugin-release > div { min-width: 0; padding: 0 10px; overflow: hidden; }
 .pgp-page-frame .pfs-plugin-release dd { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pgp-page-frame .pfs-plugin-release .label { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
