@@ -81,6 +81,11 @@ const PG_COLUMN_TYPES = Object.freeze(new Set([
   'timestamp', 'timestamp with time zone', 'uuid', 'varchar(255)',
 ]));
 const PG_DEFAULTS = Object.freeze(new Set(['', 'now()', 'gen_random_uuid()', 'true', 'false']));
+const STACKGRES_EXTENSION_INDEX_URL = process.env.STACKGRES_EXTENSION_INDEX_URL
+  || 'https://extensions.stackgres.io/postgres/repository/v2/index.json';
+const STACKGRES_EXTENSION_CACHE_MS = Number(process.env.STACKGRES_EXTENSION_CACHE_MS || 60 * 60 * 1000);
+const PG_EXTENSION_RE = /^[A-Za-z_][A-Za-z0-9_$-]{0,62}$/;
+const PG_EXTENSION_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/;
 const POSTGRES_PROFILE_KINDS = Object.freeze({
   instance: Object.freeze({ apiVersion: 'stackgres.io/v1', apiKind: 'SGInstanceProfile', resource: 'sginstanceprofiles' }),
   postgres: Object.freeze({ apiVersion: 'stackgres.io/v1', apiKind: 'SGPostgresConfig', resource: 'sgpgconfigs' }),
@@ -90,6 +95,7 @@ const POSTGRES_PROFILE_KINDS = Object.freeze({
 const POSTGRES_RUNTIME_CATALOG = 'opensphere-stackgres';
 const pgPools = new Map();
 const pgCredentialCache = new Map();
+let stackGresExtensionCache = { fetchedAt: 0, body: null };
 const POSTGRES_DEFAULT_ID = 'stackgres:' + FND_NS + ':' + POSTGRES_ADMIN.cluster;
 const FOUNDATION_API = '/apis/foundation.opensphere.io/v1alpha1';
 const HIS_STATUS_SCHEMA = 'his-status.opensphere.io/v1alpha1';
@@ -199,6 +205,70 @@ function parsePostgresClusterId(value) {
   if (!match) throw { code: 400, msg: 'cluster must be stackgres:namespace:name' };
   return { id, provider: 'stackgres', namespace: match[1], name: match[3] };
 }
+function postgresExtensionName(value, field = 'extension name') {
+  const name = String(value || '').trim();
+  if (!PG_EXTENSION_RE.test(name)) throw { code: 400, msg: `${field} is not a supported PostgreSQL extension identifier` };
+  return name;
+}
+function postgresExtensionVersion(value, field = 'extension version') {
+  const version = String(value || '').trim();
+  if (version && !PG_EXTENSION_VERSION_RE.test(version)) throw { code: 400, msg: `${field} is not a supported StackGres extension version` };
+  return version;
+}
+function sanitizePostgresExtensions(value) {
+  if (!Array.isArray(value) || value.length > 32) throw { code: 400, msg: 'extensions must be an array with at most 32 items' };
+  const seen = new Set();
+  return value.map((item, index) => {
+    requireClosedOwnerBody(item, ['name', 'version', 'publisher', 'repository']);
+    const name = postgresExtensionName(item.name, `extensions[${index}].name`);
+    const publisher = String(item.publisher || '').trim();
+    const repository = String(item.repository || '').trim();
+    if (publisher && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(publisher)) throw { code: 400, msg: `extensions[${index}].publisher is invalid` };
+    if (repository && !/^https:\/\//.test(repository)) throw { code: 400, msg: `extensions[${index}].repository must use https` };
+    const identity = name;
+    if (seen.has(identity)) throw { code: 400, msg: `duplicate extension: ${name}` };
+    seen.add(identity);
+    const version = postgresExtensionVersion(item.version, `extensions[${index}].version`);
+    return { name, ...(version ? { version } : {}), ...(publisher ? { publisher } : {}), ...(repository ? { repository } : {}) };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+}
+function postgresExtensionSpecDiff(before, after) {
+  const key = (item) => item.name;
+  const previous = new Map((before || []).map((item) => [key(item), item]));
+  const next = new Map((after || []).map((item) => [key(item), item]));
+  return {
+    add: [...next].filter(([id]) => !previous.has(id)).map(([, item]) => item),
+    update: [...next].filter(([id, item]) => previous.has(id) && JSON.stringify(previous.get(id)) !== JSON.stringify(item)).map(([, item]) => item),
+    remove: [...previous].filter(([id]) => !next.has(id)).map(([, item]) => item),
+  };
+}
+function stackGresExtensionVersions(item, postgresVersion, flavor = 'vanilla') {
+  const major = String(postgresVersion || '').split('.')[0];
+  return (item?.versions || []).filter((version) => (version.availableFor || []).some((build) =>
+    String(build.postgresVersion || '').split('.')[0] === major && String(build.flavor || 'vanilla') === flavor))
+    .map((version) => String(version.version)).filter(Boolean);
+}
+async function stackGresExtensionCatalog(postgresVersion, catalogFetch = fetch) {
+  const now = Date.now();
+  if (!stackGresExtensionCache.body || now - stackGresExtensionCache.fetchedAt > STACKGRES_EXTENSION_CACHE_MS) {
+    const response = await catalogFetch(STACKGRES_EXTENSION_INDEX_URL, {
+      headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) throw { code: 502, msg: `StackGres extension catalog HTTP ${response.status}` };
+    stackGresExtensionCache = { fetchedAt: now, body: await response.json() };
+  }
+  const extensions = (stackGresExtensionCache.body?.extensions || []).map((item) => {
+    const versions = stackGresExtensionVersions(item, postgresVersion);
+    if (!versions.length) return null;
+    const channels = Object.fromEntries(Object.entries(item.channels || {}).filter(([, version]) => versions.includes(String(version))));
+    return {
+      name: item.name, publisher: item.publisher || 'com.ongres', repository: item.repository || '',
+      license: item.license || '', abstract: item.abstract || '', description: item.description || '',
+      tags: Array.isArray(item.tags) ? item.tags : [], versions, channels,
+    };
+  }).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
+  return { extensions, publishers: stackGresExtensionCache.body?.publishers || [], source: STACKGRES_EXTENSION_INDEX_URL };
+}
 function postgresClusterProjection(item) {
   const namespace = item?.metadata?.namespace || '';
   const name = item?.metadata?.name || '';
@@ -219,6 +289,8 @@ function postgresClusterProjection(item) {
     storage: item?.spec?.pods?.persistentVolume?.size || item?.spec?.storage?.size || '',
     plan: item?.metadata?.labels?.['catalog.opensphere.io/plan'] || '',
     bindingSecret: item?.status?.binding?.name || name + '-binding',
+    extensions: sanitizePostgresExtensions(item?.spec?.postgres?.extensions || []),
+    extensionStatus: Array.isArray(item?.status?.extensions) ? item.status.extensions : [],
     uid: item?.metadata?.uid || '', createdAt: item?.metadata?.creationTimestamp || null,
   };
 }
@@ -234,6 +306,78 @@ async function postgresFleetClusters(req, res) {
     return jsonRes(res, 200, { schema: 'foundation.postgres.fleet/v1beta1', clusters, refreshedAt: new Date().toISOString() });
   } catch (e) {
     return jsonRes(res, typeof e.code === 'number' ? e.code : 502, { error: e.msg || e.message || String(e) });
+  }
+}
+async function postgresExtensions(req, res, url) {
+  if (!['GET', 'POST'].includes(req.method || '')) return jsonRes(res, 405, { error: 'method not allowed' });
+  let actor;
+  try {
+    actor = req.method === 'POST' ? await foundationOwnerActor(req) : requireConsoleAdmin(await verifyToken(requestToken(req)));
+    if (req.method === 'GET') {
+      const clusterId = url.searchParams.get('cluster') || '';
+      let cluster = null;
+      let postgresVersion = String(url.searchParams.get('postgresVersion') || '').trim();
+      if (clusterId) {
+        const target = parsePostgresClusterId(clusterId);
+        const result = await k8sJson('GET', `/apis/stackgres.io/v1/namespaces/${target.namespace}/sgclusters/${target.name}`, undefined, actor);
+        if (!result.ok) throw { code: result.status, msg: 'StackGres cluster unavailable: ' + k8sFailure(result) };
+        cluster = result.json;
+        postgresVersion = String(cluster?.spec?.postgres?.version || postgresVersion);
+      }
+      if (!/^\d+(?:\.\d+)?$/.test(postgresVersion)) throw { code: 400, msg: 'postgresVersion must be derived from an AddOnPlan or SGCluster' };
+      const catalog = await stackGresExtensionCatalog(postgresVersion);
+      const desired = sanitizePostgresExtensions(cluster?.spec?.postgres?.extensions || []);
+      return jsonRes(res, 200, {
+        schema: 'foundation.postgres.extensions/v1alpha1', postgresVersion,
+        catalog: catalog.extensions, publishers: catalog.publishers, source: catalog.source,
+        desired, observed: Array.isArray(cluster?.status?.extensions) ? cluster.status.extensions : [],
+        pendingRestart: Boolean(cluster?.status?.extensionsPendingRestart || cluster?.status?.pendingRestart),
+        refreshedAt: new Date().toISOString(),
+      });
+    }
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['cluster', 'extensions', 'reason', 'dryRun']);
+    if (!String(body.cluster || '').trim()) throw { code: 400, msg: 'cluster is required; OpenSphere does not select an implicit PostgreSQL instance' };
+    const target = parsePostgresClusterId(body.cluster);
+    const reason = requireOwnerReason(body.reason);
+    const desired = sanitizePostgresExtensions(body.extensions);
+    await requireManagedPostgresNamespace(target.namespace, actor);
+    const clusterPath = `/apis/stackgres.io/v1/namespaces/${target.namespace}/sgclusters/${target.name}`;
+    const current = await k8sJson('GET', clusterPath, undefined, actor);
+    if (!current.ok) throw { code: current.status, msg: 'StackGres cluster unavailable: ' + k8sFailure(current) };
+    const postgresVersion = String(current.json?.spec?.postgres?.version || '');
+    const catalog = await stackGresExtensionCatalog(postgresVersion);
+    const available = new Map(catalog.extensions.map((item) => [`${item.publisher || 'com.ongres'}/${item.name}`, item]));
+    for (const item of desired) {
+      const entry = available.get(`${item.publisher || 'com.ongres'}/${item.name}`);
+      if (!entry) throw { code: 400, msg: `${item.name} is not compatible with PostgreSQL ${postgresVersion}` };
+      if (item.version && !entry.versions.includes(item.version)) throw { code: 400, msg: `${item.name} ${item.version} is not compatible with PostgreSQL ${postgresVersion}` };
+    }
+    const before = sanitizePostgresExtensions(current.json?.spec?.postgres?.extensions || []);
+    const diff = postgresExtensionSpecDiff(before, desired);
+    const impact = {
+      restartMayBeRequired: diff.update.length > 0 || diff.remove.length > 0,
+      databaseActivationRequired: diff.add.map((item) => item.name),
+      removedBinaries: diff.remove.map((item) => item.name),
+    };
+    const claimName = String(current.json?.metadata?.labels?.['provisioning.opensphere.io/postgres-claim'] || '');
+    if (!claimName) throw { code: 409, msg: 'Extensions can only be changed through the owning PostgresClaim' };
+    const claimPath = `/apis/provisioning.opensphere.io/v1beta1/namespaces/${target.namespace}/postgresclaims/${claimName}`;
+    const claim = await k8sJson('GET', claimPath, undefined, actor);
+    if (!claim.ok) throw { code: claim.status, msg: 'PostgresClaim authority unavailable: ' + k8sFailure(claim) };
+    const patch = { metadata: { resourceVersion: claim.json?.metadata?.resourceVersion }, spec: { extensions: desired } };
+    const validation = await k8sJson('PATCH', `${claimPath}?dryRun=All&fieldManager=opensphere-foundation`, patch, actor);
+    if (!validation.ok) throw { code: validation.status, msg: `Extension dry-run rejected: ${k8sFailure(validation)}` };
+    if (body.dryRun === true) return jsonRes(res, 200, { accepted: true, dryRun: true, cluster: target.id, before, desired, diff, impact });
+    const auditTarget = `PostgresClaim/${target.namespace}/${claimName}`;
+    await publishFoundationAudit(actor, 'postgres-extensions-apply', auditTarget, 'attempt', reason);
+    const applied = await k8sJson('PATCH', claimPath, patch, actor);
+    if (!applied.ok) throw { code: applied.status, msg: k8sFailure(applied) };
+    await publishFoundationAudit(actor, 'postgres-extensions-apply', auditTarget, 'accepted', reason);
+    return jsonRes(res, 200, { accepted: true, cluster: target.id, authority: auditTarget, before, desired, diff, impact, resourceVersion: applied.json?.metadata?.resourceVersion || '' });
+  } catch (e) {
+    if (actor && req.method === 'POST') await publishFoundationAudit(actor, 'postgres-extensions-apply', 'PostgresClaim', 'failed', e.msg || e.message || String(e)).catch(() => {});
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 400, { error: e.msg || e.message || String(e) });
   }
 }
 async function postgresFleetNamespaces(req, res) {
@@ -284,6 +428,97 @@ async function postgresFleetNamespaces(req, res) {
     return jsonRes(res, created.status === 409 ? 200 : 201, { accepted: true, created: created.status !== 409, namespace: name });
   } catch (e) {
     if (actor && req.method === 'POST') await publishFoundationAudit(actor, 'postgres-namespace-create', 'Namespace', 'failed', e.msg || e.message || String(e)).catch(() => {});
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 400, { error: e.msg || e.message || String(e) });
+  }
+}
+
+async function requireManagedPostgresNamespace(namespace, actor) {
+  const result = await k8sJson('GET', `/api/v1/namespaces/${namespace}`, undefined, actor);
+  if (!result.ok) throw { code: result.status, msg: `Namespace ${namespace} is unavailable: ${k8sFailure(result)}` };
+  const labels = result.json?.metadata?.labels || {};
+  const managed = labels['opensphere.io/managed-by'] === 'foundation'
+    || labels['app.kubernetes.io/managed-by'] === 'foundation-control-plane';
+  if (!managed) throw { code: 403, msg: `Namespace ${namespace} is not admitted for Foundation PostgreSQL` };
+}
+function sanitizePostgresClaimProfileRefs(value) {
+  if (value === undefined) return undefined;
+  profileOnlyKeys(value, ['instanceProfile', 'postgresConfig', 'poolingConfig', 'objectStorage'], 'profileRefs');
+  return Object.fromEntries(Object.entries(value)
+    .filter(([, item]) => String(item || '').trim())
+    .map(([key, item]) => [key, requireK8sName(item, `profileRefs.${key}`)]));
+}
+function postgresClaimResource(body) {
+  const name = requireK8sName(body.name, 'claim name');
+  const namespace = requireK8sName(body.namespace, 'namespace');
+  const database = pgName(body.database, 'database');
+  const owner = pgName(body.owner, 'owner');
+  const plan = requireK8sName(body.plan, 'plan');
+  const postgresVersion = String(body.postgresVersion || '').trim();
+  if (!/^\d+(?:\.\d+)?$/.test(postgresVersion)) throw { code: 400, msg: 'postgresVersion must be selected from the approved runtime catalog' };
+  const deletionPolicy = String(body.deletionPolicy || 'Retain');
+  if (!['Retain', 'Delete'].includes(deletionPolicy)) throw { code: 400, msg: 'deletionPolicy must be Retain or Delete' };
+  const alias = String(body.alias || '').trim();
+  if (!alias || alias.length > 160) throw { code: 400, msg: 'alias must be 1..160 characters' };
+  const spec = { planRef: { name: plan }, isolation: 'Dedicated', database, owner, postgresVersion, deletionPolicy };
+  const extensions = body.extensions === undefined ? undefined : sanitizePostgresExtensions(body.extensions);
+  const profileRefs = sanitizePostgresClaimProfileRefs(body.profileRefs);
+  if (extensions?.length) spec.extensions = extensions;
+  if (profileRefs && Object.keys(profileRefs).length) spec.profileRefs = profileRefs;
+  if (body.storage !== undefined) {
+    profileOnlyKeys(body.storage, ['size', 'storageClass'], 'storage');
+    const size = String(body.storage.size || '').trim();
+    const storageClass = String(body.storage.storageClass || '').trim();
+    if (size && !/^[0-9]+(?:Mi|Gi|Ti)$/.test(size)) throw { code: 400, msg: 'storage.size must be a binary quantity such as 20Gi' };
+    if (storageClass) requireK8sName(storageClass, 'storage.storageClass');
+    spec.storage = { ...(size ? { size } : {}), ...(storageClass ? { storageClass } : {}) };
+  }
+  return {
+    apiVersion: 'provisioning.opensphere.io/v1beta1', kind: 'PostgresClaim',
+    metadata: {
+      name, namespace,
+      labels: { 'opensphere.io/managed-by': 'foundation', 'opensphere.io/component': 'postgres-fleet' },
+      annotations: { 'opensphere.io/display-name': alias },
+    },
+    spec,
+  };
+}
+async function postgresClaims(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  let actor;
+  try {
+    actor = await foundationOwnerActor(req);
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['name', 'namespace', 'alias', 'database', 'owner', 'plan', 'postgresVersion', 'deletionPolicy', 'extensions', 'profileRefs', 'storage', 'reason', 'confirm', 'dryRun']);
+    const reason = requireOwnerReason(body.reason);
+    const resource = postgresClaimResource(body);
+    requireOwnerConfirm(body.confirm, resource.metadata.name);
+    await requireManagedPostgresNamespace(resource.metadata.namespace, actor);
+    const planResult = await k8sJson('GET', `/apis/catalog.opensphere.io/v1alpha1/addonplans/${resource.spec.planRef.name}`, undefined, actor);
+    if (!planResult.ok) throw { code: planResult.status, msg: `AddOnPlan unavailable: ${k8sFailure(planResult)}` };
+    const planVersion = String(planResult.json?.spec?.postgresVersion || '');
+    if (planVersion && planVersion.split('.')[0] !== resource.spec.postgresVersion.split('.')[0]) {
+      throw { code: 400, msg: `PostgreSQL ${resource.spec.postgresVersion} is incompatible with AddOnPlan ${resource.spec.planRef.name}` };
+    }
+    const path = `/apis/provisioning.opensphere.io/v1beta1/namespaces/${resource.metadata.namespace}/postgresclaims`;
+    const existing = await k8sJson('GET', `${path}/${resource.metadata.name}`, undefined, actor);
+    if (existing.ok) {
+      const same = JSON.stringify(existing.json?.spec || {}) === JSON.stringify(resource.spec)
+        && existing.json?.metadata?.annotations?.['opensphere.io/display-name'] === resource.metadata.annotations['opensphere.io/display-name'];
+      if (!same) throw { code: 409, msg: `PostgresClaim ${resource.metadata.namespace}/${resource.metadata.name} already exists with a different contract` };
+      return jsonRes(res, 200, { accepted: true, created: false, namespace: resource.metadata.namespace, name: resource.metadata.name });
+    }
+    if (existing.status !== 404) throw { code: existing.status, msg: k8sFailure(existing) };
+    const validation = await k8sJson('POST', `${path}?dryRun=All&fieldManager=opensphere-foundation`, resource, actor);
+    if (!validation.ok) throw { code: validation.status, msg: `PostgresClaim dry-run rejected: ${k8sFailure(validation)}` };
+    if (body.dryRun === true) return jsonRes(res, 200, { accepted: true, dryRun: true, resource: validation.json || resource });
+    const target = `PostgresClaim/${resource.metadata.namespace}/${resource.metadata.name}`;
+    await publishFoundationAudit(actor, 'postgres-claim-create', target, 'attempt', reason);
+    const created = await k8sJson('POST', path, resource, actor);
+    if (!created.ok) throw { code: created.status, msg: k8sFailure(created) };
+    await publishFoundationAudit(actor, 'postgres-claim-create', target, 'accepted', reason);
+    return jsonRes(res, 201, { accepted: true, created: true, namespace: resource.metadata.namespace, name: resource.metadata.name });
+  } catch (e) {
+    if (actor) await publishFoundationAudit(actor, 'postgres-claim-create', 'PostgresClaim', 'failed', e.msg || e.message || String(e)).catch(() => {});
     return jsonRes(res, typeof e.code === 'number' ? e.code : 400, { error: e.msg || e.message || String(e) });
   }
 }
@@ -2428,8 +2663,10 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/foundation/psmdb/collection') return psmdbCollection(req, res);
     if (p === '/api/foundation/psmdb/user') return psmdbUser(req, res);
     if (p === '/api/foundation/postgres/clusters') return postgresFleetClusters(req, res);
+    if (p === '/api/foundation/postgres/extensions') return postgresExtensions(req, res, new URL(req.url || '/', 'http://localhost'));
     if (p === '/api/foundation/postgres/runtimes') return postgresRuntimes(req, res);
     if (p === '/api/foundation/postgres/namespaces') return postgresFleetNamespaces(req, res);
+    if (p === '/api/foundation/postgres/claims') return postgresClaims(req, res);
     if (p === '/api/foundation/postgres/backup-targets') return postgresBackupTargets(req, res);
     if (p === '/api/foundation/postgres/profiles') return postgresProfiles(req, res, new URL(req.url || '/', 'http://localhost'));
     if (p === '/api/foundation/postgres/operator') return postgresOperator(req, res);
@@ -2527,7 +2764,10 @@ if (require.main === module) {
     validateHisStatusContract,
     parseResp, encodeRespCommand, parseInfo, sanitizeAclLine, requireValkeyDb, requireValkeyKey,
     postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost, postgresBindingDatabase,
-    parsePostgresClusterId, postgresClusterProjection, postgresRuntimeCatalogProjection, postgresProfileKind, sanitizePostgresProfileSpec, profileReferenceCounts, profileSpecDiff,
+    parsePostgresClusterId, postgresClusterProjection, postgresRuntimeCatalogProjection,
+    postgresExtensionName, postgresExtensionVersion, sanitizePostgresExtensions, postgresExtensionSpecDiff,
+    stackGresExtensionVersions, stackGresExtensionCatalog, postgresClaimResource,
+    postgresProfileKind, sanitizePostgresProfileSpec, profileReferenceCounts, profileSpecDiff,
     postgresOperationPlan, postgresBackupPlan,
     foundationBootstrapState,
     HIS_STATUS_SCHEMA, FOUNDATION_CORE_CRDS,

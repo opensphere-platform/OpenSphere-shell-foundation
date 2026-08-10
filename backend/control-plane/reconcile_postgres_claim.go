@@ -33,6 +33,8 @@ var (
 const postgresFleetFinalizer = "provisioning.opensphere.io/postgres-cluster-protect"
 
 var postgresIdentifier = regexp.MustCompile("^[A-Za-z_][A-Za-z0-9_$-]{0,62}$")
+var postgresExtensionVersion = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
+var postgresVersionIdentifier = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+)?$`)
 
 type postgresClaimReconciler struct {
 	cached client.Client
@@ -56,6 +58,10 @@ type postgresProfileRefs struct {
 	PostgresConfig  string
 	PoolingConfig   string
 	ObjectStorage   string
+}
+
+type postgresExtension struct {
+	Name, Version, Publisher, Repository string
 }
 
 func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -102,6 +108,9 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 	}
 	if err := validatePostgresClaim(claim); err != nil {
 		return r.reject(ctx, nn, "InvalidClaim", err.Error())
+	}
+	if requested, _, _ := unstructured.NestedString(claim.Object, "spec", "postgresVersion"); requested != "" && strings.Split(requested, ".")[0] != strings.Split(plan.Version, ".")[0] {
+		return r.reject(ctx, nn, "UnsupportedPostgresVersion", fmt.Sprintf("PostgreSQL %s is incompatible with AddOnPlan %s (%s)", requested, plan.Name, plan.Version))
 	}
 
 	password, err := r.ensureApplicationSecret(ctx, claim)
@@ -512,6 +521,12 @@ func validatePostgresClaim(claim *unstructured.Unstructured) error {
 			return fmt.Errorf("spec.profileRefs.%s is not a supported Kubernetes resource name", field)
 		}
 	}
+	if version, _, _ := unstructured.NestedString(claim.Object, "spec", "postgresVersion"); version != "" && !postgresVersionIdentifier.MatchString(version) {
+		return fmt.Errorf("spec.postgresVersion is not a supported PostgreSQL version")
+	}
+	if _, err := postgresClaimExtensions(claim); err != nil {
+		return err
+	}
 	mode := postgresClaimMode(claim)
 	switch mode {
 	case postgresModeDedicated:
@@ -529,6 +544,51 @@ func validatePostgresClaim(claim *unstructured.Unstructured) error {
 		return fmt.Errorf("spec.isolation %q is not supported", mode)
 	}
 	return nil
+}
+
+func postgresClaimExtensions(claim *unstructured.Unstructured) ([]postgresExtension, error) {
+	items, found, err := unstructured.NestedSlice(claim.Object, "spec", "extensions")
+	if err != nil {
+		return nil, fmt.Errorf("spec.extensions is invalid: %w", err)
+	}
+	if !found {
+		return nil, nil
+	}
+	if len(items) > 32 {
+		return nil, fmt.Errorf("spec.extensions supports at most 32 entries")
+	}
+	seen := map[string]struct{}{}
+	result := make([]postgresExtension, 0, len(items))
+	for index, item := range items {
+		entry, ok := item.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("spec.extensions[%d] must be an object", index)
+		}
+		extension := postgresExtension{}
+		extension.Name, _, _ = unstructured.NestedString(entry, "name")
+		extension.Version, _, _ = unstructured.NestedString(entry, "version")
+		extension.Publisher, _, _ = unstructured.NestedString(entry, "publisher")
+		extension.Repository, _, _ = unstructured.NestedString(entry, "repository")
+		if !postgresIdentifier.MatchString(extension.Name) {
+			return nil, fmt.Errorf("spec.extensions[%d].name is not a supported PostgreSQL extension identifier", index)
+		}
+		if extension.Version != "" && !postgresExtensionVersion.MatchString(extension.Version) {
+			return nil, fmt.Errorf("spec.extensions[%d].version is invalid", index)
+		}
+		if extension.Publisher != "" && !regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`).MatchString(extension.Publisher) {
+			return nil, fmt.Errorf("spec.extensions[%d].publisher is invalid", index)
+		}
+		if extension.Repository != "" && !strings.HasPrefix(extension.Repository, "https://") {
+			return nil, fmt.Errorf("spec.extensions[%d].repository must use https", index)
+		}
+		identity := extension.Name
+		if _, duplicate := seen[identity]; duplicate {
+			return nil, fmt.Errorf("duplicate extension %s", identity)
+		}
+		seen[identity] = struct{}{}
+		result = append(result, extension)
+	}
+	return result, nil
 }
 
 func effectivePostgresProfileRefs(claim *unstructured.Unstructured, plan postgresPlan) postgresProfileRefs {
@@ -652,11 +712,29 @@ func renderPostgresResources(claim *unstructured.Unstructured, plan postgresPlan
 		}
 		configurations["backups"] = []interface{}{map[string]interface{}{"sgObjectStorage": objectStorage, "cronSchedule": plan.BackupSchedule}}
 	}
+	postgresSpec := map[string]interface{}{"version": plan.Version}
+	if extensions, err := postgresClaimExtensions(claim); err == nil && len(extensions) > 0 {
+		items := make([]interface{}, 0, len(extensions))
+		for _, extension := range extensions {
+			item := map[string]interface{}{"name": extension.Name}
+			if extension.Version != "" {
+				item["version"] = extension.Version
+			}
+			if extension.Publisher != "" {
+				item["publisher"] = extension.Publisher
+			}
+			if extension.Repository != "" {
+				item["repository"] = extension.Repository
+			}
+			items = append(items, item)
+		}
+		postgresSpec["extensions"] = items
+	}
 	cluster.Object["spec"] = map[string]interface{}{
 		"instances":         plan.Instances,
 		"profile":           plan.Profile,
 		"sgInstanceProfile": profileName,
-		"postgres":          map[string]interface{}{"version": plan.Version},
+		"postgres":          postgresSpec,
 		"pods":              map[string]interface{}{"persistentVolume": map[string]interface{}{"size": storageSize, "storageClass": storageClass}, "disableConnectionPooling": !plan.Pooling},
 		"configurations":    configurations,
 		"managedSql":        map[string]interface{}{"continueOnSGScriptError": false, "scripts": []interface{}{map[string]interface{}{"id": int64(1), "sgScript": script.GetName()}}},

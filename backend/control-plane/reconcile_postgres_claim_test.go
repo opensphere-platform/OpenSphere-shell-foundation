@@ -124,6 +124,53 @@ func TestClaimProfileReferenceNameIsValidated(t *testing.T) {
 	}
 }
 
+func TestClaimExtensionsRenderToStackGresCluster(t *testing.T) {
+	claim := testPostgresClaim()
+	_ = unstructured.SetNestedField(claim.Object, "18.4", "spec", "postgresVersion")
+	_ = unstructured.SetNestedSlice(claim.Object, []interface{}{
+		map[string]interface{}{"name": "pg_stat_statements", "version": "1.10", "publisher": "com.ongres"},
+	}, "spec", "extensions")
+	if err := validatePostgresClaim(claim); err != nil {
+		t.Fatalf("valid extension selection rejected: %v", err)
+	}
+	resources := renderPostgresResources(claim, postgresPlan{
+		Name: "postgresql-dev-single", Version: "18", Profile: "development",
+		CPU: "500m", Memory: "1Gi", Size: "10Gi", Instances: 1,
+	}, postgresProfileRefs{}, "SecretValue")
+	for _, resource := range resources {
+		if resource.GetKind() != "SGCluster" {
+			continue
+		}
+		exts, found, err := unstructured.NestedSlice(resource.Object, "spec", "postgres", "extensions")
+		if err != nil || !found || len(exts) != 1 {
+			t.Fatalf("StackGres extensions=%v found=%v err=%v", exts, found, err)
+		}
+		ext := exts[0].(map[string]interface{})
+		if ext["name"] != "pg_stat_statements" || ext["version"] != "1.10" || ext["publisher"] != "com.ongres" {
+			t.Fatalf("unexpected StackGres extension projection: %v", ext)
+		}
+		return
+	}
+	t.Fatal("SGCluster was not rendered")
+}
+
+func TestClaimRejectsDuplicateOrUntrustedExtensions(t *testing.T) {
+	claim := testPostgresClaim()
+	_ = unstructured.SetNestedSlice(claim.Object, []interface{}{
+		map[string]interface{}{"name": "postgis", "publisher": "com.ongres"},
+		map[string]interface{}{"name": "postgis", "publisher": "other"},
+	}, "spec", "extensions")
+	if err := validatePostgresClaim(claim); err == nil || !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("duplicate extension accepted: %v", err)
+	}
+	_ = unstructured.SetNestedSlice(claim.Object, []interface{}{
+		map[string]interface{}{"name": "postgis", "repository": "http://untrusted.example.test"},
+	}, "spec", "extensions")
+	if err := validatePostgresClaim(claim); err == nil || !strings.Contains(err.Error(), "https") {
+		t.Fatalf("untrusted extension repository accepted: %v", err)
+	}
+}
+
 func TestPostgresFleetNamespaceRequiresFoundationRegistration(t *testing.T) {
 	if !postgresFleetNamespaceAccepted("opensphere-foundation", "opensphere-foundation", nil) {
 		t.Fatal("legacy Foundation namespace must remain accepted")

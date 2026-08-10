@@ -26,6 +26,10 @@ spec:
               properties:
                 database: { type: string, pattern: '^[A-Za-z_][A-Za-z0-9_$-]{0,62}$' }
                 owner: { type: string, pattern: '^[A-Za-z_][A-Za-z0-9_$-]{0,62}$' }
+                postgresVersion:
+                  type: string
+                  pattern: '^[0-9]+(?:\.[0-9]+)?$'
+                  description: Approved PostgreSQL runtime selected by the request. Its major version must match the AddOnPlan.
                 version: { type: string }
                 engine: { type: string }
                 storageClass: { type: string }
@@ -77,6 +81,20 @@ spec:
                     postgresConfig: { type: string }
                     poolingConfig: { type: string }
                     objectStorage: { type: string }
+                extensions:
+                  type: array
+                  maxItems: 32
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys: [name]
+                  items:
+                    type: object
+                    required: [name]
+                    additionalProperties: false
+                    properties:
+                      name: { type: string, pattern: '^[A-Za-z_][A-Za-z0-9_$-]{0,62}$' }
+                      version: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$' }
+                      publisher: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$' }
+                      repository: { type: string, pattern: '^https://' }
             status:
               type: object
               x-kubernetes-preserve-unknown-fields: true

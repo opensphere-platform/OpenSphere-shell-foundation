@@ -6,6 +6,7 @@ const path = require('node:path');
 const {
   postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost, POSTGRES_ADMIN,
   POSTGRES_DEFAULT_ID, parsePostgresClusterId, postgresClusterProjection, postgresBindingDatabase,
+  sanitizePostgresExtensions, postgresExtensionSpecDiff, stackGresExtensionVersions, postgresClaimResource,
   postgresRuntimeCatalogProjection, postgresProfileKind, sanitizePostgresProfileSpec, profileReferenceCounts, profileSpecDiff, postgresOperationPlan, postgresBackupPlan,
 } = require('../server.js');
 
@@ -61,6 +62,40 @@ test('StackGres fleet identities and projections are provider-qualified', () => 
   assert.equal(projected.ready, true);
 });
 
+test('StackGres extension catalog is filtered by PostgreSQL compatibility', () => {
+  const versions = stackGresExtensionVersions({ versions: [
+    { version: '3.4.0', availableFor: [{ postgresVersion: '18', flavor: 'vanilla' }] },
+    { version: '3.3.0', availableFor: [{ postgresVersion: '17', flavor: 'vanilla' }] },
+    { version: '3.2.0', availableFor: [{ postgresVersion: '18', flavor: 'babelfish' }] },
+  ] }, '18.4');
+  assert.deepEqual(versions, ['3.4.0']);
+});
+
+test('PostgreSQL extension selections are bounded, typed and diffable', () => {
+  const desired = sanitizePostgresExtensions([
+    { name: 'postgis', version: '3.4.0', publisher: 'com.ongres' },
+    { name: 'pg_stat_statements' },
+  ]);
+  assert.equal(desired.length, 2);
+  assert.deepEqual(postgresExtensionSpecDiff([{ name: 'postgis', version: '3.3.0' }], desired), {
+    add: [{ name: 'pg_stat_statements' }],
+    update: [{ name: 'postgis', version: '3.4.0', publisher: 'com.ongres' }],
+    remove: [],
+  });
+  throwsMessage(() => sanitizePostgresExtensions([{ name: 'postgis' }, { name: 'postgis', publisher: 'other' }]), /duplicate extension/);
+  throwsMessage(() => sanitizePostgresExtensions([{ name: 'postgis', repository: 'http://untrusted.invalid' }]), /must use https/);
+});
+
+test('dedicated PostgresClaim preserves approved runtime and extensions', () => {
+  const resource = postgresClaimResource({
+    name: 'orders', namespace: 'tenant-a', alias: 'Orders database', database: 'orders', owner: 'orders_app',
+    plan: 'postgresql-compact-2', postgresVersion: '18.4', deletionPolicy: 'Delete',
+    extensions: [{ name: 'pg_stat_statements', version: '1.10' }],
+  });
+  assert.equal(resource.spec.postgresVersion, '18.4');
+  assert.deepEqual(resource.spec.extensions, [{ name: 'pg_stat_statements', version: '1.10' }]);
+});
+
 test('PostgreSQL runtime catalog exposes only exact-digest StackGres runtimes', () => {
   const catalog = postgresRuntimeCatalogProjection({
     metadata: { name: 'opensphere-stackgres' },
@@ -91,6 +126,8 @@ test('Foundation retains PostgreSQL governed endpoints but no longer compiles it
   const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
   const app = fs.readFileSync(path.join(__dirname, '../src/app/app.component.ts'), 'utf8');
   assert.match(server, /postgresFleetNamespaces/);
+  assert.match(server, /postgresClaims/);
+  assert.match(server, /postgresExtensions/);
   assert.match(server, /postgresProfiles/);
   assert.match(server, /postgresBackupTargets/);
   assert.match(server, /foundation\.postgres\.external-backup-targets\/v1alpha1/);
