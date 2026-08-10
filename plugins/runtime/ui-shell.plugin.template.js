@@ -30,11 +30,18 @@ const RUNTIME_TABS = Object.freeze([
 ]);
 
 const hasManagedFleet = () => SPEC.control?.requestModes?.Instance === 'managed';
+// PostgreSQL 기준 Carbon 관리 아이콘 계약: ListBoxes16, Catalog16, DataAdd16, Settings16.
+const MANAGEMENT_ICONS = Object.freeze({
+  fleet: { viewBox: '0 0 32 32', paths: ['M16 8H30V10H16z', 'M16 22H30V24H16z', 'M10,14H4a2.0023,2.0023,0,0,1-2-2V6A2.0023,2.0023,0,0,1,4,4h6a2.0023,2.0023,0,0,1,2,2v6A2.0023,2.0023,0,0,1,10,14ZM4,6v6h6.0012L10,6Z', 'M10,28H4a2.0023,2.0023,0,0,1-2-2V20a2.0023,2.0023,0,0,1,2-2h6a2.0023,2.0023,0,0,1,2,2v6A2.0023,2.0023,0,0,1,10,28ZM4,20v6h6.0012L10,20Z'] },
+  profiles: { viewBox: '0 0 32 32', paths: ['M26,2H8A2,2,0,0,0,6,4V8H4v2H6v5H4v2H6v5H4v2H6v4a2,2,0,0,0,2,2H26a2,2,0,0,0,2-2V4A2,2,0,0,0,26,2Zm0,26H8V24h2V22H8V17h2V15H8V10h2V8H8V4H26Z', 'M14 8H22V10H14z', 'M14 15H22V17H14z', 'M14 22H22V24H14z'] },
+  provisioning: { viewBox: '0 0 32 32', paths: ['M9,9c-.5523,0-1-.4477-1-1s.4477-1,1-1,1,.4477,1,1-.4477,1-1,1ZM10,16c0-.5523-.4477-1-1-1s-1,.4477-1,1,.4477,1,1,1,1-.4477,1-1ZM10,24c0-.5523-.4477-1-1-1s-1,.4477-1,1,.4477,1,1,1,1-.4477,1-1ZM24,25h4v-2h-4v-4h-2v4h-4v2h4v4h2v-4ZM15,27H6v-6h9v-2H6v-6h16v3h2V5c0-1.103-.8975-2-2-2H6c-1.103,0-2,.897-2,2v22c0,1.1025.897,2,2,2h9v-2ZM6,5h16v6H6v-6Z'] },
+  operator: { viewBox: '0 0 16 16', paths: ['M13.5,8.4c0-0.1,0-0.3,0-0.4c0-0.1,0-0.3,0-0.4l1-0.8c0.4-0.3,0.4-0.9,0.2-1.3l-1.2-2C13.3,3.2,13,3,12.6,3 c-0.1,0-0.2,0-0.3,0.1l-1.2,0.4c-0.2-0.1-0.4-0.3-0.7-0.4l-0.3-1.3C10.1,1.3,9.7,1,9.2,1H6.8c-0.5,0-0.9,0.3-1,0.8L5.6,3.1 C5.3,3.2,5.1,3.3,4.9,3.4L3.7,3C3.6,3,3.5,3,3.4,3C3,3,2.7,3.2,2.5,3.5l-1.2,2C1.1,5.9,1.2,6.4,1.6,6.8l0.9,0.9c0,0.1,0,0.3,0,0.4 c0,0.1,0,0.3,0,0.4L1.6,9.2c-0.4,0.3-0.5,0.9-0.2,1.3l1.2,2C2.7,12.8,3,13,3.4,13c0.1,0,0.2,0,0.3-0.1l1.2-0.4 c0.2,0.1,0.4,0.3,0.7,0.4l0.3,1.3c0.1,0.5,0.5,0.8,1,0.8h2.4c0.5,0,0.9-0.3,1-0.8l0.3-1.3c0.2-0.1,0.4-0.2,0.7-0.4l1.2,0.4 c0.1,0,0.2,0.1,0.3,0.1c0.4,0,0.7-0.2,0.9-0.5l1.1-2c0.2-0.4,0.2-0.9-0.2-1.3L13.5,8.4z M12.6,12l-1.7-0.6c-0.4,0.3-0.9,0.6-1.4,0.8 L9.2,14H6.8l-0.4-1.8c-0.5-0.2-0.9-0.5-1.4-0.8L3.4,12l-1.2-2l1.4-1.2c-0.1-0.5-0.1-1.1,0-1.6L2.2,6l1.2-2l1.7,0.6 C5.5,4.2,6,4,6.5,3.8L6.8,2h2.4l0.4,1.8c0.5,0.2,0.9,0.5,1.4,0.8L12.6,4l1.2,2l-1.4,1.2c0.1,0.5,0.1,1.1,0,1.6l1.4,1.2L12.6,12z', 'M8,11c-1.7,0-3-1.3-3-3s1.3-3,3-3s3,1.3,3,3C11,9.6,9.7,11,8,11C8,11,8,11,8,11z M8,6C6.9,6,6,6.8,6,7.9C6,7.9,6,8,6,8 c0,1.1,0.8,2,1.9,2c0,0,0.1,0,0.1,0c1.1,0,2-0.8,2-1.9c0,0,0-0.1,0-0.1C10,6.9,9.2,6,8,6C8.1,6,8,6,8,6z'] },
+});
 const MANAGEMENT_VIEWS = Object.freeze([
-  ...(hasManagedFleet() ? [['fleet', 'Fleet', 'M4 5h16M4 12h16M4 19h16']] : []),
-  ['profiles', 'Profiles', 'M6 3h12v18H6zM9 7h6M9 12h6M9 17h4'],
-  ['provisioning', 'Provisioning', 'M12 3v18M3 12h18'],
-  ['operator', 'Operator', 'M12 3l8 4v5c0 5-3.4 8.5-8 9-4.6-.5-8-4-8-9V7z'],
+  ...(hasManagedFleet() ? [['fleet', 'Fleet', MANAGEMENT_ICONS.fleet]] : []),
+  ['profiles', 'Profiles', MANAGEMENT_ICONS.profiles],
+  ['provisioning', 'Provisioning', MANAGEMENT_ICONS.provisioning],
+  ['operator', 'Operator', MANAGEMENT_ICONS.operator],
 ]);
 
 const LEGACY_VIEW_ALIASES = Object.freeze({
@@ -48,7 +55,7 @@ const OPERATOR_SHELL_CSS = `
   .pfss-op-brand{display:flex;align-items:flex-start;gap:1rem;min-width:0;padding-right:1rem}.pfss-op-logo{width:3.5rem;height:3.5rem;object-fit:contain;flex:0 0 auto}
   .pfss-op-brand h1{font-size:2rem;line-height:1.05;margin:.2rem 0 .25rem}.pfss-op-brand p{margin:0;max-width:48rem;color:#565656;line-height:1.35}.pfss-op-eyebrow{color:#526eff;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
   .pfss-op-meta{display:flex;align-items:center;justify-content:flex-end;gap:0;min-width:0;padding-top:1.35rem}.pfss-op-meta>div{min-width:6.3rem;padding:0 .8rem;border-left:1px solid #ddd}.pfss-op-meta dt,.pfss-op-context label{font-size:.68rem;color:#666}.pfss-op-meta dd{margin:.32rem 0 0;white-space:nowrap}
-  .pfss-op-actions{position:absolute;right:1rem;top:.7rem;display:flex;gap:.2rem;z-index:2}.pfss-op-action{display:grid;place-items:center;width:2rem;height:2rem;border:0;background:transparent;color:#7b1fa2;cursor:pointer}.pfss-op-action:hover,.pfss-op-action.active{background:#f4eafa}.pfss-op-action.active{box-shadow:inset 0 -2px #f47b20}.pfss-op-action svg{width:1rem;height:1rem;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .pfss-op-actions{position:absolute;right:1rem;top:.7rem;display:flex;gap:.2rem;z-index:2}.pfss-op-action{display:grid;place-items:center;width:2rem;height:2rem;border:0;background:transparent;color:#7b1fa2;cursor:pointer}.pfss-op-action:hover,.pfss-op-action.active{background:#f4eafa}.pfss-op-action.active{box-shadow:inset 0 -2px #f47b20}.pfss-op-action svg{width:1rem;height:1rem;fill:currentColor}
   .pfss-op-context{display:flex;align-items:flex-end;justify-content:flex-end;gap:.75rem;padding-right:.15rem}.pfss-op-context>div{width:13.75rem}.pfss-op-context select{width:100%;height:2rem;border:0;border-bottom:1px solid #6f7d85;background:#fff}
   .pfss-op-tabs{display:flex;gap:0;border-top:1px solid #eee;border-bottom:1px solid #d7d7d7;overflow-x:auto}.pfss-op-tab{border:0;background:#fff;padding:.72rem 1rem;color:#7b1fa2;white-space:nowrap;cursor:pointer}.pfss-op-tab.active{font-weight:700;box-shadow:inset 0 -2px #526eff}
   .pfss-op-scope{display:flex;align-items:center;justify-content:space-between;padding:.55rem .9rem;background:#fff7f1;border-top:1px solid #f7c8aa;border-bottom:1px solid #f7c8aa;font-size:.76rem}.pfss-op-scope button{border:0;background:transparent;color:#0072a3;cursor:pointer;font-weight:600}
@@ -104,7 +111,7 @@ class FoundationPluginElement extends HTMLElement {
 
   render() {
     const active = this.activeTab();
-    const management = MANAGEMENT_VIEWS.map(([id, label, path]) => `<button type="button" class="pfss-op-action${active === id ? ' active' : ''}" data-tab="${id}" aria-label="${esc(label)}" title="${esc(label)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg></button>`).join('');
+    const management = MANAGEMENT_VIEWS.map(([id, label, icon]) => `<button type="button" class="pfss-op-action${active === id ? ' active' : ''}" data-tab="${id}" aria-label="${esc(label)}" title="${esc(label)}"><svg viewBox="${icon.viewBox}" aria-hidden="true">${icon.paths.map((path) => `<path d="${path}"></path>`).join('')}</svg></button>`).join('');
     const isManagement = MANAGEMENT_VIEWS.some(([id]) => id === active);
     const tabs = RUNTIME_TABS.map(([id, label]) => `<button type="button" class="pfss-op-tab${active === id ? ' active' : ''}" role="tab" aria-selected="${active === id}" data-tab="${id}">${esc(label)}</button>`).join('');
     this.innerHTML = `<button class="btn btn-sm btn-link" type="button" data-back>← PFS 모듈</button>

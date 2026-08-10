@@ -1,5 +1,10 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
+import ListBoxes16 from '@carbon/icons/es/list--boxes/16';
+import Catalog16 from '@carbon/icons/es/catalog/16';
+import DataAdd16 from '@carbon/icons/es/data--add/16';
+import Settings16 from '@carbon/icons/es/settings/16';
+import { CarbonIcon } from '../carbon-icon';
 
 export interface PluginPageHeaderModel {
   name: string;
@@ -69,7 +74,7 @@ export function pfsPluginTabs(domainLabel: string): PluginPageTab[] {
 @Component({
   selector: 'osp-plugin-page-header',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, CarbonIcon],
   template: `
     <section class="pfs-plugin-head" [attr.aria-labelledby]="headingId">
       <div class="pfs-plugin-brand">
@@ -96,10 +101,10 @@ export function pfsPluginTabs(domainLabel: string): PluginPageTab[] {
         <ng-content select="[pluginHeaderContext]" />
       </dl>
       <nav class="pfs-operator-actions" aria-label="플랫폼 관리 작업">
-        <button *ngIf="model.managedFleet" type="button" title="Fleet" aria-label="Fleet" (click)="managementSelected.emit('cluster')">☷</button>
-        <button type="button" title="Profiles" aria-label="Profiles" (click)="managementSelected.emit('config')">▤</button>
-        <button type="button" title="Provisioning" aria-label="Provisioning" (click)="managementSelected.emit('claims')">⊞</button>
-        <button type="button" title="Operator" aria-label="Operator" (click)="managementSelected.emit('operator')">⚙</button>
+        <button *ngIf="model.managedFleet" type="button" title="Fleet" aria-label="Fleet" (click)="managementSelected.emit('cluster')"><os-cicon [icon]="iFleet" [size]="16" /></button>
+        <button type="button" title="Profiles" aria-label="Profiles" (click)="managementSelected.emit('config')"><os-cicon [icon]="iCatalog" [size]="16" /></button>
+        <button type="button" title="Provisioning" aria-label="Provisioning" (click)="managementSelected.emit('claims')"><os-cicon [icon]="iProvisioning" [size]="16" /></button>
+        <button type="button" title="Operator" aria-label="Operator" (click)="managementSelected.emit('operator')"><os-cicon [icon]="iOperator" [size]="16" /></button>
       </nav>
     </section>
   `,
@@ -141,6 +146,10 @@ export function pfsPluginTabs(domainLabel: string): PluginPageTab[] {
   `],
 })
 export class PluginPageHeaderComponent {
+  readonly iFleet = ListBoxes16;
+  readonly iCatalog = Catalog16;
+  readonly iProvisioning = DataAdd16;
+  readonly iOperator = Settings16;
   @Input({ required: true }) model!: PluginPageHeaderModel;
   @Input() headingId = 'pfs-plugin-page-title';
   @Output() readonly managementSelected = new EventEmitter<PfsPluginTabId>();
