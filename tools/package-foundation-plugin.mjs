@@ -67,7 +67,13 @@ const contributions = {
   manual: { enabled: true, sourceId: `plugin:foundation/${id}`, mode: 'runtime' },
   search: { enabled: true, mode: 'index' },
   notification: { enabled: false, frontend: false, backend: false, reason: 'This plugin does not publish notifications directly' },
-  observability: { enabled: true, logs: true, metrics: true, traces: false },
+  observability: {
+    enabled: true,
+    logs: true,
+    metrics: true,
+    traces: false,
+    reason: 'Runtime health and load metrics only',
+  },
 };
 const manifest = {
   manifestVersion: 3,

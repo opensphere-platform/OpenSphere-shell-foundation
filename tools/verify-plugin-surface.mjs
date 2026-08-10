@@ -16,12 +16,18 @@ const lockVersion = JSON.parse(read('package-lock.json')).version;
 const manifestVersion = JSON.parse(read('ui-shell/ui-shell.manifest.source.json')).version;
 const packageYaml = read('uipluginpackage.yaml');
 const dockerfile = read('Dockerfile');
+const packageFoundationPlugin = read('tools/package-foundation-plugin.mjs');
 assert.equal(manifestVersion, packageVersion, 'ui-shell manifest와 package.json 버전이 다릅니다.');
 assert.equal(lockVersion, packageVersion, 'package-lock.json과 package.json 버전이 다릅니다.');
 assert.match(packageYaml, new RegExp(`\\n  version: ${packageVersion.replaceAll('.', '\\.')}(?:\\r?\\n)`), 'UIPluginPackage 버전이 package.json과 다릅니다.');
 assert.match(packageVersion, /^\d+\.\d+\.\d+$/, '호환 버전에는 channel suffix를 사용할 수 없습니다.');
 assert.match(dockerfile, /org\.opencontainers\.image\.version=\$OS_RELEASE_TAG/, 'OCI 공식 버전은 KST release tag build arg를 사용해야 합니다.');
 assert.match(dockerfile, new RegExp(`io\\.opensphere\\.compatibility-version="${packageVersion.replaceAll('.', '\\.')}"`), 'OCI 호환 버전이 package.json과 다릅니다.');
+assert.match(
+  packageFoundationPlugin,
+  /observability:\s*\{[\s\S]*reason:\s*'Runtime health and load metrics only'/,
+  '독립 plugin manifest와 UIPluginPackage의 observability 계약이 달라 ContributionDrift가 발생할 수 있습니다.',
+);
 
 const surfaces = [
   ['Keycloak', 'src/app/modules/identity/keycloak.component.ts'],
