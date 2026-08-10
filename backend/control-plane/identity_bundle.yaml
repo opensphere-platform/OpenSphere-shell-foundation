@@ -87,7 +87,7 @@ spec:
             - { name: KC_DB, value: postgres }
             - { name: KC_DB_URL_HOST, valueFrom: { secretKeyRef: { name: pgc-foundation-identity-keycloak-pg-binding, key: host } } }
             - { name: KC_DB_URL_PORT, valueFrom: { secretKeyRef: { name: pgc-foundation-identity-keycloak-pg-binding, key: port } } }
-            - { name: KC_DB_URL_DATABASE, valueFrom: { secretKeyRef: { name: pgc-foundation-identity-keycloak-pg-binding, key: database } } }
+            - { name: KC_DB_URL_DATABASE, value: keycloak }
             - { name: KC_DB_USERNAME, valueFrom: { secretKeyRef: { name: pgc-foundation-identity-keycloak-pg-binding, key: username } } }
             - { name: KC_DB_PASSWORD, valueFrom: { secretKeyRef: { name: pgc-foundation-identity-keycloak-pg-binding, key: password } } }
             - { name: KC_BOOTSTRAP_ADMIN_USERNAME, valueFrom: { secretKeyRef: { name: foundation-identity-keycloak-admin, key: username } } }

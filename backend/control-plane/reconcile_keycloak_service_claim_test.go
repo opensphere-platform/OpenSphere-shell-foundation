@@ -180,6 +180,9 @@ func TestKeycloakBundleCanUseExistingPostgresInstance(t *testing.T) {
 			if !strings.Contains(string(encoded), bindingName) {
 				t.Fatalf("Keycloak does not consume the shared binding %q: %s", bindingName, encoded)
 			}
+			if !strings.Contains(string(encoded), `"name":"KC_DB_URL_DATABASE","value":"keycloak"`) {
+				t.Fatalf("Keycloak database name must remain the fixed bootstrap database: %s", encoded)
+			}
 		}
 	}
 	if !seenClaim || !seenDeployment {

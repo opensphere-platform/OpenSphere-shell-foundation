@@ -289,7 +289,7 @@ func applyKeycloakParams(objs []*unstructured.Unstructured, cfg *config, fm *uns
 					continue
 				}
 				name, _ := entry["name"].(string)
-				if name != "KC_DB_URL_HOST" && name != "KC_DB_URL_PORT" && name != "KC_DB_URL_DATABASE" && name != "KC_DB_USERNAME" && name != "KC_DB_PASSWORD" {
+				if name != "KC_DB_URL_HOST" && name != "KC_DB_URL_PORT" && name != "KC_DB_USERNAME" && name != "KC_DB_PASSWORD" {
 					continue
 				}
 				_ = unstructured.SetNestedField(entry, bindingName, "valueFrom", "secretKeyRef", "name")
