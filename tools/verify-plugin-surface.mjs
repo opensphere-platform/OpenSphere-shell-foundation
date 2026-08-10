@@ -70,6 +70,7 @@ assert.match(keycloakSurface, /grid-template-columns:repeat\(2,max-content\)/, '
 assert.match(keycloakSurface, /width:220px;min-width:220px/, 'Keycloak: Namespace·서비스 선택기 220px 폭 계약 누락');
 assert.match(keycloakSurface, /PostgreSQL PFSS 플랜[\s\S]*postgresql-prod-ha-pitr/, 'Keycloak: 설치 단계 PostgreSQL 플랜 선택 계약 누락');
 assert.match(keycloakSurface, /openTab\(id:string\)\{this\.vr\.setModule\('keycloak'\)/, 'Keycloak: 관리 action이 다른 PFSS 모듈로 이동할 수 있음');
+assert.match(keycloakSurface, /\['operator','cluster','config','claims'\]\.includes\(wanted\)/, 'Keycloak: 관리 workspace 딥링크 복원 계약 누락');
 assert.doesNotMatch(keycloakSurface, /embedded[- ]h2|start-dev/i, 'Keycloak: 폐기된 embedded H2 설치 가정이 UI에 재유입됨');
 
 const sharedShell = read('src/app/shared/plugin-page-shell.component.ts');
