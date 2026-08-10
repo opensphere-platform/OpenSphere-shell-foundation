@@ -24,7 +24,7 @@ spec:
     label: "Foundation"
   manifest:
     path: /plugins/ui-shell.manifest.json
-    sha256: "94c09f8daf6fe4c1b1cd04b37b8b397bcf89e8c8f13298fe1cf71964ceb880cb"
+    sha256: "96a3e6e62862232238530a2aebddbc3f2ddeb7918e57c22445d9b00d6230a92b"
     signaturePath: /plugins/ui-shell.manifest.json.sig
   trust:
     keyId: opensphere-edge-local-v1

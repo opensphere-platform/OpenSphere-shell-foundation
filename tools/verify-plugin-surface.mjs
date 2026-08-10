@@ -34,6 +34,11 @@ assert.doesNotMatch(
   /\.pgp-page-frame \.pfs-plugin-release \{ grid-template-columns: repeat\(3,[^}]*minmax\(24rem/,
   '반응형 PFSS 릴리스 메타가 Namespace 최소 폭 때문에 헤더 밖으로 밀려납니다.',
 );
+assert.match(
+  appStyles,
+  /@media \(max-width: 1180px\)[\s\S]*\.pgp-page-frame \.pfs-plugin-head \{ grid-template-columns: 1fr;/,
+  '반응형 PFSS header가 기본 2열 규칙보다 낮은 우선순위로 선언됐습니다.',
+);
 
 const surfaces = [
   ['Keycloak', 'src/app/modules/identity/keycloak.component.ts'],

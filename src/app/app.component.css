@@ -452,7 +452,7 @@ pg-metric { display: block; height: 100%; }
 
 @media (max-width: 1180px) {
   .pgp-head, .pfs-plugin-head { grid-template-columns: 1fr; min-height: 11rem; }
-  .pgp-page-frame .pfs-plugin-head { min-height: 11rem; }
+  .pgp-page-frame .pfs-plugin-head { grid-template-columns: 1fr; min-height: 11rem; }
   .pgp-release, .pfs-plugin-release { grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }
   .pgp-brand p, .pgp-release dd, .pfs-plugin-brand p, .pfs-plugin-release dd { overflow-wrap: anywhere; }
   .pgp-release dd, .pfs-plugin-release dd { min-width: 0; }
