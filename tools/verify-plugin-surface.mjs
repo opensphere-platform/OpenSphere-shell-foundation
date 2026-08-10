@@ -105,8 +105,12 @@ assert.match(runtimeTemplate, /MANAGEMENT_ICONS\.fleet/, '독립 plugin runtime 
 assert.match(runtimeTemplate, /MANAGEMENT_ICONS\.profiles/, '독립 plugin runtime Profiles 아이콘 매핑 누락');
 assert.match(runtimeTemplate, /MANAGEMENT_ICONS\.provisioning/, '독립 plugin runtime Provisioning 아이콘 매핑 누락');
 assert.match(runtimeTemplate, /MANAGEMENT_ICONS\.operator/, '독립 plugin runtime Operator 아이콘 매핑 누락');
-assert.match(runtimeTemplate, /\.pfss-op-meta\{[^}]*justify-content:flex-end;[^}]*justify-self:end;/, '독립 plugin runtime 릴리스 메타 우측 정렬 계약 누락');
-assert.doesNotMatch(runtimeTemplate, /\.pfss-op-meta\{justify-content:flex-start/, '반응형 구간에서 릴리스 메타가 좌측 정렬로 역진했습니다.');
+assert.match(runtimeTemplate, /\.pfss-op-head\{[^}]*grid-template-columns:minmax\(22rem,1fr\) minmax\(0,60%\);[^}]*align-items:center;/, '독립 plugin runtime의 identity/metadata 비율이 PostgreSQL header 계약과 다릅니다.');
+assert.match(runtimeTemplate, /\.pfss-op-brand>div\{min-width:0\}/, '독립 plugin runtime의 brand text가 metadata 영역을 침범할 수 있습니다.');
+assert.match(runtimeTemplate, /\.pfss-op-brand p\{[^}]*max-width:100%;[^}]*overflow-wrap:anywhere;/, '독립 plugin runtime 설명문 폭 제한이 없습니다.');
+assert.match(runtimeTemplate, /\.pfss-op-meta\{display:grid;grid-template-columns:[^}]*justify-self:end;width:100%;/, '독립 plugin runtime 릴리스 메타 우측 정렬 계약 누락');
+assert.match(runtimeTemplate, /pfss-op-logo-fallback/, '독립 plugin runtime 제품 로고 fallback 누락');
+assert.match(runtimeTemplate, /naturalWidth === 0/, '독립 plugin runtime 제품 로고 실패 판정 누락');
 assert.match(runtimeTemplate, /\.pfss-op-head\{[^}]*height:auto!important;[^}]*background:#fff;[^}]*color:#161616;/, '독립 plugin runtime header가 Host header 색상·높이 규칙에서 격리되지 않았습니다.');
 assert.match(runtimeTemplate, /@media\(max-width:1180px\)\{[^}]*[\s\S]{0,500}\.pfss-op-brand\{padding-right:0;padding-top:2\.25rem\}/, '독립 plugin runtime의 관리 아이콘과 브랜드가 좁은 폭에서 겹칩니다.');
 assert.match(sharedOperatorShell, /@media \(max-width: 760px\)[\s\S]{0,120}\.pfs-plugin-brand \{ padding-top: 2\.25rem; \}/, '공통 PFSS header의 관리 아이콘과 브랜드가 좁은 폭에서 겹칩니다.');

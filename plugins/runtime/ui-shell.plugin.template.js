@@ -51,16 +51,16 @@ const LEGACY_VIEW_ALIASES = Object.freeze({
 
 const OPERATOR_SHELL_CSS = `
   .pfss-op-shell{position:relative;min-width:0;background:#fff;color:#161616;border:1px solid #d7d7d7;margin-top:.35rem}
-  .pfss-op-head{position:relative;display:grid;grid-template-columns:minmax(22rem,1fr) auto;gap:1.25rem;height:auto!important;min-height:8.4rem;padding:1.2rem 1.25rem .85rem;overflow:visible;background:#fff;color:#161616;box-sizing:border-box}
-  .pfss-op-brand{display:flex;align-items:flex-start;gap:1rem;min-width:0;padding-right:1rem}.pfss-op-logo{width:3.5rem;height:3.5rem;object-fit:contain;flex:0 0 auto}
-  .pfss-op-brand h1{font-size:2rem;line-height:1.05;margin:.2rem 0 .25rem}.pfss-op-brand p{margin:0;max-width:48rem;color:#565656;line-height:1.35}.pfss-op-eyebrow{color:#526eff;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
-  .pfss-op-meta{display:flex;align-items:center;justify-content:flex-end;justify-self:end;gap:0;min-width:0;padding-top:1.35rem}.pfss-op-meta>div{min-width:6.3rem;padding:0 .8rem;border-left:1px solid #ddd}.pfss-op-meta dt,.pfss-op-context label{font-size:.68rem;color:#666}.pfss-op-meta dd{margin:.32rem 0 0;white-space:nowrap}
+  .pfss-op-head{position:relative;display:grid;grid-template-columns:minmax(22rem,1fr) minmax(0,60%);align-items:center;gap:1.25rem;height:auto!important;min-height:8.4rem;padding:1.2rem 1.25rem .85rem;overflow:visible;background:#fff;color:#161616;box-sizing:border-box}
+  .pfss-op-brand{display:flex;align-items:flex-start;gap:1rem;min-width:0;padding-right:1rem}.pfss-op-brand>div{min-width:0}.pfss-op-logo-frame{position:relative;width:3.5rem;height:3.5rem;flex:0 0 3.5rem}.pfss-op-logo{width:100%;height:100%;object-fit:contain}.pfss-op-logo-fallback{display:none;width:100%;height:100%;place-items:center;background:#eef3ff;color:#526eff;font-weight:700}.pfss-op-logo.is-error{display:none}.pfss-op-logo.is-error+.pfss-op-logo-fallback{display:grid}
+  .pfss-op-brand h1{font-size:2rem;line-height:1.05;margin:.2rem 0 .25rem}.pfss-op-brand p{margin:0;max-width:100%;overflow-wrap:anywhere;color:#565656;line-height:1.35}.pfss-op-eyebrow{color:#526eff;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+  .pfss-op-meta{display:grid;grid-template-columns:minmax(5.5rem,.65fr) minmax(5rem,.6fr) minmax(10rem,1.2fr) minmax(0,2.8fr);align-items:center;justify-self:end;width:100%;min-width:0;padding-top:1.35rem}.pfss-op-meta>div{min-width:0;padding:0 .8rem;overflow:hidden;border-left:1px solid #ddd}.pfss-op-meta dt,.pfss-op-context label{font-size:.68rem;color:#666}.pfss-op-meta dd{min-width:0;margin:.32rem 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .pfss-op-actions{position:absolute;right:1rem;top:.7rem;display:flex;gap:.2rem;z-index:2}.pfss-op-action{display:grid;place-items:center;width:2rem;height:2rem;border:0;background:transparent;color:#7b1fa2;cursor:pointer}.pfss-op-action:hover,.pfss-op-action.active{background:#f4eafa}.pfss-op-action.active{box-shadow:inset 0 -2px #f47b20}.pfss-op-action svg{width:1rem;height:1rem;fill:currentColor}
-  .pfss-op-context{display:flex;align-items:flex-end;justify-content:flex-end;gap:.75rem;padding-right:.15rem}.pfss-op-context>div{width:13.75rem}.pfss-op-context select{width:100%;height:2rem;border:0;border-bottom:1px solid #6f7d85;background:#fff}
+  .pfss-op-context{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);align-items:end;gap:.75rem;padding-right:.15rem}.pfss-op-context>div{width:auto;min-width:0}.pfss-op-context select{width:100%;height:2rem;border:0;border-bottom:1px solid #6f7d85;background:#fff}
   .pfss-op-tabs{display:flex;gap:0;border-top:1px solid #eee;border-bottom:1px solid #d7d7d7;overflow-x:auto}.pfss-op-tab{border:0;background:#fff;padding:.72rem 1rem;color:#7b1fa2;white-space:nowrap;cursor:pointer}.pfss-op-tab.active{font-weight:700;box-shadow:inset 0 -2px #526eff}
   .pfss-op-scope{display:flex;align-items:center;justify-content:space-between;padding:.55rem .9rem;background:#fff7f1;border-top:1px solid #f7c8aa;border-bottom:1px solid #f7c8aa;font-size:.76rem}.pfss-op-scope button{border:0;background:transparent;color:#0072a3;cursor:pointer;font-weight:600}
-  @media(max-width:1180px){.pfss-op-head{grid-template-columns:1fr;padding-top:1.1rem}.pfss-op-meta{width:100%;max-width:100%;box-sizing:border-box;justify-content:flex-end;justify-self:end;padding-top:.2rem;flex-wrap:wrap}.pfss-op-context{justify-content:flex-end}.pfss-op-actions{right:.7rem}.pfss-op-brand{padding-right:0;padding-top:2.25rem}}
-  @media(max-width:720px){.pfss-op-head{padding:.9rem}.pfss-op-brand{padding-right:0;padding-top:2.2rem}.pfss-op-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.pfss-op-context{grid-column:1/-1;flex-wrap:wrap}.pfss-op-context>div{width:100%}}
+  @media(max-width:1180px){.pfss-op-head{grid-template-columns:1fr;padding-top:1.1rem}.pfss-op-meta{grid-template-columns:repeat(3,minmax(0,1fr));width:100%;max-width:100%;box-sizing:border-box;justify-self:end;padding-top:.2rem}.pfss-op-context{grid-column:1/-1}.pfss-op-actions{right:.7rem}.pfss-op-brand{padding-right:0;padding-top:2.25rem}}
+  @media(max-width:720px){.pfss-op-head{padding:.9rem}.pfss-op-brand{padding-right:0;padding-top:2.2rem}.pfss-op-meta{grid-template-columns:repeat(2,minmax(0,1fr))}.pfss-op-context{grid-column:1/-1;grid-template-columns:1fr}.pfss-op-context>div{width:100%}}
 `;
 
 function apiFetch(path, init) {
@@ -114,17 +114,21 @@ class FoundationPluginElement extends HTMLElement {
     const management = MANAGEMENT_VIEWS.map(([id, label, icon]) => `<button type="button" class="pfss-op-action${active === id ? ' active' : ''}" data-tab="${id}" aria-label="${esc(label)}" title="${esc(label)}"><svg viewBox="${icon.viewBox}" aria-hidden="true">${icon.paths.map((path) => `<path d="${path}"></path>`).join('')}</svg></button>`).join('');
     const isManagement = MANAGEMENT_VIEWS.some(([id]) => id === active);
     const tabs = RUNTIME_TABS.map(([id, label]) => `<button type="button" class="pfss-op-tab${active === id ? ' active' : ''}" role="tab" aria-selected="${active === id}" data-tab="${id}">${esc(label)}</button>`).join('');
+    const logoFallback = SPEC.displayName.split(/[\s-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
     this.innerHTML = `<button class="btn btn-sm btn-link" type="button" data-back>← PFS 모듈</button>
       <style>${OPERATOR_SHELL_CSS}</style>
       <section class="pfss-op-shell" aria-label="${esc(SPEC.displayName)} Operator 작업 영역">
         <header class="pfss-op-head" aria-labelledby="${esc(SPEC.id)}-title">
-          <div class="pfss-op-brand"><img class="pfss-op-logo" src="${esc(SPEC.logo)}" alt="${esc(SPEC.displayName)}"><div><div class="pfss-op-eyebrow">PFS · OPERATOR · ${esc(SPEC.capability.toUpperCase())}</div><h1 id="${esc(SPEC.id)}-title">${esc(SPEC.displayName)}</h1><p>${esc(SPEC.description)}</p></div></div>
+          <div class="pfss-op-brand"><span class="pfss-op-logo-frame"><img class="pfss-op-logo" src="${esc(SPEC.logo)}" alt="${esc(SPEC.displayName)}"><span class="pfss-op-logo-fallback" aria-hidden="true">${esc(logoFallback)}</span></span><div><div class="pfss-op-eyebrow">PFS · OPERATOR · ${esc(SPEC.capability.toUpperCase())}</div><h1 id="${esc(SPEC.id)}-title">${esc(SPEC.displayName)}</h1><p>${esc(SPEC.description)}</p></div></div>
           <dl class="pfss-op-meta"><div><dt>Lifecycle</dt><dd>${statePill('ok', 'Ready')}</dd></div><div><dt>Version</dt><dd>${esc(SPEC.version)}</dd></div><div><dt>Profile</dt><dd>${esc(SPEC.control?.operatorDriver || SPEC.channel)}</dd></div><div class="pfss-op-context"><div><label>Namespace</label><select aria-label="Namespace"><option>${esc(SPEC.namespace)}</option></select></div><div><label>${hasManagedFleet() ? 'Instance' : 'Service'}</label><select aria-label="${hasManagedFleet() ? 'Instance' : 'Service'}"><option>${esc(SPEC.displayName)}</option></select></div></div></dl>
           <div class="pfss-op-actions" aria-label="플랫폼 관리 작업">${management}</div>
         </header>
         ${isManagement ? `<div class="pfss-op-scope"><span><b>관리 작업</b> · 실행 상태 탭과 분리된 Namespace/플랫폼 설정 영역입니다.</span><button type="button" data-tab="overview">선택한 서비스로 돌아가기</button></div>` : `<nav class="pfss-op-tabs" role="tablist" aria-label="${esc(SPEC.displayName)} 실행 상태 메뉴">${tabs}</nav>`}
       </section>
       <div data-content>${this.renderTab(active)}</div>`;
+    const logo = this.querySelector('.pfss-op-logo');
+    if (logo?.complete && logo.naturalWidth === 0) logo.classList.add('is-error');
+    logo?.addEventListener('error', () => logo.classList.add('is-error'), { once: true });
     this.querySelector('[data-back]')?.addEventListener('click', () => {
       history.pushState(history.state, '', '/pfss/modules');
       window.dispatchEvent(new PopStateEvent('popstate'));
