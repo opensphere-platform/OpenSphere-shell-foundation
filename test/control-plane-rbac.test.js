@@ -46,3 +46,23 @@ test('control-plane RBAC permits label-scoped collection cleanup', () => {
     assert.ok(rule.verbs.includes('deletecollection'), `${apiGroup}/${resource} must permit deletecollection`);
   }
 });
+
+test('PostgreSQL runtime catalog remains declared and readable by the control plane', () => {
+  const role = documents.find(
+    (document) => document.kind === 'ClusterRole'
+      && document.metadata?.name === 'foundation-control-plane-core',
+  );
+  const catalogRule = role.rules.find(
+    (rule) => rule.apiGroups?.includes('catalog.opensphere.io')
+      && rule.resources?.includes('postgresruntimecatalogs'),
+  );
+  assert.ok(catalogRule, 'PostgresRuntimeCatalog read rule must exist');
+  for (const verb of ['get', 'list', 'watch']) assert.ok(catalogRule.verbs.includes(verb));
+
+  const runtimeCatalog = yaml.load(
+    fs.readFileSync(path.join(__dirname, '..', 'deploy', 'postgres-runtime-catalog.yaml'), 'utf8'),
+  );
+  assert.equal(runtimeCatalog.kind, 'PostgresRuntimeCatalog');
+  assert.equal(runtimeCatalog.metadata.name, 'opensphere-stackgres');
+  assert.match(runtimeCatalog.spec.versions[0].image, /@sha256:[a-f0-9]{64}$/);
+});

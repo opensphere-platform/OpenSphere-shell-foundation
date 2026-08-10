@@ -40,7 +40,7 @@ rules:
     resources: [postgresclaims/finalizers]
     verbs: [update]
   - apiGroups: ["catalog.opensphere.io"]
-    resources: [addonplans]
+    resources: [addonplans, postgresruntimecatalogs]
     verbs: [get, list, watch]
   - apiGroups: ["catalog.opensphere.io"]
     resources: [addoninstalls]

@@ -8,7 +8,7 @@ rules:
     resources: [sgclusters, sgbackups, sgdbops, sgscripts, sginstanceprofiles, sgpgconfigs, sgpoolconfigs, sgobjectstorages]
     verbs: [get, list, watch]
   - apiGroups: ["catalog.opensphere.io"]
-    resources: [addoncapabilities, addonofferings, addonplans, addoninstalls]
+    resources: [addoncapabilities, addonofferings, addonplans, addoninstalls, postgresruntimecatalogs]
     verbs: [get, list, watch]
   - apiGroups: ["provisioning.opensphere.io"]
     resources: [postgresclaims]

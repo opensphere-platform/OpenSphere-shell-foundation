@@ -87,6 +87,7 @@ const POSTGRES_PROFILE_KINDS = Object.freeze({
   pooling: Object.freeze({ apiVersion: 'stackgres.io/v1', apiKind: 'SGPoolingConfig', resource: 'sgpoolconfigs' }),
   objectStorage: Object.freeze({ apiVersion: 'stackgres.io/v1beta1', apiKind: 'SGObjectStorage', resource: 'sgobjectstorages' }),
 });
+const POSTGRES_RUNTIME_CATALOG = 'opensphere-stackgres';
 const pgPools = new Map();
 const pgCredentialCache = new Map();
 const POSTGRES_DEFAULT_ID = 'stackgres:' + FND_NS + ':' + POSTGRES_ADMIN.cluster;
@@ -284,6 +285,45 @@ async function postgresFleetNamespaces(req, res) {
   } catch (e) {
     if (actor && req.method === 'POST') await publishFoundationAudit(actor, 'postgres-namespace-create', 'Namespace', 'failed', e.msg || e.message || String(e)).catch(() => {});
     return jsonRes(res, typeof e.code === 'number' ? e.code : 400, { error: e.msg || e.message || String(e) });
+  }
+}
+
+function postgresRuntimeCatalogProjection(resource) {
+  const versions = (resource?.spec?.versions || []).map((item) => ({
+    version: String(item?.version || ''),
+    major: String(item?.major || ''),
+    patroniVersion: String(item?.patroniVersion || ''),
+    lifecycle: String(item?.lifecycle || ''),
+    image: String(item?.image || ''),
+  })).filter((item) => item.version && item.major
+    && /^ghcr\.io\/opensphere-platform\/mirror\/ongres\/patroni@sha256:[a-f0-9]{64}$/.test(item.image));
+  return {
+    name: String(resource?.metadata?.name || POSTGRES_RUNTIME_CATALOG),
+    provider: String(resource?.spec?.provider || ''),
+    operatorVersion: String(resource?.spec?.operatorVersion || ''),
+    defaultVersion: String(resource?.spec?.defaultVersion || ''),
+    versions,
+  };
+}
+
+async function loadPostgresRuntimeCatalog(actor) {
+  const result = await k8sJson('GET', `/apis/catalog.opensphere.io/v1alpha1/postgresruntimecatalogs/${POSTGRES_RUNTIME_CATALOG}`, undefined, actor);
+  if (!result.ok) throw { code: result.status, msg: 'PostgreSQL runtime catalog unavailable: ' + k8sFailure(result) };
+  const catalog = postgresRuntimeCatalogProjection(result.json);
+  if (catalog.provider !== 'stackgres' || !catalog.operatorVersion || !catalog.defaultVersion || !catalog.versions.length) {
+    throw { code: 409, msg: 'PostgreSQL runtime catalog is incomplete' };
+  }
+  return catalog;
+}
+
+async function postgresRuntimes(req, res) {
+  if (req.method !== 'GET') return jsonRes(res, 405, { error: 'read-only endpoint' });
+  try {
+    const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
+    const catalog = await loadPostgresRuntimeCatalog(actor);
+    return jsonRes(res, 200, { schema: 'foundation.postgres.runtimes/v1alpha1', catalog, refreshedAt: new Date().toISOString() });
+  } catch (e) {
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 502, { error: e.msg || e.message || String(e) });
   }
 }
 
@@ -2388,6 +2428,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/foundation/psmdb/collection') return psmdbCollection(req, res);
     if (p === '/api/foundation/psmdb/user') return psmdbUser(req, res);
     if (p === '/api/foundation/postgres/clusters') return postgresFleetClusters(req, res);
+    if (p === '/api/foundation/postgres/runtimes') return postgresRuntimes(req, res);
     if (p === '/api/foundation/postgres/namespaces') return postgresFleetNamespaces(req, res);
     if (p === '/api/foundation/postgres/backup-targets') return postgresBackupTargets(req, res);
     if (p === '/api/foundation/postgres/profiles') return postgresProfiles(req, res, new URL(req.url || '/', 'http://localhost'));
@@ -2486,7 +2527,7 @@ if (require.main === module) {
     validateHisStatusContract,
     parseResp, encodeRespCommand, parseInfo, sanitizeAclLine, requireValkeyDb, requireValkeyKey,
     postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost, postgresBindingDatabase,
-    parsePostgresClusterId, postgresClusterProjection, postgresProfileKind, sanitizePostgresProfileSpec, profileReferenceCounts, profileSpecDiff,
+    parsePostgresClusterId, postgresClusterProjection, postgresRuntimeCatalogProjection, postgresProfileKind, sanitizePostgresProfileSpec, profileReferenceCounts, profileSpecDiff,
     postgresOperationPlan, postgresBackupPlan,
     foundationBootstrapState,
     HIS_STATUS_SCHEMA, FOUNDATION_CORE_CRDS,

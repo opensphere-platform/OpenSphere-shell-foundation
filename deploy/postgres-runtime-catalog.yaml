@@ -1,0 +1,17 @@
+apiVersion: catalog.opensphere.io/v1alpha1
+kind: PostgresRuntimeCatalog
+metadata:
+  name: opensphere-stackgres
+  labels:
+    app.kubernetes.io/managed-by: foundation-control-plane
+    app.kubernetes.io/part-of: pfss-postgresql
+spec:
+  provider: stackgres
+  operatorVersion: "1.19.0"
+  defaultVersion: "18.4"
+  versions:
+    - { version: "18.4", major: "18", patroniVersion: "4.1.4", lifecycle: Available, upstreamImage: "quay.io/ongres/patroni:v4.1.4-pg18.4-build-6.53", image: "ghcr.io/opensphere-platform/mirror/ongres/patroni@sha256:e5207dd1c6bb0b9a1870bf285b71391fac2798c8155db923039b306ad51f66c2" }
+    - { version: "17.10", major: "17", patroniVersion: "4.1.4", lifecycle: Available, upstreamImage: "quay.io/ongres/patroni:v4.1.4-pg17.10-build-6.53", image: "ghcr.io/opensphere-platform/mirror/ongres/patroni@sha256:4cc349b14da3721c240447c95c234f0f414cdee1eaab643ab099704c56ce54f3" }
+    - { version: "16.14", major: "16", patroniVersion: "4.1.4", lifecycle: Available, upstreamImage: "quay.io/ongres/patroni:v4.1.4-pg16.14-build-6.53", image: "ghcr.io/opensphere-platform/mirror/ongres/patroni@sha256:6162810498af7c092954bf7169bf1a318ea1f7d1925fdc16b70a9c8afa766c51" }
+    - { version: "15.18", major: "15", patroniVersion: "4.1.4", lifecycle: Available, upstreamImage: "quay.io/ongres/patroni:v4.1.4-pg15.18-build-6.53", image: "ghcr.io/opensphere-platform/mirror/ongres/patroni@sha256:39af519d512fa2a59e21a7517f5b4f848d12695d4dc41c28e7d1393c35fdf878" }
+    - { version: "14.23", major: "14", patroniVersion: "4.1.4", lifecycle: Available, upstreamImage: "quay.io/ongres/patroni:v4.1.4-pg14.23-build-6.53", image: "ghcr.io/opensphere-platform/mirror/ongres/patroni@sha256:e17b67db5b15db84639ca74d4b25c48e4875a737982a4f5e724e87a4cfabd06f" }

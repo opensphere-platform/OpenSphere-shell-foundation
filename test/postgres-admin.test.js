@@ -6,7 +6,7 @@ const path = require('node:path');
 const {
   postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost, POSTGRES_ADMIN,
   POSTGRES_DEFAULT_ID, parsePostgresClusterId, postgresClusterProjection, postgresBindingDatabase,
-  postgresProfileKind, sanitizePostgresProfileSpec, profileReferenceCounts, profileSpecDiff, postgresOperationPlan, postgresBackupPlan,
+  postgresRuntimeCatalogProjection, postgresProfileKind, sanitizePostgresProfileSpec, profileReferenceCounts, profileSpecDiff, postgresOperationPlan, postgresBackupPlan,
 } = require('../server.js');
 
 function throwsMessage(fn, pattern) {
@@ -59,6 +59,25 @@ test('StackGres fleet identities and projections are provider-qualified', () => 
   assert.equal(projected.id, 'stackgres:tenant-a:orders');
   assert.equal(projected.mode, 'Dedicated');
   assert.equal(projected.ready, true);
+});
+
+test('PostgreSQL runtime catalog exposes only exact-digest StackGres runtimes', () => {
+  const catalog = postgresRuntimeCatalogProjection({
+    metadata: { name: 'opensphere-stackgres' },
+    spec: {
+      provider: 'stackgres', operatorVersion: '1.19.0', defaultVersion: '18.4',
+      versions: [
+        { version: '18.4', major: '18', patroniVersion: '4.1.4', lifecycle: 'Available', image: `ghcr.io/opensphere-platform/mirror/ongres/patroni@sha256:${'a'.repeat(64)}` },
+        { version: '17.10', major: '17', patroniVersion: '4.1.4', lifecycle: 'Available', image: 'quay.io/ongres/patroni:latest' },
+      ],
+    },
+  });
+  assert.equal(catalog.provider, 'stackgres');
+  assert.equal(catalog.defaultVersion, '18.4');
+  assert.deepEqual(catalog.versions.map((item) => item.version), ['18.4']);
+  const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+  assert.match(server, /\/api\/foundation\/postgres\/runtimes/);
+  assert.match(server, /postgresruntimecatalogs\/\$\{POSTGRES_RUNTIME_CATALOG\}/);
 });
 
 test('PostgreSQL binding hosts and database URI stay namespace scoped', () => {
