@@ -83,7 +83,7 @@ func sambaOperandURL(service string, fm *unstructured.Unstructured) string {
 type identityEngineOpts struct {
 	version, profile, resourceProfile                string
 	cpuRequest, memoryRequest, cpuLimit, memoryLimit string
-	ingressMode, databaseMode                        string
+	ingressMode, databaseMode, databasePlan          string
 	replicas                                         int64
 	monitoring                                       bool
 }
@@ -177,7 +177,7 @@ func keycloakParams(fm *unstructured.Unstructured) identityEngineOpts {
 	o := identityEngineOpts{
 		version: "26.0", profile: "production", resourceProfile: "small", replicas: 1,
 		cpuRequest: "250m", memoryRequest: "512Mi", cpuLimit: "1", memoryLimit: "1536Mi",
-		ingressMode: "cluster-internal", databaseMode: "managed-postgres",
+		ingressMode: "cluster-internal", databaseMode: "managed-postgres", databasePlan: "postgresql-dev-single",
 	}
 	p, _, _ := unstructured.NestedMap(fm.Object, "spec", "parameters", "identityEngines", "keycloak")
 	if p == nil {
@@ -196,6 +196,7 @@ func keycloakParams(fm *unstructured.Unstructured) identityEngineOpts {
 	o.memoryLimit = pStr(p, "memoryLimit", o.memoryLimit)
 	o.ingressMode = pStr(p, "ingressMode", o.ingressMode)
 	o.databaseMode = pStr(p, "databaseMode", o.databaseMode)
+	o.databasePlan = pStr(p, "databasePlan", o.databasePlan)
 	o.replicas = pInt(p, "replicas", o.replicas)
 	if o.replicas < 1 {
 		o.replicas = 1
@@ -209,6 +210,11 @@ func keycloakParams(fm *unstructured.Unstructured) identityEngineOpts {
 	if o.databaseMode != "managed-postgres" {
 		o.databaseMode = "managed-postgres"
 	}
+	switch o.databasePlan {
+	case "postgresql-dev-single", "postgresql-compact-2", "postgresql-prod-ha-pitr":
+	default:
+		o.databasePlan = "postgresql-dev-single"
+	}
 	o.monitoring = pBool(p, "monitoring", false)
 	return o
 }
@@ -216,6 +222,16 @@ func keycloakParams(fm *unstructured.Unstructured) identityEngineOpts {
 func applyKeycloakParams(objs []*unstructured.Unstructured, cfg *config, fm *unstructured.Unstructured) {
 	o := keycloakParams(fm)
 	for _, obj := range objs {
+		if obj.GetKind() == "PostgresClaim" && obj.GetName() == "foundation-identity-keycloak-pg" {
+			_ = unstructured.SetNestedField(obj.Object, o.databasePlan, "spec", "planRef", "name")
+			annotations := obj.GetAnnotations()
+			if annotations == nil {
+				annotations = map[string]string{}
+			}
+			annotations["foundation.opensphere.io/database-mode"] = o.databaseMode
+			obj.SetAnnotations(annotations)
+			continue
+		}
 		if obj.GetKind() != "Deployment" || obj.GetName() != keycloakName {
 			continue
 		}
@@ -242,6 +258,7 @@ func applyKeycloakParams(objs []*unstructured.Unstructured, cfg *config, fm *uns
 		annotations["foundation.opensphere.io/profile"] = o.profile
 		annotations["foundation.opensphere.io/monitoring"] = boolStr(o.monitoring)
 		annotations["foundation.opensphere.io/ingress-mode"] = o.ingressMode
+		annotations["foundation.opensphere.io/database-plan"] = o.databasePlan
 		obj.SetAnnotations(annotations)
 	}
 }
@@ -412,6 +429,9 @@ func extraIdentity(cfg *config, o *unstructured.Unstructured) {
 	setNested(o, op.profile == "production" && op.replicas >= 2, "status", "opaProductionReady")
 	setNested(o, keycloakParams(o).version, "status", "keycloakVersion")
 	setNested(o, keycloakParams(o).profile, "status", "keycloakProfile")
+	setNested(o, "StackGres/foundation-identity-keycloak-pg/keycloak", "status", "keycloakDatabase")
+	setNested(o, keycloakParams(o).databasePlan, "status", "keycloakDatabasePlan")
+	setNested(o, "foundation-identity-keycloak-pg-binding", "status", "keycloakDatabaseBinding")
 	sp := syncopeParams(o)
 	setNested(o, syncopeURL(cfg.managedNS), "status", "syncopeURL")
 	setNested(o, sp.version, "status", "syncopeVersion")

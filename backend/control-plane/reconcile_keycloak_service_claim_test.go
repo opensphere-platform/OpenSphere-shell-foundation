@@ -132,3 +132,29 @@ func TestKeycloakBundleUsesManagedPostgresAndExternalAdminSecret(t *testing.T) {
 		t.Fatalf("bundle missing claim=%v deployment=%v", seenClaim, seenDeployment)
 	}
 }
+
+func TestKeycloakBundleAppliesSelectedPostgresPlan(t *testing.T) {
+	fm := gvkObj(fmGVK)
+	fm.SetName("identity")
+	fm.Object["spec"] = map[string]interface{}{"parameters": map[string]interface{}{
+		"engines": map[string]interface{}{"keycloak": "enabled", "samba": "disabled", "opa": "disabled", "syncope": "disabled"},
+		"identityEngines": map[string]interface{}{"keycloak": map[string]interface{}{
+			"databaseMode": "managed-postgres", "databasePlan": "postgresql-prod-ha-pitr",
+		}},
+	}}
+	objects, err := buildIdentityBundle(&config{managedNS: "opensphere-foundation", keycloakImage: "mirror/keycloak:26.0"}, fm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, object := range objects {
+		if object.GetKind() != "PostgresClaim" || object.GetName() != "foundation-identity-keycloak-pg" {
+			continue
+		}
+		plan, _, _ := unstructured.NestedString(object.Object, "spec", "planRef", "name")
+		if plan != "postgresql-prod-ha-pitr" {
+			t.Fatalf("selected database plan not rendered: %q", plan)
+		}
+		return
+	}
+	t.Fatal("Keycloak PostgresClaim was not rendered")
+}

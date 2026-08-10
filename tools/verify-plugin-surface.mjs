@@ -66,6 +66,10 @@ assert.match(keycloakSurface, /Profile Catalog/, 'Keycloak: 재사용 Profile �
 assert.match(keycloakSurface, /Keycloak 서비스 생성/, 'Keycloak: Provisioning surface 누락');
 assert.match(keycloakSurface, /IdentityServiceClaim[\s\S]*Foundation Control Plane[\s\S]*Keycloak/, 'Keycloak: 요청-배정-실행 provisioning bridge 누락');
 assert.match(keycloakSurface, /Keycloak Service Fleet/, 'Keycloak: 관리 서비스 Fleet 누락');
+assert.match(keycloakSurface, /grid-template-columns:repeat\(2,max-content\)/, 'Keycloak: Namespace·서비스 선택기를 좌우 배치하는 header 계약 누락');
+assert.match(keycloakSurface, /width:220px;min-width:220px/, 'Keycloak: Namespace·서비스 선택기 220px 폭 계약 누락');
+assert.match(keycloakSurface, /PostgreSQL PFSS 플랜[\s\S]*postgresql-prod-ha-pitr/, 'Keycloak: 설치 단계 PostgreSQL 플랜 선택 계약 누락');
+assert.doesNotMatch(keycloakSurface, /embedded[- ]h2|start-dev/i, 'Keycloak: 폐기된 embedded H2 설치 가정이 UI에 재유입됨');
 
 const sharedShell = read('src/app/shared/plugin-page-shell.component.ts');
 const canonicalTabs = ['overview', 'monitoring', 'topology', 'domain', 'backups', 'upgrade', 'events', 'documentation'];
