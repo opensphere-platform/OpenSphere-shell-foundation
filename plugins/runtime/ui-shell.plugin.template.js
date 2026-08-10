@@ -50,7 +50,7 @@ const LEGACY_VIEW_ALIASES = Object.freeze({
 });
 
 const OPERATOR_SHELL_CSS = `
-  .pfss-op-shell{position:relative;min-width:0;background:#fff;color:#161616;border:1px solid #d7d7d7;margin-top:.35rem}
+  .pfss-op-shell{position:relative;min-width:0;container-type:inline-size;background:#fff;color:#161616;border:1px solid #d7d7d7;margin-top:.35rem}
   .pfss-op-head{position:relative;display:grid;grid-template-columns:minmax(22rem,1fr) minmax(0,60%);align-items:center;gap:1.25rem;height:auto!important;min-height:8.4rem;padding:1.2rem 1.25rem .85rem;overflow:visible;background:#fff;color:#161616;box-sizing:border-box}
   .pfss-op-brand{display:flex;align-items:flex-start;gap:1rem;min-width:0;padding-right:1rem}.pfss-op-brand>div{min-width:0}.pfss-op-logo-frame{position:relative;width:3.5rem;height:3.5rem;flex:0 0 3.5rem}.pfss-op-logo{width:100%;height:100%;object-fit:contain}.pfss-op-logo-fallback{display:none;width:100%;height:100%;place-items:center;background:#eef3ff;color:#526eff;font-weight:700}.pfss-op-logo.is-error{display:none}.pfss-op-logo.is-error+.pfss-op-logo-fallback{display:grid}
   .pfss-op-brand h1{font-size:2rem;line-height:1.05;margin:.2rem 0 .25rem}.pfss-op-brand p{margin:0;max-width:100%;overflow-wrap:anywhere;color:#565656;line-height:1.35}.pfss-op-eyebrow{color:#526eff;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
@@ -61,6 +61,8 @@ const OPERATOR_SHELL_CSS = `
   .pfss-op-scope{display:flex;align-items:center;justify-content:space-between;padding:.55rem .9rem;background:#fff7f1;border-top:1px solid #f7c8aa;border-bottom:1px solid #f7c8aa;font-size:.76rem}.pfss-op-scope button{border:0;background:transparent;color:#0072a3;cursor:pointer;font-weight:600}
   @media(max-width:1180px){.pfss-op-head{grid-template-columns:1fr;padding-top:1.1rem}.pfss-op-meta{grid-template-columns:repeat(3,minmax(0,1fr));width:100%;max-width:100%;box-sizing:border-box;justify-self:end;padding-top:.2rem}.pfss-op-context{grid-column:1/-1}.pfss-op-actions{right:.7rem}.pfss-op-brand{padding-right:0;padding-top:2.25rem}}
   @media(max-width:720px){.pfss-op-head{padding:.9rem}.pfss-op-brand{padding-right:0;padding-top:2.2rem}.pfss-op-meta{grid-template-columns:repeat(2,minmax(0,1fr))}.pfss-op-context{grid-column:1/-1;grid-template-columns:1fr}.pfss-op-context>div{width:100%}}
+  @container(max-width:1180px){.pfss-op-head{grid-template-columns:1fr;padding-top:1.1rem}.pfss-op-meta{grid-template-columns:repeat(3,minmax(0,1fr));width:100%;max-width:100%;box-sizing:border-box;justify-self:end;padding-top:.2rem}.pfss-op-context{grid-column:1/-1}.pfss-op-actions{right:.7rem}.pfss-op-brand{padding-right:0;padding-top:2.25rem}}
+  @container(max-width:720px){.pfss-op-head{padding:.9rem}.pfss-op-brand{padding-right:0;padding-top:2.2rem}.pfss-op-meta{grid-template-columns:repeat(2,minmax(0,1fr))}.pfss-op-context{grid-column:1/-1;grid-template-columns:1fr}.pfss-op-context>div{width:100%}}
 `;
 
 function apiFetch(path, init) {

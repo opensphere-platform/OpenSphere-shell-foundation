@@ -111,6 +111,8 @@ assert.match(runtimeTemplate, /\.pfss-op-brand p\{[^}]*max-width:100%;[^}]*overf
 assert.match(runtimeTemplate, /\.pfss-op-meta\{display:grid;grid-template-columns:[^}]*justify-self:end;width:100%;/, '독립 plugin runtime 릴리스 메타 우측 정렬 계약 누락');
 assert.match(runtimeTemplate, /pfss-op-logo-fallback/, '독립 plugin runtime 제품 로고 fallback 누락');
 assert.match(runtimeTemplate, /naturalWidth === 0/, '독립 plugin runtime 제품 로고 실패 판정 누락');
+assert.match(runtimeTemplate, /\.pfss-op-shell\{[^}]*container-type:inline-size;/, '독립 plugin runtime이 실제 header container 폭을 관측하지 않습니다.');
+assert.match(runtimeTemplate, /@container\(max-width:1180px\)/, '독립 plugin runtime의 container 반응형 규칙 누락');
 assert.match(runtimeTemplate, /\.pfss-op-head\{[^}]*height:auto!important;[^}]*background:#fff;[^}]*color:#161616;/, '독립 plugin runtime header가 Host header 색상·높이 규칙에서 격리되지 않았습니다.');
 assert.match(runtimeTemplate, /@media\(max-width:1180px\)\{[^}]*[\s\S]{0,500}\.pfss-op-brand\{padding-right:0;padding-top:2\.25rem\}/, '독립 plugin runtime의 관리 아이콘과 브랜드가 좁은 폭에서 겹칩니다.');
 assert.match(sharedOperatorShell, /@media \(max-width: 760px\)[\s\S]{0,120}\.pfs-plugin-brand \{ padding-top: 2\.25rem; \}/, '공통 PFSS header의 관리 아이콘과 브랜드가 좁은 폭에서 겹칩니다.');
