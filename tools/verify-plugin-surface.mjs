@@ -69,6 +69,7 @@ assert.match(keycloakSurface, /Keycloak Service Fleet/, 'Keycloak: 관리 서비
 assert.match(keycloakSurface, /grid-template-columns:repeat\(2,max-content\)/, 'Keycloak: Namespace·서비스 선택기를 좌우 배치하는 header 계약 누락');
 assert.match(keycloakSurface, /width:220px;min-width:220px/, 'Keycloak: Namespace·서비스 선택기 220px 폭 계약 누락');
 assert.match(keycloakSurface, /PostgreSQL PFSS 플랜[\s\S]*postgresql-prod-ha-pitr/, 'Keycloak: 설치 단계 PostgreSQL 플랜 선택 계약 누락');
+assert.match(keycloakSurface, /openTab\(id:string\)\{this\.vr\.setModule\('keycloak'\)/, 'Keycloak: 관리 action이 다른 PFSS 모듈로 이동할 수 있음');
 assert.doesNotMatch(keycloakSurface, /embedded[- ]h2|start-dev/i, 'Keycloak: 폐기된 embedded H2 설치 가정이 UI에 재유입됨');
 
 const sharedShell = read('src/app/shared/plugin-page-shell.component.ts');
