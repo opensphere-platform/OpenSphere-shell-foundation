@@ -107,10 +107,17 @@ func TestKeycloakBundleUsesManagedPostgresAndExternalAdminSecret(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	seenClaim, seenDeployment := false, false
+	seenClaim, seenRealm, seenDeployment := false, false, false
 	for _, object := range objects {
 		if object.GetKind() == "PostgresClaim" && object.GetName() == "foundation-identity-keycloak-pg" {
 			seenClaim = true
+		}
+		if object.GetKind() == "ConfigMap" && object.GetName() == "keycloak-realm-import" {
+			seenRealm = true
+			data, _, _ := unstructured.NestedStringMap(object.Object, "data")
+			if !strings.Contains(data["opensphere-workforce-realm.json"], `"realm": "opensphere-workforce"`) {
+				t.Fatalf("Keycloak bootstrap realm is missing: %#v", data)
+			}
 		}
 		if object.GetKind() != "Deployment" || object.GetName() != keycloakName {
 			continue
@@ -119,17 +126,22 @@ func TestKeycloakBundleUsesManagedPostgresAndExternalAdminSecret(t *testing.T) {
 		containers, _, _ := unstructured.NestedSlice(object.Object, "spec", "template", "spec", "containers")
 		encoded, _ := json.Marshal(containers[0])
 		text := string(encoded)
-		for _, expected := range []string{`"start"`, "KC_DB_URL", "pgc-foundation-identity-keycloak-pg-binding", keycloakAdminSecretName} {
+		for _, expected := range []string{`"start"`, "KC_DB_URL", "pgc-foundation-identity-keycloak-pg-binding", keycloakAdminSecretName, `"containerPort":9000`, `"path":"/health/started"`, `"path":"/health/ready"`, `"path":"/health/live"`} {
 			if !strings.Contains(text, expected) {
 				t.Errorf("Keycloak deployment is missing %q: %s", expected, text)
 			}
+		}
+		volumes, _, _ := unstructured.NestedSlice(object.Object, "spec", "template", "spec", "volumes")
+		volumeJSON, _ := json.Marshal(volumes)
+		if !strings.Contains(string(volumeJSON), `"name":"keycloak-realm-import","optional":false`) {
+			t.Fatalf("Keycloak realm ConfigMap must be required: %s", volumeJSON)
 		}
 		if strings.Contains(text, "start-dev") || strings.Contains(text, "embedded-h2") {
 			t.Fatalf("development Keycloak mode leaked into production bundle: %s", text)
 		}
 	}
-	if !seenClaim || !seenDeployment {
-		t.Fatalf("bundle missing claim=%v deployment=%v", seenClaim, seenDeployment)
+	if !seenClaim || !seenRealm || !seenDeployment {
+		t.Fatalf("bundle missing claim=%v realm=%v deployment=%v", seenClaim, seenRealm, seenDeployment)
 	}
 }
 

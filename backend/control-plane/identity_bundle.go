@@ -282,7 +282,7 @@ func buildIdentityBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstruc
 	applyKeycloakParams(objs, cfg, fm)
 	out := objs[:0]
 	for _, o := range objs {
-		if !engineEnabled(fm, "keycloak") && strings.HasPrefix(o.GetName(), keycloakName) {
+		if !engineEnabled(fm, "keycloak") && (strings.HasPrefix(o.GetName(), keycloakName) || o.GetLabels()[lblEngine] == "keycloak") {
 			continue
 		}
 		out = append(out, o)

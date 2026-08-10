@@ -2,8 +2,8 @@
 # D-3: Keycloak production operand. Runtime state is stored in a dedicated
 # StackGres PostgresClaim and bootstrap administrator credentials are supplied
 # by the exact-name Secret foundation-identity-keycloak-admin.
-#   P3 identity operator 소유 CM `keycloak-realm-import`(ns opensphere-foundation)를 --import-realm 으로 마운트만 한다
-#   (인라인 realm CM 폐기, 아래 volumes). 소유권: control-plane=Keycloak operand / P3=realm config·Syncope·IGA.
+#   최초 기동에 필요한 workforce realm은 control-plane 소유 CM `keycloak-realm-import`로 함께 선언한다.
+#   설치 후 realm/client 운영은 Keycloak Admin API 계약으로 조정하며 Syncope·IGA lifecycle과 분리한다.
 # 2026-07-06 self-contained: Samba-AD operand 선언은 이 번들에서 제거됨 — plugin(OpenSphere-plugin-directory)이
 #   소유하고 GET /operand/manifests로 내민다. control-plane은 engines.samba=enabled면 그 선언을 fetch해
 #   라벨 스탬프 후 SSA apply(buildIdentityBundle). 이 파일엔 keycloak operand만 남는다.
@@ -33,12 +33,29 @@ spec:
   planRef: { name: postgresql-dev-single }
   deletionPolicy: Retain
 ---
-# [P3-W1 realm-import 핸드오프 2026-07-23] 인라인 workforce realm 정의는 폐기됨.
-#   realm 정본 = P3 identity operator 소유 ConfigMap `keycloak-realm-import`(ns opensphere-foundation, 아래
-#   Deployment 가 마운트). 근거: workforce SSO 단일 realm 정의(중복 제거) + 소유권 경계(control-plane = Keycloak
-#   operand 소유 / P3 = realm config·Syncope·IGA lifecycle 소유). 정본 시드/스키마:
-#   OpenSphere-shell-identity/bootstrap/keycloak-realm-import.yaml (client·ES256 서명·하드닝 포함 완전 realm).
-#   ※ control-plane 은 이 CM 을 정의/reclaim 하지 않는다 — P3 가 소유(SSA field owner 분리, 상호 clobber 방지).
+# Keycloak은 --import-realm을 기동 시 한 번만 처리한다. 따라서 설치 선언과 realm seed를 한 번에
+# reconcile하여 "Deployment는 있으나 realm이 없어 readiness 404"인 반쪽 설치를 만들지 않는다.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm-import
+  namespace: __NAMESPACE__
+  labels: { foundation.opensphere.io/engine: keycloak }
+data:
+  opensphere-workforce-realm.json: |
+    {
+      "realm": "opensphere-workforce",
+      "enabled": true,
+      "registrationAllowed": false,
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
+      "resetPasswordAllowed": true,
+      "rememberMe": false,
+      "verifyEmail": true,
+      "sslRequired": "external",
+      "bruteForceProtected": true
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -75,16 +92,23 @@ spec:
             - { name: KC_BOOTSTRAP_ADMIN_PASSWORD, valueFrom: { secretKeyRef: { name: foundation-identity-keycloak-admin, key: password } } }
           ports:
             - { name: http, containerPort: 8080 }
+            - { name: management, containerPort: 9000 }
+          startupProbe:
+            httpGet: { path: /health/started, port: management }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
           readinessProbe:
-            httpGet: { path: /realms/opensphere-workforce, port: 8080 }
-            initialDelaySeconds: 25
+            httpGet: { path: /health/ready, port: management }
+            initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 3
-            failureThreshold: 18
+            failureThreshold: 12
           livenessProbe:
-            httpGet: { path: /realms/opensphere-workforce, port: 8080 }
-            initialDelaySeconds: 90
+            httpGet: { path: /health/live, port: management }
+            initialDelaySeconds: 10
             periodSeconds: 20
+            timeoutSeconds: 3
             failureThreshold: 6
           # Keycloak augmentation and realm import are memory intensive.
           resources: { requests: { cpu: 250m, memory: 512Mi }, limits: { cpu: "1", memory: 1536Mi } }
@@ -94,10 +118,7 @@ spec:
             - { name: realm, mountPath: /opt/keycloak/data/import, readOnly: true }
       volumes:
         - name: realm
-          # [핸드오프] P3 identity operator 소유 realm CM 마운트(구 인라인 foundation-identity-keycloak-realm 폐기).
-          #   optional: P3 CM 미생성 시에도 Keycloak 기동(realm 부재 → import 빈 상태 → readiness 미충족 대기,
-          #   CM 생성 후 pod 재기동 시 --import-realm 반영. import-realm 은 기동 시 1회이므로 CM 늦게 오면 재기동 필요).
-          configMap: { name: keycloak-realm-import, optional: true }
+          configMap: { name: keycloak-realm-import, optional: false }
 ---
 apiVersion: v1
 kind: Service
