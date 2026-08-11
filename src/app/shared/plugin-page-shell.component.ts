@@ -21,6 +21,8 @@ export interface PluginPageHeaderModel {
   profile: string;
   namespace?: string;
   managedFleet?: boolean;
+  stackSeparator?: '/' | '·';
+  managementActions?: boolean;
 }
 
 export interface PluginPageTab {
@@ -88,7 +90,7 @@ export function pfsPluginTabs(domainLabel: string): PluginPageTab[] {
           </ng-template>
         </div>
         <div>
-          <span class="vl-eyebrow">{{ model.stack || 'PFS' }} · {{ model.capability }}</span>
+          <span class="vl-eyebrow">{{ model.stack || 'PFSS' }} {{ model.stackSeparator || '·' }} {{ model.capability }}</span>
           <h1 [id]="headingId">{{ model.name }}</h1>
           <p>{{ model.description }}</p>
         </div>
@@ -100,7 +102,7 @@ export function pfsPluginTabs(domainLabel: string): PluginPageTab[] {
         <div *ngIf="model.namespace"><dt>Namespace</dt><dd class="os-mono">{{ model.namespace }}</dd></div>
         <ng-content select="[pluginHeaderContext]" />
       </dl>
-      <nav class="pfs-operator-actions" aria-label="플랫폼 관리 작업">
+      <nav *ngIf="model.managementActions !== false" class="pfs-operator-actions" aria-label="플랫폼 관리 작업">
         <button *ngIf="model.managedFleet" type="button" title="Fleet" aria-label="Fleet" (click)="managementSelected.emit('cluster')"><os-cicon [icon]="iFleet" [size]="16" /></button>
         <button type="button" title="Profiles" aria-label="Profiles" (click)="managementSelected.emit('config')"><os-cicon [icon]="iCatalog" [size]="16" /></button>
         <button type="button" title="Provisioning" aria-label="Provisioning" (click)="managementSelected.emit('claims')"><os-cicon [icon]="iProvisioning" [size]="16" /></button>
