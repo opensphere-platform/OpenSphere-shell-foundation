@@ -80,7 +80,7 @@ assert.match(appStyles, /\.pgp-header-context-field \{[^}]*width: 220px;[^}]*min
 assert.match(appStyles, /\.pgp-page-frame \.pfs-plugin-head \{ grid-template-columns: minmax\(11\.5rem, 0\.5fr\) minmax\(0, 1\.5fr\); gap: 10px;/, 'Keycloak: PostgreSQL 공통 header identity/metadata 비율 누락');
 assert.match(appStyles, /\.pgp-page-frame \.pfs-plugin-brand p \{[^}]*overflow: hidden;[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/, 'Keycloak: 긴 설명이 PostgreSQL 공통 header 높이를 확장할 수 있습니다.');
 assert.match(appStyles, /\.pgp-page-frame \.pfs-plugin-release > \.pgp-header-tools \{[^}]*overflow: visible;/, 'Keycloak: 공통 release overflow가 header 관리 아이콘을 잘라서는 안 됩니다.');
-assert.match(keycloakSurface, /description:'Workforce IAM·SSO와 OIDC realm을 운영합니다\.'/,'Keycloak: header 설명은 한 줄 운영 요약이어야 합니다.');
+assert.match(keycloakSurface, /description:this\.exists\(\)\?'Workforce IAM·SSO와 OIDC realm을 운영합니다\.':'Namespace를 선택하거나 Keycloak 서비스를 생성하세요\.'/,'Keycloak: runtime·bootstrap header 설명 계약이 누락되었습니다.');
 assert.match(appStyles, /\.pgp-management-actions--header \{ position: absolute; top: -0\.9rem; right: 4px;/, 'Keycloak: PostgreSQL 관리 아이콘 상대 위치 누락');
 assert.match(appStyles, /\.pgp-management-actions--header \.pgp-management-action \{[^}]*color: var\(--os-brand-500\);/, 'Keycloak: 관리 아이콘 기본 색상 공통 계약 누락');
 assert.match(appStyles, /\.pgp-management-actions--header \.pgp-management-action\.active,[\s\S]*\.pgp-management-actions--header \.pgp-management-action\.active os-cicon \{[^}]*background: transparent;[^}]*color: #5f1f8f;/, 'Keycloak: 관리 아이콘 active 색상 공통 계약 누락');
