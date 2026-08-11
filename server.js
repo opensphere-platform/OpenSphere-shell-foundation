@@ -1494,8 +1494,8 @@ async function requireFoundationLifecycle(rawToken) {
   const body = await platformReadinessAuthority(rawToken);
   const prerequisites = Array.isArray(body.prerequisites) ? body.prerequisites : [];
   const clusterManager = prerequisites.find((item) => item.key === 'cluster-manager');
-  const hisBinding = prerequisites.find((item) => item.key === 'his-binding');
-  if (!clusterManager?.ready || !hisBinding?.ready) {
+  const hisPreflight = prerequisites.find((item) => item.key === 'his-preflight');
+  if (!clusterManager?.ready || !hisPreflight?.ready) {
     const reason = clusterManager?.ready ? 'his_preflight_not_ready' : 'cluster_manager_not_activated';
     throw { code: 409, msg: `Foundation mutation gate closed: ${reason}` };
   }
