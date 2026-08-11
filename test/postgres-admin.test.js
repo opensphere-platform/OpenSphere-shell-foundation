@@ -7,7 +7,9 @@ const {
   postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost, POSTGRES_ADMIN,
   POSTGRES_DEFAULT_ID, parsePostgresClusterId, postgresClusterProjection, postgresBindingDatabase,
   sanitizePostgresExtensions, postgresExtensionSpecDiff, stackGresExtensionVersions, postgresClaimResource,
-  postgresRuntimeCatalogProjection, postgresProfileKind, sanitizePostgresProfileSpec, profileReferenceCounts, profileSpecDiff, postgresOperationPlan, postgresBackupPlan,
+  postgresRuntimeCatalogProjection, postgresPlanProjection, postgresClaimProjection, validatePostgresClaimPlan,
+  postgresClaimConfirmation, requirePostgresClaimConfirm,
+  postgresProfileKind, sanitizePostgresProfileSpec, profileReferenceCounts, profileSpecDiff, postgresOperationPlan, postgresBackupPlan,
 } = require('../server.js');
 
 function throwsMessage(fn, pattern) {
@@ -113,6 +115,50 @@ test('PostgreSQL runtime catalog exposes only exact-digest StackGres runtimes', 
   const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
   assert.match(server, /\/api\/foundation\/postgres\/runtimes/);
   assert.match(server, /postgresruntimecatalogs\/\$\{POSTGRES_RUNTIME_CATALOG\}/);
+});
+
+test('R2D2 PostgreSQL owner plan is closed, runtime-bound, and uses exact confirmation', () => {
+  const resource = postgresClaimResource({
+    name: 'orders', namespace: 'opensphere-foundation', alias: 'Orders database',
+    database: 'orders', owner: 'orders_app', plan: 'postgresql-dev-single',
+    postgresVersion: '18.4', deletionPolicy: 'Retain',
+  });
+  const planResource = {
+    metadata: { name: 'postgresql-dev-single' },
+    spec: {
+      capabilityRef: 'postgresql', provider: 'stackgres', lifecycle: 'Available', profile: 'development',
+      postgresVersion: '18', supportedPostgresVersions: ['18.4'], instances: 1,
+      storage: { size: '10Gi', storageClass: 'ceph-rbd' }, resources: { cpu: '500m', memory: '1Gi' },
+      constraints: { productionHA: false },
+    },
+  };
+  const runtimeCatalog = { versions: [{ version: '18.4', lifecycle: 'Available' }] };
+  assert.equal(validatePostgresClaimPlan(planResource, runtimeCatalog, resource).name, 'postgresql-dev-single');
+  assert.equal(postgresClaimConfirmation(resource),
+    'create PostgreSQL cluster opensphere-foundation/orders plan postgresql-dev-single version 18.4');
+  assert.equal(requirePostgresClaimConfirm(postgresClaimConfirmation(resource), resource), postgresClaimConfirmation(resource));
+  throwsMessage(() => requirePostgresClaimConfirm('yes', resource), /confirmation must exactly equal/);
+  throwsMessage(() => validatePostgresClaimPlan({ ...planResource, spec: { ...planResource.spec, lifecycle: 'Preview' } }, runtimeCatalog, resource), /cannot accept new claims/);
+  throwsMessage(() => validatePostgresClaimPlan(planResource, { versions: [] }, resource), /not an Available owner runtime/);
+});
+
+test('R2D2 PostgreSQL projections do not expose credentials and owner routes remain typed', () => {
+  const plan = postgresPlanProjection({
+    metadata: { name: 'postgresql-dev-single' },
+    spec: { provider: 'stackgres', lifecycle: 'Available', supportedPostgresVersions: ['18.4'], backup: { enabled: false } },
+  });
+  assert.equal(plan.name, 'postgresql-dev-single');
+  const claim = postgresClaimProjection({
+    metadata: { namespace: 'opensphere-foundation', name: 'orders', generation: 2 },
+    spec: { planRef: { name: plan.name }, postgresVersion: '18.4', database: 'orders', owner: 'orders_app' },
+    status: { observedGeneration: 2, conditions: [{ type: 'Ready', status: 'True', message: 'binding secret orders-binding' }] },
+  });
+  assert.equal(claim.ready, true);
+  assert.equal(Object.hasOwn(claim, 'credentials'), false);
+  const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+  assert.match(server, /\/api\/foundation\/oaa\/postgres\/status/);
+  assert.match(server, /\/api\/foundation\/oaa\/postgres\/plan/);
+  assert.match(server, /PostgresClaim Ready=True and observedGeneration equals metadata\.generation/);
 });
 
 test('PostgreSQL binding hosts and database URI stay namespace scoped', () => {

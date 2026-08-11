@@ -491,14 +491,14 @@ async function postgresClaims(req, res) {
     requireClosedOwnerBody(body, ['name', 'namespace', 'alias', 'database', 'owner', 'plan', 'postgresVersion', 'deletionPolicy', 'extensions', 'profileRefs', 'storage', 'reason', 'confirm', 'dryRun']);
     const reason = requireOwnerReason(body.reason);
     const resource = postgresClaimResource(body);
-    requireOwnerConfirm(body.confirm, resource.metadata.name);
+    requirePostgresClaimConfirm(body.confirm, resource);
     await requireManagedPostgresNamespace(resource.metadata.namespace, actor);
-    const planResult = await k8sJson('GET', `/apis/catalog.opensphere.io/v1alpha1/addonplans/${resource.spec.planRef.name}`, undefined, actor);
+    const [planResult, runtimeCatalog] = await Promise.all([
+      k8sJson('GET', `/apis/catalog.opensphere.io/v1alpha1/addonplans/${resource.spec.planRef.name}`, undefined, actor),
+      loadPostgresRuntimeCatalog(actor),
+    ]);
     if (!planResult.ok) throw { code: planResult.status, msg: `AddOnPlan unavailable: ${k8sFailure(planResult)}` };
-    const planVersion = String(planResult.json?.spec?.postgresVersion || '');
-    if (planVersion && planVersion.split('.')[0] !== resource.spec.postgresVersion.split('.')[0]) {
-      throw { code: 400, msg: `PostgreSQL ${resource.spec.postgresVersion} is incompatible with AddOnPlan ${resource.spec.planRef.name}` };
-    }
+    validatePostgresClaimPlan(planResult.json, runtimeCatalog, resource);
     const path = `/apis/provisioning.opensphere.io/v1beta1/namespaces/${resource.metadata.namespace}/postgresclaims`;
     const existing = await k8sJson('GET', `${path}/${resource.metadata.name}`, undefined, actor);
     if (existing.ok) {
@@ -541,6 +541,95 @@ function postgresRuntimeCatalogProjection(resource) {
   };
 }
 
+function postgresPlanProjection(resource) {
+  const spec = resource?.spec || {};
+  const supportedPostgresVersions = Array.isArray(spec.supportedPostgresVersions)
+    ? spec.supportedPostgresVersions.map((value) => String(value || '').trim()).filter((value) => /^\d+(?:\.\d+)?$/.test(value))
+    : [];
+  return {
+    name: String(resource?.metadata?.name || ''),
+    lifecycle: String(spec.lifecycle || ''),
+    profile: String(spec.profile || ''),
+    provider: String(spec.provider || ''),
+    postgresVersion: String(spec.postgresVersion || ''),
+    supportedPostgresVersions,
+    instances: Number(spec.instances || 0),
+    pooling: spec.pooling === true,
+    storage: {
+      size: String(spec.storage?.size || ''),
+      storageClass: String(spec.storage?.storageClass || ''),
+    },
+    resources: {
+      cpu: String(spec.resources?.cpu || ''),
+      memory: String(spec.resources?.memory || ''),
+    },
+    backup: {
+      enabled: spec.backup?.enabled === true,
+      retention: Number(spec.backup?.retention || 0),
+      schedule: String(spec.backup?.cronSchedule || ''),
+    },
+    productionHA: spec.constraints?.productionHA === true,
+    warning: String(spec.constraints?.warning || ''),
+  };
+}
+
+function postgresClaimProjection(resource) {
+  const conditions = Array.isArray(resource?.status?.conditions) ? resource.status.conditions : [];
+  return {
+    namespace: String(resource?.metadata?.namespace || ''),
+    name: String(resource?.metadata?.name || ''),
+    displayName: String(resource?.metadata?.annotations?.['opensphere.io/display-name'] || ''),
+    generation: Number(resource?.metadata?.generation || 0),
+    plan: String(resource?.spec?.planRef?.name || ''),
+    postgresVersion: String(resource?.spec?.postgresVersion || ''),
+    database: String(resource?.spec?.database || ''),
+    owner: String(resource?.spec?.owner || ''),
+    deletionPolicy: String(resource?.spec?.deletionPolicy || ''),
+    phase: String(resource?.status?.phase || 'Pending'),
+    ready: conditions.some((condition) => condition?.type === 'Ready' && condition?.status === 'True'),
+    observedGeneration: Number(resource?.status?.observedGeneration || 0),
+    conditions: conditions.map((condition) => ({
+      type: String(condition?.type || ''), status: String(condition?.status || ''),
+      reason: String(condition?.reason || ''), message: String(condition?.message || '').slice(0, 300),
+    })).filter((condition) => condition.type),
+  };
+}
+
+function validatePostgresClaimPlan(planResource, runtimeCatalog, resource) {
+  const plan = postgresPlanProjection(planResource);
+  if (plan.provider !== 'stackgres' || planResource?.spec?.capabilityRef !== 'postgresql') {
+    throw { code: 409, msg: `AddOnPlan ${plan.name || resource.spec.planRef.name} is not a PostgreSQL owner plan` };
+  }
+  if (plan.lifecycle !== 'Available') {
+    throw { code: 409, msg: `AddOnPlan ${plan.name} is ${plan.lifecycle || 'Unavailable'} and cannot accept new claims` };
+  }
+  const requestedVersion = resource.spec.postgresVersion;
+  const runtime = (runtimeCatalog?.versions || []).find((item) => item.version === requestedVersion && item.lifecycle === 'Available');
+  if (!runtime) throw { code: 400, msg: `PostgreSQL ${requestedVersion} is not an Available owner runtime` };
+  if (plan.supportedPostgresVersions.length && !plan.supportedPostgresVersions.includes(requestedVersion)) {
+    throw { code: 400, msg: `PostgreSQL ${requestedVersion} is not supported by AddOnPlan ${plan.name}` };
+  }
+  if (plan.postgresVersion && plan.postgresVersion.split('.')[0] !== requestedVersion.split('.')[0]) {
+    throw { code: 400, msg: `PostgreSQL ${requestedVersion} is incompatible with AddOnPlan ${plan.name}` };
+  }
+  return plan;
+}
+
+function postgresClaimConfirmation(resource) {
+  return `create PostgreSQL cluster ${resource.metadata.namespace}/${resource.metadata.name} plan ${resource.spec.planRef.name} version ${resource.spec.postgresVersion}`;
+}
+
+function requirePostgresClaimConfirm(value, resource) {
+  const supplied = String(value || '');
+  const expected = postgresClaimConfirmation(resource);
+  // The existing human-operated PFSS form confirms with the exact claim name.
+  // R2D2 uses the stronger plan/version-bound phrase returned by the plan API.
+  if (supplied !== resource.metadata.name && supplied !== expected) {
+    throw { code: 400, msg: `confirmation must exactly equal ${expected}` };
+  }
+  return supplied;
+}
+
 async function loadPostgresRuntimeCatalog(actor) {
   const result = await k8sJson('GET', `/apis/catalog.opensphere.io/v1alpha1/postgresruntimecatalogs/${POSTGRES_RUNTIME_CATALOG}`, undefined, actor);
   if (!result.ok) throw { code: result.status, msg: 'PostgreSQL runtime catalog unavailable: ' + k8sFailure(result) };
@@ -549,6 +638,88 @@ async function loadPostgresRuntimeCatalog(actor) {
     throw { code: 409, msg: 'PostgreSQL runtime catalog is incomplete' };
   }
   return catalog;
+}
+
+async function postgresOaaStatus(req, res) {
+  if (req.method !== 'GET') return jsonRes(res, 405, { error: 'read-only endpoint' });
+  try {
+    const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
+    const [runtimeCatalog, planResult, namespaceResult, claimResult, clusterResult] = await Promise.all([
+      loadPostgresRuntimeCatalog(actor),
+      k8sJson('GET', '/apis/catalog.opensphere.io/v1alpha1/addonplans', undefined, actor),
+      k8sJson('GET', '/api/v1/namespaces', undefined, actor),
+      k8sJson('GET', '/apis/provisioning.opensphere.io/v1beta1/postgresclaims', undefined, actor),
+      k8sJson('GET', '/apis/stackgres.io/v1/sgclusters', undefined, actor),
+    ]);
+    const required = [planResult, namespaceResult, claimResult];
+    const failed = required.find((item) => !item.ok);
+    if (failed) throw { code: failed.status, msg: `PostgreSQL owner inventory unavailable: ${k8sFailure(failed)}` };
+    if (!clusterResult.ok && clusterResult.status !== 404) {
+      throw { code: clusterResult.status, msg: `PostgreSQL runtime inventory unavailable: ${k8sFailure(clusterResult)}` };
+    }
+    const plans = (planResult.json?.items || []).map(postgresPlanProjection)
+      .filter((item) => item.name && item.provider === 'stackgres')
+      .sort((a, b) => Number(b.lifecycle === 'Available') - Number(a.lifecycle === 'Available') || a.name.localeCompare(b.name));
+    const managedNamespaces = (namespaceResult.json?.items || [])
+      .filter((item) => !item?.metadata?.deletionTimestamp
+        && (item?.metadata?.labels?.['opensphere.io/managed-by'] === 'foundation'
+          || item?.metadata?.labels?.['app.kubernetes.io/managed-by'] === 'foundation-control-plane'))
+      .map((item) => String(item?.metadata?.name || '')).filter(Boolean).sort();
+    const claims = (claimResult.json?.items || []).map(postgresClaimProjection)
+      .sort((a, b) => a.namespace.localeCompare(b.namespace) || a.name.localeCompare(b.name));
+    const clusters = ((clusterResult.ok ? clusterResult.json?.items : []) || []).map(postgresClusterProjection)
+      .sort((a, b) => Number(b.ready) - Number(a.ready) || a.displayName.localeCompare(b.displayName));
+    return jsonRes(res, 200, {
+      schema: 'foundation.postgres.owner-status/v1alpha1', owner: 'PFSS / data.sql.postgres',
+      capabilities: ['status-read', 'claim-plan', 'claim-create'], runtimeCatalog, plans,
+      managedNamespaces, claims, clusters, refreshedAt: new Date().toISOString(),
+    });
+  } catch (e) {
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 502, { error: e.msg || e.message || String(e) });
+  }
+}
+
+async function postgresOaaPlan(req, res) {
+  if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
+  try {
+    const actor = await foundationOwnerActor(req);
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    requireClosedOwnerBody(body, ['name', 'namespace', 'alias', 'database', 'owner', 'plan', 'postgresVersion', 'deletionPolicy', 'storage']);
+    const resource = postgresClaimResource(body);
+    await requireManagedPostgresNamespace(resource.metadata.namespace, actor);
+    const [planResult, runtimeCatalog] = await Promise.all([
+      k8sJson('GET', `/apis/catalog.opensphere.io/v1alpha1/addonplans/${resource.spec.planRef.name}`, undefined, actor),
+      loadPostgresRuntimeCatalog(actor),
+    ]);
+    if (!planResult.ok) throw { code: planResult.status, msg: `AddOnPlan unavailable: ${k8sFailure(planResult)}` };
+    const plan = validatePostgresClaimPlan(planResult.json, runtimeCatalog, resource);
+    const path = `/apis/provisioning.opensphere.io/v1beta1/namespaces/${resource.metadata.namespace}/postgresclaims`;
+    const existing = await k8sJson('GET', `${path}/${resource.metadata.name}`, undefined, actor);
+    if (!existing.ok && existing.status !== 404) throw { code: existing.status, msg: k8sFailure(existing) };
+    const same = existing.ok && JSON.stringify(existing.json?.spec || {}) === JSON.stringify(resource.spec)
+      && existing.json?.metadata?.annotations?.['opensphere.io/display-name'] === resource.metadata.annotations['opensphere.io/display-name'];
+    if (existing.ok && !same) throw { code: 409, msg: `PostgresClaim ${resource.metadata.namespace}/${resource.metadata.name} already exists with a different contract` };
+    let validated = resource;
+    if (!existing.ok) {
+      const validation = await k8sJson('POST', `${path}?dryRun=All&fieldManager=opensphere-foundation`, resource, actor);
+      if (!validation.ok) throw { code: validation.status, msg: `PostgresClaim dry-run rejected: ${k8sFailure(validation)}` };
+      validated = validation.json || resource;
+    }
+    return jsonRes(res, 200, {
+      schema: 'foundation.postgres.claim-plan/v1alpha1', owner: 'PFSS / data.sql.postgres',
+      target: `PostgresClaim/${resource.metadata.namespace}/${resource.metadata.name}`,
+      action: same ? 'NoChange' : 'Create', expectedConfirmation: postgresClaimConfirmation(resource),
+      postcondition: 'PostgresClaim Ready=True and observedGeneration equals metadata.generation',
+      plan, resource: postgresClaimProjection(validated),
+      warnings: [
+        ...(plan.productionHA ? [] : ['Selected plan is not production HA']),
+        ...(resource.spec.deletionPolicy === 'Delete' ? ['DeletionPolicy Delete removes the managed cluster when the claim is released'] : []),
+        ...(plan.warning ? [plan.warning] : []),
+      ],
+    });
+  } catch (e) {
+    return jsonRes(res, typeof e.code === 'number' ? e.code : 400, { error: e.msg || e.message || String(e) });
+  }
 }
 
 async function postgresRuntimes(req, res) {
@@ -2679,6 +2850,8 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/foundation/establishment/status') return foundationEstablishmentStatus(req, res);
     if (p === '/api/foundation/bootstrap/plan') return foundationBootstrapPlan(req, res);
     if (p === '/api/foundation/oaa/status') return foundationStatus(req, res);
+    if (p === '/api/foundation/oaa/postgres/status') return postgresOaaStatus(req, res);
+    if (p === '/api/foundation/oaa/postgres/plan') return postgresOaaPlan(req, res);
     if (p === '/api/foundation/oaa/engines/lifecycle') return foundationEngineLifecycle(req, res);
     if (p === '/api/foundation/oaa/claims/create') return foundationClaimCreate(req, res);
     if (p === '/api/foundation/oaa/claims/release') return foundationClaimRelease(req, res);
@@ -2765,6 +2938,8 @@ if (require.main === module) {
     parseResp, encodeRespCommand, parseInfo, sanitizeAclLine, requireValkeyDb, requireValkeyKey,
     postgresReadOnlySql, postgresActionPlan, pgName, postgresServiceHost, postgresBindingDatabase,
     parsePostgresClusterId, postgresClusterProjection, postgresRuntimeCatalogProjection,
+    postgresPlanProjection, postgresClaimProjection, validatePostgresClaimPlan,
+    postgresClaimConfirmation, requirePostgresClaimConfirm,
     postgresExtensionName, postgresExtensionVersion, sanitizePostgresExtensions, postgresExtensionSpecDiff,
     stackGresExtensionVersions, stackGresExtensionCatalog, postgresClaimResource,
     postgresProfileKind, sanitizePostgresProfileSpec, profileReferenceCounts, profileSpecDiff,
