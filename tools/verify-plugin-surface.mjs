@@ -79,6 +79,11 @@ assert.match(appStyles, /\.pgp-page-frame\.kc-page-frame \.pfs-plugin-brand p \{
 assert.match(appStyles, /\.pgp-page-frame\.kc-page-frame \.pfs-plugin-release > \.pgp-header-tools \{ overflow: visible; \}/, 'Keycloak: scoped release overflow가 header 관리 아이콘을 잘라서는 안 됩니다.');
 assert.match(keycloakSurface, /description:'Workforce IAM·SSO와 OIDC realm을 운영합니다\.'/,'Keycloak: header 설명은 한 줄 운영 요약이어야 합니다.');
 assert.match(appStyles, /\.pgp-management-actions--header \{ position: absolute; top: -0\.9rem; right: 4px;/, 'Keycloak: PostgreSQL 관리 아이콘 상대 위치 누락');
+assert.match(appStyles, /\.pgp-workspace--full \{ width: 100%; max-width: none; \}/, 'Keycloak: 전체 폭 workspace가 PostgreSQL 기준 82rem 제한을 해제하지 못했습니다.');
+assert.match(keycloakSurface, /class="pgp-empty-state"[\s\S]*class="pgp-empty-copy"[\s\S]*Keycloak 서비스 생성/, 'Keycloak: PostgreSQL 공통 빈 상태 생성 surface를 사용하지 않습니다.');
+assert.doesNotMatch(keycloakSurface, /class="kc-empty"|\.kc-empty/, 'Keycloak: 별도 빈 상태 구현이 PostgreSQL 공통 규칙과 병존합니다.');
+assert.match(appStyles, /\.pgp-empty-copy h2 \{[^}]*font-size: 1\.2rem;[^}]*line-height: 1\.3;/, 'Keycloak: 빈 상태 제목 타이포가 PostgreSQL 기준과 다릅니다.');
+assert.match(appStyles, /\.pgp-empty-copy p \{[^}]*font-size: 0\.72rem;[^}]*line-height: 1\.5;/, 'Keycloak: 빈 상태 설명 타이포가 PostgreSQL 기준과 다릅니다.');
 assert.match(keycloakSurface, /PostgreSQL PFSS 플랜[\s\S]*postgresql-prod-ha-pitr/, 'Keycloak: 설치 단계 PostgreSQL 플랜 선택 계약 누락');
 assert.match(keycloakSurface, /openTab\(id:string\)\{this\.vr\.setModule\('keycloak'\)/, 'Keycloak: 관리 action이 다른 PFSS 모듈로 이동할 수 있음');
 assert.match(keycloakSurface, /\['operator','cluster','config','claims'\]\.includes\(wanted\)/, 'Keycloak: 관리 workspace 딥링크 복원 계약 누락');
