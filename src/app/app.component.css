@@ -398,6 +398,7 @@ pg-metric { display: block; height: 100%; }
 .pgp-page-frame.kc-page-frame .pfs-plugin-release dd { font-size: 0.74rem; }
 .pgp-header-tools { position: relative; min-width: 0; padding-top: 1.55rem; }
 .pgp-page-frame .pfs-plugin-release > .pgp-header-tools { padding: 1.55rem 6px 0; overflow: visible; }
+.pgp-page-frame.kc-page-frame .pfs-plugin-release > .pgp-header-tools { overflow: visible; }
 .pgp-page-frame.kc-page-frame .pgp-header-context { display: grid; grid-template-columns: repeat(2, max-content); justify-content: end; gap: 6px; align-items: end; }
 .pgp-page-frame.kc-page-frame .pgp-header-context-field { flex: 0 0 220px; width: 220px; min-width: 220px; margin: 0; }
 .pgp-page-frame.kc-page-frame .pgp-header-context-action,
