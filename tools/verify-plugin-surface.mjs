@@ -75,6 +75,8 @@ assert.match(keycloakSurface, /Keycloak Service Fleet/, 'Keycloak: 관리 서비
 assert.match(appStyles, /\.pgp-page-frame\.kc-page-frame \.pgp-header-context \{[^}]*grid-template-columns: repeat\(2, max-content\);[^}]*justify-content: end;/, 'Keycloak: Namespace·서비스 선택기를 좌우·우측 정렬하는 header 계약 누락');
 assert.match(appStyles, /\.pgp-page-frame\.kc-page-frame \.pgp-header-context-field \{[^}]*width: 220px;[^}]*min-width: 220px;/, 'Keycloak: Namespace·서비스 선택기 220px 폭 계약 누락');
 assert.match(appStyles, /\.pgp-page-frame\.kc-page-frame \.pfs-plugin-head \{ grid-template-columns: minmax\(11\.5rem, 0\.5fr\) minmax\(0, 1\.5fr\); gap: 10px;/, 'Keycloak: PostgreSQL header identity/metadata 비율 누락');
+assert.match(appStyles, /\.pgp-page-frame\.kc-page-frame \.pfs-plugin-brand p \{[^}]*overflow: hidden;[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/, 'Keycloak: 긴 설명이 PostgreSQL 기준 header 높이를 확장할 수 있습니다.');
+assert.match(keycloakSurface, /description:'Workforce IAM·SSO와 OIDC realm을 운영합니다\.'/,'Keycloak: header 설명은 한 줄 운영 요약이어야 합니다.');
 assert.match(appStyles, /\.pgp-management-actions--header \{ position: absolute; top: -0\.9rem; right: 4px;/, 'Keycloak: PostgreSQL 관리 아이콘 상대 위치 누락');
 assert.match(keycloakSurface, /PostgreSQL PFSS 플랜[\s\S]*postgresql-prod-ha-pitr/, 'Keycloak: 설치 단계 PostgreSQL 플랜 선택 계약 누락');
 assert.match(keycloakSurface, /openTab\(id:string\)\{this\.vr\.setModule\('keycloak'\)/, 'Keycloak: 관리 action이 다른 PFSS 모듈로 이동할 수 있음');
