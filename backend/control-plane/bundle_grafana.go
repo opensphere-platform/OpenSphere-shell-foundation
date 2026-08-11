@@ -62,6 +62,16 @@ func buildGrafanaBundle(cfg *config, fm *unstructured.Unstructured) []*unstructu
 					"spec": map[string]interface{}{
 						"imagePullSecrets": []interface{}{map[string]interface{}{"name": "opensphere-ghcr-pull"}},
 						"securityContext":  map[string]interface{}{"runAsNonRoot": true, "runAsUser": int64(472), "runAsGroup": int64(472), "fsGroup": int64(472)},
+						// Grafana Operator 5.24 creates spec.persistentVolumeClaim but keeps its
+						// generated grafana-data volume as emptyDir unless the Deployment merge
+						// explicitly replaces that named volume. Bind the owner-managed claim so
+						// persistence is real and WaitForFirstConsumer storage can become Ready.
+						"volumes": []interface{}{map[string]interface{}{
+							"name": "grafana-data",
+							"persistentVolumeClaim": map[string]interface{}{
+								"claimName": grafanaName + "-pvc",
+							},
+						}},
 						"containers": []interface{}{map[string]interface{}{
 							"name": "grafana",
 							"resources": map[string]interface{}{
