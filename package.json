@@ -18,6 +18,7 @@
     "test:platform-delivery": "node --test test/platform-delivery.test.js",
     "test:opensearch-hosting": "node --test test/opensearch-hosting.test.js",
     "test:postgres-admin": "node --test test/postgres-admin.test.js",
+    "test:pfss-header": "node --test test/pfss-header-icon-contract.test.js",
     "package:plugin": "node tools/package-foundation-plugin.mjs"
   },
   "dependencies": {

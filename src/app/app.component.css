@@ -402,6 +402,7 @@ pg-metric { display: block; height: 100%; }
 .pgp-management-action--primary os-cicon { color: inherit; }
 .pgp-management-actions--header { position: absolute; top: -0.9rem; right: 4px; justify-content: flex-end; align-items: center; min-height: 1.45rem; border-left: 0; }
 .pgp-management-actions--header .pgp-management-action { width: 1.4rem; min-width: 1.4rem; min-height: 1.45rem; border-bottom: 0; color: var(--os-brand-500); }
+.pgp-management-actions--header .pgp-management-action os-cicon { display: inline-flex; width: 16px; min-width: 16px; height: 16px; min-height: 16px; align-items: center; justify-content: center; line-height: 0; }
 .pgp-management-actions--header .pgp-management-action:hover,
 .pgp-management-actions--header .pgp-management-action:focus-visible { background: #f7f2fb; color: #5f1f8f; }
 .pgp-management-actions--header .pgp-management-action.active,
