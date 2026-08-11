@@ -38,7 +38,7 @@ const DEFAULT_FORM: PsmdbForm = {
   template: `
     <a class="vl-back" (click)="back()" (keydown.enter)="back()" role="button" tabindex="0"><os-cicon [icon]="iBack" [size]="16"/> PFSS 모듈</a>
     <section class="pgp-page-frame" aria-label="Percona PSMDB plugin 개요와 메뉴">
-      <osp-plugin-page-header [model]="headerModel()" headingId="psmdb-plugin-title" />
+      <osp-plugin-page-header [model]="headerModel()" headingId="psmdb-plugin-title" (managementSelected)="openTab($event)" (namespaceAdd)="openTab('claims')" (refreshRequested)="refresh()" />
       <osp-plugin-tabs [tabs]="tabsForUi()" [active]="tab()" ariaLabel="Percona PSMDB plugin 메뉴" (selected)="openTab($event)" />
     </section>
 
@@ -101,7 +101,7 @@ export class PsmdbPluginComponent implements OnInit, OnDestroy {
   ngOnDestroy():void{this.ps.stop();if(this.watch)clearInterval(this.watch);}
   private async initialize():Promise<void>{await Promise.allSettled([this.reg.refreshModels(),this.loadStorageClasses(),this.loadControlPlane()]);this.hydrate();await this.ps.refresh();this.ensureSelection();}
   back():void{this.vr.setModule('modules');} openTab(id:string):void{this.vr.setTab(id);} patch(value:Partial<PsmdbForm>):void{this.form.update((form)=>({...form,...value}));}
-  headerModel():PluginPageHeaderModel{return{name:'Percona PSMDB',logo:SPEC.logo,capability:SPEC.capability,description:'Percona Server for MongoDB 기반 ReplicaSet 설치·TLS·영속성·모니터링·Database와 사용자 운영을 제공하는 Foundation plugin',lifecycle:!this.ps.runtime.operatorReady('psmdb')?'Operator required':!this.ps.exists()?'Service required':this.ps.ready()?'Ready':'Progressing',lifecycleClass:this.ps.ready()?'label-success':'label-warning',versionLabel:'MongoDB',version:this.ps.summary()?.version||this.form().version,profile:this.form().profile,namespace:SPEC.namespace};}
+  headerModel():PluginPageHeaderModel{const exists=this.ps.exists();return{name:'Percona PSMDB',logo:SPEC.logo,capability:SPEC.capability,description:exists?'Percona Server for MongoDB 기반 ReplicaSet을 운영합니다.':'Namespace를 선택하거나 Percona PSMDB 서비스를 생성하세요.',lifecycle:!exists?'Bootstrap 대기':this.ps.ready()?'Ready':'Progressing',lifecycleClass:this.ps.ready()?'label-success':'label-warning',versionLabel:'MongoDB',version:exists?(this.ps.summary()?.version||this.form().version):'—',profile:exists?this.form().profile:'미선택',namespace:SPEC.namespace};}
   tabsForUi():PluginPageTab[]{return this.tabs.map((item)=>({...item,disabled:['monitoring','topology','config','domain','backups','events'].includes(item.id)&&!this.ps.exists(),badge:item.id==='events'?(this.ps.rt().events.filter((event:any)=>event.type==='Warning').length||''):''}));}
   setProfile(profile:Profile):void{if(profile==='production'){this.form.set(structuredClone(DEFAULT_FORM));return;}if(profile==='development'){this.form.update((f)=>({...f,profile,replicas:1,storageSize:'10Gi',resourceProfile:'small',cpuRequest:'250m',memoryRequest:'512Mi',cpuLimit:'1',memoryLimit:'1Gi'}));return;}this.patch({profile});}
   setResource(profile:string):void{const map:Record<string,Partial<PsmdbForm>>={small:{resourceProfile:'small',cpuRequest:'250m',memoryRequest:'512Mi',cpuLimit:'1',memoryLimit:'1Gi'},medium:{resourceProfile:'medium',cpuRequest:'500m',memoryRequest:'1Gi',cpuLimit:'2',memoryLimit:'2Gi'},large:{resourceProfile:'large',cpuRequest:'1',memoryRequest:'2Gi',cpuLimit:'4',memoryLimit:'4Gi'}};this.patch({...map[profile],profile:'custom'});}

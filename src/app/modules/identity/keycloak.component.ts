@@ -5,15 +5,10 @@ import { ClarityModule } from '@clr/angular';
 import { CarbonIcon } from '../../carbon-icon';
 import { apiBase, hostFetch } from '../../api-base';
 import { IdentityEngineInstallParameters, FoundationRegistryService } from '../../registry/foundation-registry.service';
-import { PfsPluginTabId, PluginPageHeaderComponent, PluginPageHeaderModel, PluginPageTab, PluginTabsComponent, pfsPluginTabs } from '../../shared/plugin-page-shell.component';
+import { PfsPluginTabId, PluginHeaderContextModel, PluginPageHeaderComponent, PluginPageHeaderModel, PluginPageTab, PluginTabsComponent, pfsPluginTabs } from '../../shared/plugin-page-shell.component';
 import { ViewRouter } from '../../view-router';
 import { KcService } from './identity.services';
 import ArrowLeft16 from '@carbon/icons/es/arrow--left/16';
-import ListBoxes16 from '@carbon/icons/es/list--boxes/16';
-import Catalog16 from '@carbon/icons/es/catalog/16';
-import DataAdd16 from '@carbon/icons/es/data--add/16';
-import Settings16 from '@carbon/icons/es/settings/16';
-import Renew16 from '@carbon/icons/es/renew/16';
 
 type Tab = PfsPluginTabId;
 type KeycloakForm = IdentityEngineInstallParameters;
@@ -40,37 +35,8 @@ const DEFAULT_FORM: KeycloakForm = {
   template: `
     <a class="vl-back" (click)="back()" (keydown.enter)="back()" role="button" tabindex="0"><os-cicon [icon]="iBack" [size]="16" /> PFSS 모듈</a>
     <section class="pgp-page-frame" aria-label="Keycloak plugin 개요와 메뉴">
-      <osp-plugin-page-header [model]="headerModel()" headingId="keycloak-plugin-title">
-        <div pluginHeaderContext class="pgp-header-tools">
-          <nav class="pgp-management-actions pgp-management-actions--header" aria-label="Keycloak 관리 작업">
-            <a class="pgp-management-action" href="/pfss/keycloak/cluster" aria-label="전체 서비스" title="전체 서비스" [class.active]="tab()==='cluster'" [attr.aria-current]="tab()==='cluster'?'page':null"><os-cicon [icon]="iFleet" [size]="16" /><span>전체 서비스</span></a>
-            <a class="pgp-management-action" href="/pfss/keycloak/config" aria-label="설정 카탈로그" title="설정 카탈로그" [class.active]="tab()==='config'" [attr.aria-current]="tab()==='config'?'page':null"><os-cicon [icon]="iCatalog" [size]="16" /><span>설정 카탈로그</span></a>
-            <a class="pgp-management-action pgp-management-action--primary" href="/pfss/keycloak/claims" aria-label="Keycloak 생성" title="Keycloak 생성" [class.active]="tab()==='claims'" [attr.aria-current]="tab()==='claims'?'page':null"><os-cicon [icon]="iAdd" [size]="16" /><span>Keycloak 생성</span></a>
-            <a class="pgp-management-action" href="/pfss/keycloak/operator" aria-label="엔진 관리" title="엔진 관리" [class.active]="tab()==='operator'" [attr.aria-current]="tab()==='operator'?'page':null"><os-cicon [icon]="iSettings" [size]="16" /><span>엔진 관리</span></a>
-          </nav>
-          <div class="pgp-header-context" aria-label="Keycloak 운영 컨텍스트">
-            <div class="pgp-header-context-unit">
-              <clr-select-container class="pgp-header-context-field">
-                <label>Namespace</label>
-                <select clrSelect name="keycloakNamespace" aria-label="Keycloak Namespace 선택" [ngModel]="svc.ns">
-                  <option [ngValue]="svc.ns">{{svc.ns}}</option>
-                </select>
-              </clr-select-container>
-              <button class="btn btn-sm btn-link pgp-header-context-action" type="button"
-                aria-label="선택한 Namespace에 Keycloak 서비스 추가" title="Keycloak 서비스 추가" (click)="openTab('claims')">추가</button>
-            </div>
-            <div class="pgp-header-context-unit">
-              <clr-select-container class="pgp-header-context-field" *ngIf="exists()">
-                <label>Keycloak 서비스</label>
-                <select clrSelect name="keycloakService" aria-label="Keycloak 서비스 선택" [ngModel]="svc.name" disabled>
-                  <option [ngValue]="svc.name">{{svc.name}}</option>
-                </select>
-              </clr-select-container>
-              <button class="btn btn-sm btn-link pgp-header-context-refresh" type="button" aria-label="Keycloak 컨텍스트 새로고침" title="새로고침" (click)="refresh()"><os-cicon [icon]="iRenew" [size]="16" /></button>
-            </div>
-          </div>
-        </div>
-      </osp-plugin-page-header>
+      <osp-plugin-page-header [model]="headerModel()" [context]="headerContext()" headingId="keycloak-plugin-title"
+        (managementSelected)="openTab($event)" (namespaceAdd)="openTab('claims')" (refreshRequested)="refresh()" />
       <div class="kc-navigation-row" *ngIf="exists()&&!isManagementView()"><osp-plugin-tabs [tabs]="tabsForUi()" [active]="tab()" ariaLabel="Keycloak 운영 메뉴" (selected)="openTab($event)" /></div>
       <div class="kc-management-scope" *ngIf="isManagementView()"><span><b>관리 워크스페이스</b> · 운영 상태 탭과 분리된 Keycloak 서비스·프로파일·프로비저닝 영역입니다.</span><button *ngIf="exists()" class="btn btn-sm btn-link" type="button" (click)="openOperational()">선택한 서비스로 돌아가기</button></div>
     </section>
@@ -167,7 +133,7 @@ const DEFAULT_FORM: KeycloakForm = {
 })
 export class KeycloakComponent implements OnInit, OnDestroy {
   readonly svc = inject(KcService); private readonly reg = inject(FoundationRegistryService); private readonly vr = inject(ViewRouter);
-  readonly iBack = ArrowLeft16; readonly iFleet = ListBoxes16; readonly iCatalog = Catalog16; readonly iAdd = DataAdd16; readonly iSettings = Settings16; readonly iRenew = Renew16; readonly logoUrl = LOGO; readonly manualId = MANUAL_ID; readonly manualUrl = `/manual?doc=${encodeURIComponent(`plugin:foundation/${MANUAL_ID}`)}`; readonly tab = signal<Tab>('overview'); readonly form = signal<KeycloakForm>({...DEFAULT_FORM}); readonly controlPlaneReady = signal(false); readonly postgresInstances = signal<PostgresInstanceOption[]>([]); readonly postgresCatalogState = signal<'loading'|'ok'|'error'>('loading'); readonly selectedPostgresInstance = computed(()=>this.postgresInstances().find(pg=>pg.name===this.form().databaseTargetClaim)); readonly applying = signal(false); readonly progress = signal(0); readonly logs = signal<string[]>([]);
+  readonly iBack = ArrowLeft16; readonly logoUrl = LOGO; readonly manualId = MANUAL_ID; readonly manualUrl = `/manual?doc=${encodeURIComponent(`plugin:foundation/${MANUAL_ID}`)}`; readonly tab = signal<Tab>('overview'); readonly form = signal<KeycloakForm>({...DEFAULT_FORM}); readonly controlPlaneReady = signal(false); readonly postgresInstances = signal<PostgresInstanceOption[]>([]); readonly postgresCatalogState = signal<'loading'|'ok'|'error'>('loading'); readonly selectedPostgresInstance = computed(()=>this.postgresInstances().find(pg=>pg.name===this.form().databaseTargetClaim)); readonly applying = signal(false); readonly progress = signal(0); readonly logs = signal<string[]>([]);
   private timer: ReturnType<typeof setInterval>|undefined;
   readonly tabs: {id:Tab;label:string;runtime?:boolean}[]=pfsPluginTabs('Realms & Roles').map(tab=>({...tab,id:tab.id as Tab,runtime:['topology','events'].includes(tab.id)}));
   readonly validationError=computed(()=>{const f=this.form();if(f.version!=='26.0')return'검증된 Keycloak 26.0만 설치할 수 있습니다.';if(f.replicas<1||f.replicas>5)return'Replicas는 1–5 범위여야 합니다.';if(!['dedicated','existing-instance'].includes(f.databaseMode))return'PostgreSQL PFSS 데이터베이스 배정 방식을 선택해야 합니다.';if(f.databaseMode==='dedicated'&&!['postgresql-dev-single','postgresql-compact-2','postgresql-prod-ha-pitr'].includes(f.databasePlan))return'검증된 PostgreSQL PFSS 플랜을 선택해야 합니다.';if(f.databaseMode==='existing-instance'&&!f.databaseTargetClaim)return'Keycloak database를 추가할 기존 PostgreSQL 인스턴스를 선택해야 합니다.';if(f.databaseMode==='existing-instance'&&this.postgresCatalogState()==='ok'&&!this.selectedPostgresInstance())return'선택한 PostgreSQL 인스턴스가 Ready 상태가 아닙니다.';if(f.profile==='production'&&(this.effectiveDatabasePlan()!=='postgresql-prod-ha-pitr'||f.replicas<2))return'Production은 HA/PITR PostgreSQL 인스턴스와 Keycloak replica 2개 이상이 필요합니다.';return'';});
@@ -177,7 +143,8 @@ export class KeycloakComponent implements OnInit, OnDestroy {
   private async initialize(){await Promise.allSettled([this.reg.refreshModels(),this.svc.refresh(),this.loadControlPlane(),this.loadPostgresInstances()]);const p=this.reg.parametersOf('keycloak') as any;const cfg=p?.identityEngines?.keycloak;if(cfg)this.form.update(f=>({...f,...cfg,databaseMode:cfg.databaseMode==='existing-instance'?'existing-instance':'dedicated',databaseTargetClaim:String(cfg.databaseTargetClaim||''),databasePlan:['postgresql-dev-single','postgresql-compact-2','postgresql-prod-ha-pitr'].includes(cfg.databasePlan)?cfg.databasePlan:'postgresql-dev-single'}));}
   exists(){return this.svc.state()==='ok'&&!!this.svc.deploy();} modelState(){return this.reg.modelOf('keycloak')||'확인 중';} availability(){return this.svc.totalN()?Math.round(this.svc.readyN()/this.svc.totalN()*100):0;}
   lifecycle(){if(!this.exists())return'Bootstrap 대기';return this.svc.ready()?'Ready':'Progressing';}
-  headerModel():PluginPageHeaderModel{return{name:'Keycloak',logo:LOGO,stack:'PFSS',stackSeparator:'/',capability:'identity.iam.workspace',description:this.exists()?'Workforce IAM·SSO와 OIDC realm을 운영합니다.':'Namespace를 선택하거나 Keycloak 서비스를 생성하세요.',lifecycle:this.lifecycle(),lifecycleClass:this.svc.ready()?'label-success':'label-warning',version:this.exists()?this.form().version:'—',profile:this.exists()?this.form().profile:'미선택',managedFleet:true,managementActions:false};}
+  headerModel():PluginPageHeaderModel{return{name:'Keycloak',logo:LOGO,stack:'PFSS',stackSeparator:'/',capability:'identity.iam.workspace',description:this.exists()?'Workforce IAM·SSO와 OIDC realm을 운영합니다.':'Namespace를 선택하거나 Keycloak 서비스를 생성하세요.',lifecycle:this.lifecycle(),lifecycleClass:this.svc.ready()?'label-success':'label-warning',version:this.exists()?this.form().version:'—',profile:this.exists()?this.form().profile:'미선택',managedFleet:true};}
+  headerContext():PluginHeaderContextModel{return{namespace:this.svc.ns,namespaces:[{value:this.svc.ns,label:this.svc.ns}],resourceLabel:'Keycloak 서비스',resource:this.exists()?this.svc.name:'',resources:this.exists()?[{value:this.svc.name,label:this.svc.name}]:[],activeManagement:this.isManagementView()?this.tab():'',allowNamespaceAdd:true};}
   tabsForUi():PluginPageTab[]{return this.tabs.map(t=>({id:t.id,label:t.label,disabled:!!t.runtime&&!this.exists(),badge:t.id==='events'?this.svc.events().filter((e:any)=>e.type==='Warning').length:''}));}
   isManagementView(){return['operator','cluster','config','claims'].includes(this.tab());} back(){this.vr.setModule('modules');} openTab(id:string){this.vr.setModule('keycloak');this.tab.set(id as Tab);this.vr.setTab(id);} openOperational(){this.openTab('overview');} patch(p:Partial<KeycloakForm>){this.form.update(f=>({...f,...p}));} effectiveDatabasePlan(){return this.form().databaseMode==='dedicated'?this.form().databasePlan:(this.selectedPostgresInstance()?.plan||'—');}
   chooseProfile(profile:KeycloakForm['profile']){this.setProfile(profile);this.openTab('claims');}

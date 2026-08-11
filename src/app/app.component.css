@@ -346,12 +346,12 @@ pg-metric { display: block; height: 100%; }
 .pgp-logo, .pfs-plugin-logo { width: 68px; height: 68px; flex: 0 0 68px; display: grid; place-items: center; border: 1px solid #b9c6dd; border-radius: 18px; background: #fff; }
 .pgp-logo img, .pfs-plugin-logo img { width: 50px; height: 50px; object-fit: contain; }
 .pfs-plugin-monogram { color: var(--os-brand-500); font-size: 1rem; font-weight: 700; letter-spacing: -0.02em; }
-.pgp-brand h1, .pfs-plugin-brand h1 { margin: 2px 0 3px; color: var(--os-ink); font-size: 1.75rem; font-weight: 400; line-height: 1.12; }
-.pgp-brand p, .pfs-plugin-brand p { margin: 0; max-width: 45rem; color: var(--os-text-sec); font-size: 0.8rem; line-height: 1.45; white-space: normal; }
+.pgp-brand h1, .pfs-plugin-brand h1 { margin: 2px 0 3px; color: var(--os-ink); font-size: 1.5rem; font-weight: 400; line-height: 1.12; }
+.pgp-brand p, .pfs-plugin-brand p { margin: 0; max-width: 45rem; color: var(--os-text-sec); font-size: 0.72rem; line-height: 1.4; white-space: normal; }
 .pgp-release, .pfs-plugin-release { display: grid; grid-template-columns: repeat(4, minmax(7.5rem, auto)); margin: 0; }
 .pgp-release > div, .pfs-plugin-release > div { min-height: 3.4rem; padding: 0 14px; border-left: 1px solid var(--os-border); }
-.pgp-release dt, .pfs-plugin-release dt { margin-bottom: 8px; color: var(--os-muted); font-size: 0.68rem; }
-.pgp-release dd, .pfs-plugin-release dd { margin: 0; color: var(--os-ink); font-size: 0.82rem; }
+.pgp-release dt, .pfs-plugin-release dt { margin-bottom: 8px; color: var(--os-muted); font-size: 0.62rem; }
+.pgp-release dd, .pfs-plugin-release dd { margin: 0; color: var(--os-ink); font-size: 0.74rem; }
 
 .pgp-tabs, .pfs-plugin-tabs { display: flex; gap: 0; overflow-x: auto; margin: 0 0 18px; background: #fff; border-bottom: 1px solid var(--os-border); }
 .pgp-tab, .pfs-plugin-tab { display: inline-flex; align-items: center; gap: 6px; min-height: 2.55rem; padding: 0 12px; border: 0; border-bottom: 2px solid transparent;
@@ -504,6 +504,6 @@ pg-metric { display: block; height: 100%; }
   .pgp-release > div, .pfs-plugin-release > div { border-left: 0; border-top: 1px solid var(--os-border); padding: 8px 6px; }
   .pgp-panel:last-child { grid-column: auto; }
   .pgp-page-frame .pfs-plugin-release { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .pgp-header-context { grid-column: 1 / -1; grid-template-columns: 1fr; }
+  .pgp-header-context { grid-column: 1 / -1; grid-template-columns: 1fr; justify-items: end; }
   .pgp-management-actions--header { top: 0; }
 }

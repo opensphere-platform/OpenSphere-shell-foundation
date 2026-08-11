@@ -58,16 +58,11 @@ for (const [name, file] of surfaces) {
 }
 
 const keycloakSurface = read('src/app/modules/identity/keycloak.component.ts');
-assert.match(keycloakSurface, /pluginHeaderContext[\s\S]*Keycloak 운영 컨텍스트/, 'Keycloak: Namespace·서비스 header context 누락');
-assert.match(keycloakSurface, /managedFleet\s*:\s*true/, 'Keycloak: PostgreSQL 기준 Fleet 관리 action 누락');
-assert.match(keycloakSurface, /managementActions\s*:\s*false/, 'Keycloak: 공통 legacy 관리 action을 비활성화하지 않았습니다.');
-assert.match(keycloakSurface, /class="pgp-header-tools"[\s\S]*class="pgp-management-actions pgp-management-actions--header"/, 'Keycloak: PostgreSQL header tools 구조 누락');
-assert.match(keycloakSurface, /ListBoxes16[\s\S]*Catalog16[\s\S]*DataAdd16[\s\S]*Settings16/, 'Keycloak: PostgreSQL과 동일한 관리 action 아이콘 계약 누락');
-assert.match(keycloakSurface, /clr-select-container class="pgp-header-context-field"[\s\S]*select clrSelect name="keycloakNamespace"/, 'Keycloak: Namespace가 PostgreSQL 기준 Clarity Select가 아닙니다.');
-assert.doesNotMatch(keycloakSurface, /select clrSelect name="keycloakNamespace"[^>]*\sdisabled/, 'Keycloak: Namespace Select가 비활성 스타일로 PostgreSQL 기준과 달라졌습니다.');
-assert.match(keycloakSurface, /class="btn btn-sm btn-link pgp-header-context-action"[\s\S]*aria-label="선택한 Namespace에 Keycloak 서비스 추가"[\s\S]*>추가<\/button>/, 'Keycloak: PostgreSQL 기준 Namespace 인접 추가 action 누락');
-assert.match(keycloakSurface, /select clrSelect name="keycloakService"/, 'Keycloak: 서비스 선택기가 PostgreSQL 기준 Clarity Select가 아닙니다.');
-assert.doesNotMatch(keycloakSurface, /kc-context-field|kc-header-context|kc-refresh/, 'Keycloak: 별도 header/select 구현이 남아 있습니다.');
+assert.match(keycloakSurface, /\[context\]="headerContext\(\)"/, 'Keycloak: Namespace·서비스 공통 header context 누락');
+assert.match(keycloakSurface, /headerContext\(\):PluginHeaderContextModel/, 'Keycloak: 공통 context model 누락');
+assert.match(keycloakSurface, /managedFleet:true/, 'Keycloak: PostgreSQL 기준 Fleet 관리 action 누락');
+assert.match(keycloakSurface, /\(namespaceAdd\)="openTab\('claims'\)"/, 'Keycloak: Namespace 인접 추가 action 배선 누락');
+assert.match(keycloakSurface, /\(refreshRequested\)="refresh\(\)"/, 'Keycloak: 공통 새로고침 action 배선 누락');
 assert.match(keycloakSurface, /\*ngIf="exists\(\)&&!isManagementView\(\)"/, 'Keycloak: 서비스가 없거나 관리 view일 때 운영 탭을 숨기는 계약 누락');
 assert.match(keycloakSurface, /관리 워크스페이스/, 'Keycloak: 관리 view와 운영 view 구분 누락');
 assert.match(keycloakSurface, /Profile Catalog/, 'Keycloak: 재사용 Profile 관리 surface 누락');
@@ -84,7 +79,6 @@ assert.match(keycloakSurface, /description:this\.exists\(\)\?'Workforce IAM·SSO
 assert.match(appStyles, /\.pgp-management-actions--header \{ position: absolute; top: -0\.9rem; right: 4px;/, 'Keycloak: PostgreSQL 관리 아이콘 상대 위치 누락');
 assert.match(appStyles, /\.pgp-management-actions--header \.pgp-management-action \{[^}]*color: var\(--os-brand-500\);/, 'Keycloak: 관리 아이콘 기본 색상 공통 계약 누락');
 assert.match(appStyles, /\.pgp-management-actions--header \.pgp-management-action\.active,[\s\S]*\.pgp-management-actions--header \.pgp-management-action\.active os-cicon \{[^}]*background: transparent;[^}]*color: #5f1f8f;/, 'Keycloak: 관리 아이콘 active 색상 공통 계약 누락');
-assert.match(keycloakSurface, /aria-current/, 'Keycloak: active 관리 action의 접근성 상태 누락');
 assert.match(appStyles, /\.pgp-workspace--full \{ width: 100%; max-width: none; \}/, 'Keycloak: 전체 폭 workspace가 PostgreSQL 기준 82rem 제한을 해제하지 못했습니다.');
 assert.match(keycloakSurface, /class="pgp-empty-state"[\s\S]*class="pgp-empty-copy"[\s\S]*Keycloak 서비스 생성/, 'Keycloak: PostgreSQL 공통 빈 상태 생성 surface를 사용하지 않습니다.');
 assert.doesNotMatch(keycloakSurface, /class="kc-empty"|\.kc-empty/, 'Keycloak: 별도 빈 상태 구현이 PostgreSQL 공통 규칙과 병존합니다.');
@@ -103,8 +97,8 @@ for (const tab of canonicalTabs) {
 for (const label of ['Overview', 'Monitoring', 'Topology', 'Data Protection', 'Operations', 'Events', 'Documentation']) {
   assert.match(sharedShell, new RegExp(`label: ['\"]${label}['\"]`), `공통 11탭 계약: ${label} 라벨 누락`);
 }
-for (const action of ['Fleet', 'Profiles', 'Provisioning', 'Operator']) {
-  assert.match(sharedShell, new RegExp(`title=['\"]${action}['\"]`), `공통 management action 누락: ${action}`);
+for (const action of ['전체 서비스', '설정 카탈로그', '서비스 생성', '엔진 관리']) {
+  assert.match(sharedShell, new RegExp(action), `공통 management action 누락: ${action}`);
 }
 for (const contract of [/role="tablist"/, /role="tab"/, /aria-selected/, /tabindex/, /ArrowRight/, /ArrowLeft/, /Home/, /End/]) {
   assert.match(sharedShell, contract, `공통 탭 접근성·키보드 계약 누락: ${contract}`);
@@ -143,17 +137,19 @@ assert.match(runtimeTemplate, /MANAGEMENT_ICONS\.fleet/, '독립 plugin runtime 
 assert.match(runtimeTemplate, /MANAGEMENT_ICONS\.profiles/, '독립 plugin runtime Profiles 아이콘 매핑 누락');
 assert.match(runtimeTemplate, /MANAGEMENT_ICONS\.provisioning/, '독립 plugin runtime Provisioning 아이콘 매핑 누락');
 assert.match(runtimeTemplate, /MANAGEMENT_ICONS\.operator/, '독립 plugin runtime Operator 아이콘 매핑 누락');
-assert.match(runtimeTemplate, /\.pfss-op-head\{[^}]*grid-template-columns:minmax\(22rem,1fr\) minmax\(0,60%\);[^}]*align-items:center;/, '독립 plugin runtime의 identity/metadata 비율이 PostgreSQL header 계약과 다릅니다.');
+assert.match(runtimeTemplate, /\.pfss-op-head\{[^}]*grid-template-columns:minmax\(11\.5rem,\.5fr\) minmax\(0,1\.5fr\);[^}]*align-items:center;[^}]*min-height:6rem;/, '독립 plugin runtime의 identity/metadata 비율이 PostgreSQL header 계약과 다릅니다.');
 assert.match(runtimeTemplate, /\.pfss-op-brand>div\{min-width:0\}/, '독립 plugin runtime의 brand text가 metadata 영역을 침범할 수 있습니다.');
-assert.match(runtimeTemplate, /\.pfss-op-brand p\{[^}]*max-width:100%;[^}]*overflow-wrap:anywhere;/, '독립 plugin runtime 설명문 폭 제한이 없습니다.');
+assert.match(runtimeTemplate, /\.pfss-op-brand p\{[^}]*max-width:45rem;[^}]*overflow:hidden;[^}]*text-overflow:ellipsis;[^}]*white-space:nowrap/, '독립 plugin runtime 설명문 폭 제한이 없습니다.');
 assert.match(runtimeTemplate, /\.pfss-op-meta\{display:grid;grid-template-columns:[^}]*justify-self:end;width:100%;/, '독립 plugin runtime 릴리스 메타 우측 정렬 계약 누락');
 assert.match(runtimeTemplate, /pfss-op-logo-fallback/, '독립 plugin runtime 제품 로고 fallback 누락');
 assert.match(runtimeTemplate, /naturalWidth === 0/, '독립 plugin runtime 제품 로고 실패 판정 누락');
-assert.match(runtimeTemplate, /\.pfss-op-shell\{[^}]*container-type:inline-size;/, '독립 plugin runtime이 실제 header container 폭을 관측하지 않습니다.');
-assert.match(runtimeTemplate, /@container\(max-width:1180px\)/, '독립 plugin runtime의 container 반응형 규칙 누락');
+assert.doesNotMatch(runtimeTemplate, /@container\(max-width:1180px\)/, 'Host rail 폭이 canonical header를 임의의 고층 레이아웃으로 바꾸면 안 됩니다.');
 assert.match(runtimeTemplate, /\.pfss-op-head\{[^}]*height:auto!important;[^}]*background:#fff;[^}]*color:#161616;/, '독립 plugin runtime header가 Host header 색상·높이 규칙에서 격리되지 않았습니다.');
-assert.match(runtimeTemplate, /@media\(max-width:1180px\)\{[^}]*[\s\S]{0,500}\.pfss-op-brand\{padding-right:0;padding-top:2\.25rem\}/, '독립 plugin runtime의 관리 아이콘과 브랜드가 좁은 폭에서 겹칩니다.');
-assert.match(sharedOperatorShell, /@media \(max-width: 760px\)[\s\S]{0,120}\.pfs-plugin-brand \{ padding-top: 2\.25rem; \}/, '공통 PFSS header의 관리 아이콘과 브랜드가 좁은 폭에서 겹칩니다.');
+assert.match(runtimeTemplate, /\.pfss-op-tools\{[^}]*padding:1\.55rem 6px 0!important;[^}]*overflow:visible!important/, '독립 plugin runtime header tools 기준점 누락');
+assert.match(runtimeTemplate, /\.pfss-op-actions\{[^}]*right:4px;top:-\.9rem;/, '독립 plugin runtime 관리 아이콘 위치가 PostgreSQL과 다릅니다.');
+assert.match(runtimeTemplate, /\.pfss-op-field\{display:grid;width:220px;min-width:220px\}/, '독립 plugin runtime Namespace/서비스 폭이 220px 계약과 다릅니다.');
+assert.match(runtimeTemplate, /aria-current="page"/, '독립 plugin runtime 관리 아이콘 active 접근성 상태 누락');
+assert.match(runtimeTemplate, /Bootstrap 대기/, '독립 plugin runtime bootstrap 상태 계약 누락');
 assert.doesNotMatch(runtimeTemplate, /[☷▤⊞⚙]/, '독립 plugin runtime에 임의 문자 아이콘이 남아 있습니다.');
 assert.match(runtimeTemplate, /Symbol\.for\(`opensphere\.plugin\.foundation\.\$\{SPEC\.id\}\.runtime`\)/, '독립 plugin runtime 재활성화 context slot 누락');
 assert.match(runtimeTemplate, /RUNTIME\.apiFetch/, '독립 plugin runtime Host API capability 배선 누락');
@@ -193,7 +189,7 @@ const samba = readDirectory('ui-shell/ui-shell.plugin.js');
 assert.match(samba, /pgp-page-frame/, 'Samba-AD: PostgreSQL 공통 page frame 누락');
 assert.match(samba, /pfs-plugin-head/, 'Samba-AD: 공통 header 누락');
 assert.match(samba, /pfs-plugin-tabs/, 'Samba-AD: 공통 runtime tabs 누락');
-assert.match(samba, /pfss-op-actions/, 'Samba-AD: 관리 action 누락');
+assert.match(samba, /pgp-management-actions/, 'Samba-AD: PostgreSQL 기준 관리 action 누락');
 for (const capability of ['overview', 'monitoring', 'topology', 'directory', 'backups', 'upgrade', 'events', 'documentation']) {
   assert.match(samba, new RegExp(`['"]${capability}['"]`), `Samba-AD: ${capability} surface 누락`);
 }

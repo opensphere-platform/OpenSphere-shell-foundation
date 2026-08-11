@@ -155,6 +155,18 @@ async function runtimeStatus(req, res) {
   });
 }
 
+async function listNamespaces(req, res) {
+  const upstream = await foundationRequest(req, '/api/k8s/api/v1/namespaces');
+  const text = await upstream.text();
+  if (!upstream.ok) return json(res, upstream.status, parseJson(text, { error: `Foundation host HTTP ${upstream.status}` }));
+  const list = parseJson(text, { items: [] });
+  return json(res, 200, {
+    items: (Array.isArray(list.items) ? list.items : [])
+      .map((item) => ({ metadata: { name: String(item?.metadata?.name || '') } }))
+      .filter((item) => item.metadata.name),
+  });
+}
+
 async function applyRuntime(req, res) {
   const control = spec.control;
   if (control.reconciler !== 'implemented') {
@@ -324,6 +336,7 @@ const server = http.createServer((req, res) => {
       // upstream failures are converted into explicit HTTP responses instead
       // of becoming unhandled rejections that terminate the plugin process.
       if (url.pathname === '/api/runtime/status' && req.method === 'GET') return await runtimeStatus(req, res);
+      if (url.pathname === '/api/namespaces' && req.method === 'GET') return await listNamespaces(req, res);
       if (url.pathname === '/api/runtime/apply' && req.method === 'POST') return await applyRuntime(req, res);
       if (url.pathname === '/api/claims' && req.method === 'GET') return await listClaims(req, res);
       if (url.pathname === '/api/claims' && req.method === 'POST') return await createClaim(req, res);

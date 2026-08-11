@@ -39,7 +39,7 @@ const DEFAULT_FORM: RustFSForm = {
   template: `
     <a class="vl-back" (click)="back()" (keydown.enter)="back()" role="button" tabindex="0"><os-cicon [icon]="iBack" [size]="16"/> PFSS 모듈</a>
     <section class="pgp-page-frame" aria-label="RustFS plugin 개요와 메뉴">
-      <osp-plugin-page-header [model]="headerModel()" headingId="rustfs-plugin-title" />
+      <osp-plugin-page-header [model]="headerModel()" headingId="rustfs-plugin-title" (managementSelected)="openTab($event)" (namespaceAdd)="openTab('claims')" (refreshRequested)="refresh()" />
       <osp-plugin-tabs [tabs]="tabsForUi()" [active]="tab()" ariaLabel="RustFS plugin 메뉴" (selected)="openTab($event)" />
     </section>
 
@@ -134,7 +134,7 @@ export class RustFSPluginComponent implements OnInit, OnDestroy {
   back(): void { this.vr.setModule('modules'); }
   openTab(id: string): void { this.vr.setTab(id); }
   patch(value: Partial<RustFSForm>): void { this.form.update((form) => ({ ...form, ...value, replicas: 1, authSecret: 'rustfs-credentials', monitoring: false })); }
-  headerModel(): PluginPageHeaderModel { return { name:'RustFS', logo:SPEC.logo, capability:SPEC.capability, description:'S3 호환 오브젝트 스토리지의 설치·영속성·버킷·자격과 운영 증거를 관리하는 Foundation plugin', lifecycle:!this.controlPlaneReady()?'Runtime required':!this.rf.exists()?'Service required':this.rf.ready()?'Ready':'Progressing', lifecycleClass:this.rf.ready()?'label-success':'label-warning', versionLabel:'RustFS', version:this.rf.summary()?.version||this.form().version, profile:this.form().profile, namespace:SPEC.namespace }; }
+  headerModel(): PluginPageHeaderModel { const exists=this.rf.exists(); return { name:'RustFS', logo:SPEC.logo, capability:SPEC.capability, description:exists?'S3 호환 오브젝트 스토리지의 버킷·자격과 운영 증거를 관리합니다.':'Namespace를 선택하거나 RustFS 서비스를 생성하세요.', lifecycle:!exists?'Bootstrap 대기':this.rf.ready()?'Ready':'Progressing', lifecycleClass:this.rf.ready()?'label-success':'label-warning', versionLabel:'RustFS', version:exists?(this.rf.summary()?.version||this.form().version):'—', profile:exists?this.form().profile:'미선택', namespace:SPEC.namespace }; }
   tabsForUi(): PluginPageTab[] { return this.tabs.map((item) => ({ ...item, disabled:['monitoring','topology','config','domain','backups','events'].includes(item.id)&&!this.rf.exists(), badge:item.id==='events'?(this.rf.rt().events.filter((e:any)=>e.type==='Warning').length||''):'' })); }
   setProfile(profile: Profile): void { if (profile === 'development') this.form.set({ ...structuredClone(DEFAULT_FORM), storageClass:this.form().storageClass }); else this.patch({ profile }); }
   setResource(profile: string): void { const map: Record<string, Partial<RustFSForm>> = { small:{resourceProfile:'small',cpuRequest:'250m',memoryRequest:'512Mi',cpuLimit:'1',memoryLimit:'1Gi'}, medium:{resourceProfile:'medium',cpuRequest:'500m',memoryRequest:'1Gi',cpuLimit:'2',memoryLimit:'2Gi'}, large:{resourceProfile:'large',cpuRequest:'1',memoryRequest:'2Gi',cpuLimit:'4',memoryLimit:'4Gi'} }; this.patch({ ...map[profile], profile:'custom' }); }

@@ -114,9 +114,9 @@ export class OpaComponent implements OnInit, OnDestroy {
   readonly headerModel = computed<PluginPageHeaderModel>(() => ({
     name: 'Open Policy Agent', logo: 'https://logos.opl.io.kr/i/opa', monogram: 'OPA', capability: 'identity.policy.opa',
     description: 'Rego 정책 결정점, 안전한 정책 공급망과 결정 관측 경계를 관리합니다.',
-		lifecycle: this.productionReady() ? 'Production Ready' : this.svc.ready() ? 'Production gates pending' : this.exists() ? 'Progressing' : 'Not installed',
-		lifecycleClass: this.productionReady() ? 'label-success' : 'label-warning', version: this.svc.fm()?.spec?.parameters?.identityEngines?.opa?.version || '1.18.2-static',
-		profile: 'production · fail-closed', namespace: 'opensphere-foundation',
+		lifecycle: !this.exists() ? 'Bootstrap 대기' : this.productionReady() ? 'Production Ready' : this.svc.ready() ? 'Production gates pending' : 'Progressing',
+		lifecycleClass: this.productionReady() ? 'label-success' : 'label-warning', version: this.exists() ? (this.svc.fm()?.spec?.parameters?.identityEngines?.opa?.version || '1.18.2-static') : '—',
+		profile: this.exists() ? 'production · fail-closed' : '미선택', namespace: 'opensphere-foundation',
   }));
   private readonly tabs: PluginPageTab[] = pfsPluginTabs('Policies & Decisions');
 

@@ -40,7 +40,7 @@ const DEFAULT_FORM: ValkeyForm = {
   template: `
     <a class="vl-back" (click)="back()" (keydown.enter)="back()" role="button" tabindex="0"><os-cicon [icon]="iBack" [size]="16"/> PFSS 모듈</a>
     <section class="pgp-page-frame" aria-label="Valkey plugin 개요와 메뉴">
-      <osp-plugin-page-header [model]="headerModel()" headingId="valkey-plugin-title" />
+      <osp-plugin-page-header [model]="headerModel()" headingId="valkey-plugin-title" (managementSelected)="openTab($event)" (namespaceAdd)="openTab('claims')" (refreshRequested)="refresh()" />
       <osp-plugin-tabs [tabs]="tabsForUi()" [active]="tab()" ariaLabel="Valkey plugin 메뉴" (selected)="openTab($event)" />
     </section>
 
@@ -139,7 +139,7 @@ export class ValkeyPluginComponent implements OnInit, OnDestroy {
   ngOnDestroy():void{this.vk.stop();if(this.watch)clearInterval(this.watch);}
   private async initialize():Promise<void>{await Promise.allSettled([this.reg.refreshModels(),this.loadStorageClasses(),this.loadControlPlane()]);this.hydrate();await this.vk.refresh();}
   back():void{this.vr.setModule('modules');} openTab(id:string):void{this.vr.setTab(id);} patch(p:Partial<ValkeyForm>):void{this.form.update(f=>({...f,...p}));}
-  headerModel():PluginPageHeaderModel{return{name:'Valkey',logo:SPEC.logo,capability:SPEC.capability,description:'Valkey 9.1 기반 설치·영속성·복제·모니터링·Keyspace와 ACL 운영을 제공하는 Foundation plugin',lifecycle:!this.controlPlaneReady()?'Runtime required':!this.vk.exists()?'Service required':this.vk.ready()?'Ready':'Progressing',lifecycleClass:this.vk.ready()?'label-success':'label-warning',versionLabel:'Valkey',version:this.vk.summary()?.version||this.form().version,profile:this.form().profile,namespace:SPEC.namespace};}
+  headerModel():PluginPageHeaderModel{const exists=this.vk.exists();return{name:'Valkey',logo:SPEC.logo,capability:SPEC.capability,description:exists?'Valkey의 영속성·복제·Keyspace와 ACL을 운영합니다.':'Namespace를 선택하거나 Valkey 서비스를 생성하세요.',lifecycle:!exists?'Bootstrap 대기':this.vk.ready()?'Ready':'Progressing',lifecycleClass:this.vk.ready()?'label-success':'label-warning',versionLabel:'Valkey',version:exists?(this.vk.summary()?.version||this.form().version):'—',profile:exists?this.form().profile:'미선택',namespace:SPEC.namespace};}
   tabsForUi():PluginPageTab[]{return this.tabs.map(t=>({...t,disabled:['monitoring','topology','config','domain','backups','events'].includes(t.id)&&!this.vk.exists(),badge:t.id==='events'?(this.vk.rt().events.filter((e:any)=>e.type==='Warning').length||''):''}));}
   setProfile(p:Profile):void{if(p==='development'){this.form.set({...structuredClone(DEFAULT_FORM),storageClass:this.form().storageClass});return;}if(p==='replicated'){this.form.update(f=>({...f,profile:p,replicas:3,storageSize:'20Gi',resourceProfile:'medium',cpuRequest:'500m',memoryRequest:'1Gi',cpuLimit:'2',memoryLimit:'2Gi',monitoring:true,persistenceMode:'aof-everysec'}));return;}this.patch({profile:p});}
   setResource(p:string):void{const m:Record<string,Partial<ValkeyForm>>={small:{resourceProfile:'small',cpuRequest:'250m',memoryRequest:'512Mi',cpuLimit:'1',memoryLimit:'1Gi'},medium:{resourceProfile:'medium',cpuRequest:'500m',memoryRequest:'1Gi',cpuLimit:'2',memoryLimit:'2Gi'},large:{resourceProfile:'large',cpuRequest:'1',memoryRequest:'2Gi',cpuLimit:'4',memoryLimit:'4Gi'}};this.patch({...m[p],profile:'custom'});}

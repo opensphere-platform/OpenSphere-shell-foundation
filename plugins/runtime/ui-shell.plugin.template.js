@@ -50,19 +50,18 @@ const LEGACY_VIEW_ALIASES = Object.freeze({
 });
 
 const OPERATOR_SHELL_CSS = `
-  .pfss-op-shell{position:relative;min-width:0;container-type:inline-size;background:#fff;color:#161616;border:1px solid #d7d7d7;margin-top:.35rem}
-  .pfss-op-head{position:relative;display:grid;grid-template-columns:minmax(22rem,1fr) minmax(0,60%);align-items:center;gap:1.25rem;height:auto!important;min-height:8.4rem;padding:1.2rem 1.25rem .85rem;overflow:visible;background:#fff;color:#161616;box-sizing:border-box}
-  .pfss-op-brand{display:flex;align-items:flex-start;gap:1rem;min-width:0;padding-right:1rem}.pfss-op-brand>div{min-width:0}.pfss-op-logo-frame{position:relative;width:3.5rem;height:3.5rem;flex:0 0 3.5rem}.pfss-op-logo{width:100%;height:100%;object-fit:contain}.pfss-op-logo-fallback{display:none;width:100%;height:100%;place-items:center;background:#eef3ff;color:#526eff;font-weight:700}.pfss-op-logo.is-error{display:none}.pfss-op-logo.is-error+.pfss-op-logo-fallback{display:grid}
-  .pfss-op-brand h1{font-size:2rem;line-height:1.05;margin:.2rem 0 .25rem}.pfss-op-brand p{margin:0;max-width:100%;overflow-wrap:anywhere;color:#565656;line-height:1.35}.pfss-op-eyebrow{color:#526eff;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
-  .pfss-op-meta{display:grid;grid-template-columns:minmax(5.5rem,.65fr) minmax(5rem,.6fr) minmax(10rem,1.2fr) minmax(0,2.8fr);align-items:center;justify-self:end;width:100%;min-width:0;padding-top:1.35rem}.pfss-op-meta>div{min-width:0;padding:0 .8rem;overflow:hidden;border-left:1px solid #ddd}.pfss-op-meta dt,.pfss-op-context label{font-size:.68rem;color:#666}.pfss-op-meta dd{min-width:0;margin:.32rem 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .pfss-op-actions{position:absolute;right:1rem;top:.7rem;display:flex;gap:.2rem;z-index:2}.pfss-op-action{display:grid;place-items:center;width:2rem;height:2rem;border:0;background:transparent;color:#7b1fa2;cursor:pointer}.pfss-op-action:hover,.pfss-op-action.active{background:#f4eafa}.pfss-op-action.active{box-shadow:inset 0 -2px #f47b20}.pfss-op-action svg{width:1rem;height:1rem;fill:currentColor}
-  .pfss-op-context{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);align-items:end;gap:.75rem;padding-right:.15rem}.pfss-op-context>div{width:auto;min-width:0}.pfss-op-context select{width:100%;height:2rem;border:0;border-bottom:1px solid #6f7d85;background:#fff}
+  .pfss-op-shell{position:relative;width:100%;max-width:100%;min-width:0;background:#fff;color:#161616;border:0;margin-top:.35rem;overflow:hidden}
+  .pfss-op-head{position:relative;display:grid;grid-template-columns:minmax(11.5rem,.5fr) minmax(0,1.5fr);align-items:center;gap:10px;height:auto!important;min-height:6rem;padding:14px 10px 16px;overflow:visible;background:#fff;color:#161616;box-sizing:border-box}
+  .pfss-op-brand{display:flex;align-items:center;gap:12px;min-width:0}.pfss-op-brand>div{min-width:0}.pfss-op-logo-frame{position:relative;width:55px;height:55px;flex:0 0 55px}.pfss-op-logo{width:100%;height:100%;object-fit:contain}.pfss-op-logo-fallback{display:none;width:100%;height:100%;place-items:center;background:#eef3ff;color:#526eff;font-weight:700}.pfss-op-logo.is-error{display:none}.pfss-op-logo.is-error+.pfss-op-logo-fallback{display:grid}
+  .pfss-op-brand h1{font-size:1.5rem;line-height:1.12;margin:2px 0 3px;font-weight:400}.pfss-op-brand p{margin:0;max-width:45rem;overflow:hidden;color:#565656;font-size:.72rem;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}.pfss-op-eyebrow{color:#526eff;font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+  .pfss-op-meta{display:grid;grid-template-columns:minmax(3.5rem,.55fr) minmax(3rem,.45fr) minmax(6.75rem,1fr) minmax(26.5rem,3.2fr);align-items:center;justify-self:end;width:100%;min-width:0;margin:0}.pfss-op-meta>div{min-width:0;min-height:3.4rem;padding:0 6px;overflow:hidden;border-left:1px solid #ddd}.pfss-op-meta dt,.pfss-op-context label{margin:0 0 8px;color:#666;font-size:.62rem}.pfss-op-meta dd{min-width:0;margin:0;overflow:hidden;font-size:.74rem;text-overflow:ellipsis;white-space:nowrap}
+  .pfss-op-tools{position:relative!important;min-width:0;padding:1.55rem 6px 0!important;overflow:visible!important}.pfss-op-actions{position:absolute;right:4px;top:-.9rem;display:flex;align-items:center;justify-content:flex-end;min-height:1.45rem;z-index:2}.pfss-op-action{display:grid;place-items:center;width:1.4rem;min-width:1.4rem;height:1.45rem;border:0;background:transparent;color:#a123b7;cursor:pointer}.pfss-op-action:hover,.pfss-op-action:focus-visible{background:#f7f2fb;color:#5f1f8f}.pfss-op-action.active{background:transparent;color:#5f1f8f}.pfss-op-action svg{width:1rem;height:1rem;fill:currentColor}
+  .pfss-op-context{display:grid;grid-template-columns:repeat(2,max-content);justify-content:end;align-items:end;gap:6px}.pfss-op-context-unit{display:flex;align-items:flex-end;gap:4px;min-width:0}.pfss-op-field{display:grid;width:220px;min-width:220px}.pfss-op-context label{margin:0 0 1px;line-height:1}.pfss-op-context select{width:100%;height:1.35rem;min-height:1.35rem;padding-right:1.1rem;border:0;border-bottom:1px solid #6f7d85;background:#fff;font-size:.66rem;line-height:1.35rem}.pfss-op-context button{width:1.35rem;min-width:1.35rem;height:1.35rem;min-height:1.35rem;margin:0 0 1px;padding:0;border:0;background:transparent;color:#0072a3;font-size:.62rem;line-height:1.35rem;cursor:pointer}.pfss-op-context button svg{width:1rem;height:1rem;fill:currentColor}
+  .pfss-op-empty{display:grid;grid-template-columns:minmax(18rem,.7fr) minmax(34rem,1.3fr);gap:28px;align-items:start;padding:24px;border:1px solid #d7d7d7;background:#fff}.pfss-op-empty h2{margin:7px 0 10px;font-size:1.2rem;font-weight:400}.pfss-op-empty p{margin:0;color:#565656;font-size:.72rem;line-height:1.5}.pfss-op-empty-actions{display:flex;align-items:center;gap:12px;padding-top:10px}.pfss-op-empty-actions button{border:0;background:#0f62fe;color:#fff;padding:.55rem .85rem;cursor:pointer;font-weight:600}
   .pfss-op-tabs{display:flex;gap:0;border-top:1px solid #eee;border-bottom:1px solid #d7d7d7;overflow-x:auto}.pfss-op-tab{border:0;background:#fff;padding:.72rem 1rem;color:#7b1fa2;white-space:nowrap;cursor:pointer}.pfss-op-tab.active{font-weight:700;box-shadow:inset 0 -2px #526eff}
   .pfss-op-scope{display:flex;align-items:center;justify-content:space-between;padding:.55rem .9rem;background:#fff7f1;border-top:1px solid #f7c8aa;border-bottom:1px solid #f7c8aa;font-size:.76rem}.pfss-op-scope button{border:0;background:transparent;color:#0072a3;cursor:pointer;font-weight:600}
-  @media(max-width:1180px){.pfss-op-head{grid-template-columns:1fr;padding-top:1.1rem}.pfss-op-meta{grid-template-columns:repeat(3,minmax(0,1fr));width:100%;max-width:100%;box-sizing:border-box;justify-self:end;padding-top:.2rem}.pfss-op-context{grid-column:1/-1}.pfss-op-actions{right:.7rem}.pfss-op-brand{padding-right:0;padding-top:2.25rem}}
-  @media(max-width:720px){.pfss-op-head{padding:.9rem}.pfss-op-brand{padding-right:0;padding-top:2.2rem}.pfss-op-meta{grid-template-columns:repeat(2,minmax(0,1fr))}.pfss-op-context{grid-column:1/-1;grid-template-columns:1fr}.pfss-op-context>div{width:100%}}
-  @container(max-width:1180px){.pfss-op-head{grid-template-columns:1fr;padding-top:1.1rem}.pfss-op-meta{grid-template-columns:repeat(3,minmax(0,1fr));width:100%;max-width:100%;box-sizing:border-box;justify-self:end;padding-top:.2rem}.pfss-op-context{grid-column:1/-1}.pfss-op-actions{right:.7rem}.pfss-op-brand{padding-right:0;padding-top:2.25rem}}
-  @container(max-width:720px){.pfss-op-head{padding:.9rem}.pfss-op-brand{padding-right:0;padding-top:2.2rem}.pfss-op-meta{grid-template-columns:repeat(2,minmax(0,1fr))}.pfss-op-context{grid-column:1/-1;grid-template-columns:1fr}.pfss-op-context>div{width:100%}}
+  @media(max-width:1180px){.pfss-op-head{grid-template-columns:1fr;min-height:11rem}.pfss-op-meta{grid-template-columns:repeat(3,minmax(0,1fr));width:100%;max-width:100%;box-sizing:border-box}.pfss-op-tools{grid-column:1/-1;justify-self:end;width:min(100%,30rem)}.pfss-op-actions{top:0}}
+  @media(max-width:720px){.pfss-op-head{min-height:15rem;padding:14px 0}.pfss-op-meta{grid-template-columns:repeat(2,minmax(0,1fr))}.pfss-op-context{grid-template-columns:1fr;justify-items:end}}
 `;
 
 function apiFetch(path, init) {
@@ -84,6 +83,8 @@ class FoundationPluginElement extends HTMLElement {
     this.style.minWidth = '0';
     this._onPopstate = () => this.render();
     window.addEventListener('popstate', this._onPopstate);
+    this._selectedNamespace ||= SPEC.namespace;
+    this._namespaces ||= [SPEC.namespace];
     this.render();
     void this.loadRuntimeEvidence();
   }
@@ -113,21 +114,31 @@ class FoundationPluginElement extends HTMLElement {
 
   render() {
     const active = this.activeTab();
-    const management = MANAGEMENT_VIEWS.map(([id, label, icon]) => `<button type="button" class="pfss-op-action${active === id ? ' active' : ''}" data-tab="${id}" aria-label="${esc(label)}" title="${esc(label)}"><svg viewBox="${icon.viewBox}" aria-hidden="true">${icon.paths.map((path) => `<path d="${path}"></path>`).join('')}</svg></button>`).join('');
+    const management = MANAGEMENT_VIEWS.map(([id, label, icon]) => `<button type="button" class="pfss-op-action${active === id ? ' active' : ''}" data-tab="${id}" aria-label="${esc(label)}" title="${esc(label)}"${active === id ? ' aria-current="page"' : ''}><svg viewBox="${icon.viewBox}" aria-hidden="true">${icon.paths.map((path) => `<path d="${path}"></path>`).join('')}</svg></button>`).join('');
     const isManagement = MANAGEMENT_VIEWS.some(([id]) => id === active);
     const tabs = RUNTIME_TABS.map(([id, label]) => `<button type="button" class="pfss-op-tab${active === id ? ' active' : ''}" role="tab" aria-selected="${active === id}" data-tab="${id}">${esc(label)}</button>`).join('');
     const logoFallback = SPEC.displayName.split(/[\s-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+    const phase = String(this._runtimeState?.phase || 'NotInstalled');
+    const installed = !['NotInstalled', 'Disabled', 'Missing', 'Checking'].includes(phase);
+    const lifecycle = !installed ? statePill('warn', 'Bootstrap 대기')
+      : statePill(/ready|running/i.test(phase) ? 'ok' : 'warn', phase);
+    const namespaceOptions = (this._namespaces || [SPEC.namespace]).map((namespace) => `<option value="${esc(namespace)}"${namespace === this._selectedNamespace ? ' selected' : ''}>${esc(namespace)}</option>`).join('');
+    const resourceLabel = hasManagedFleet() ? '인스턴스' : '서비스';
+    const resourceField = installed ? `<div class="pfss-op-field"><label>${resourceLabel}</label><select aria-label="${resourceLabel} 선택"><option>${esc(SPEC.displayName)}</option></select></div>` : '';
+    const renewIcon = `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M12 10H6.8l2.6-2.6L8 6l-5 5 5 5 1.4-1.4L6.8 12H12a10 10 0 1 1-9.5 13.1l-1.9.6A12 12 0 1 0 12 10z"></path></svg>`;
+    const runtimeContent = installed || isManagement
+      ? `<div data-content>${this.renderTab(active)}</div>`
+      : `<section class="pfss-op-empty"><div><div class="pfss-op-eyebrow">${esc(this._selectedNamespace || SPEC.namespace)}</div><h2>이 Namespace에는 ${esc(SPEC.displayName)} 서비스가 없습니다</h2><p>${esc(SPEC.displayName)} 서비스를 생성하면 운영·모니터링 워크스페이스가 활성화됩니다.</p></div><div class="pfss-op-empty-actions"><button type="button" data-tab="provisioning">${esc(SPEC.displayName)} 서비스 생성</button><span>Provisioning에서 검증된 프로파일과 버전을 선택합니다.</span></div></section>`;
     this.innerHTML = `<button class="btn btn-sm btn-link" type="button" data-back>← PFSS 모듈</button>
       <style>${OPERATOR_SHELL_CSS}</style>
       <section class="pfss-op-shell" aria-label="${esc(SPEC.displayName)} Operator 작업 영역">
         <header class="pfss-op-head" aria-labelledby="${esc(SPEC.id)}-title">
-          <div class="pfss-op-brand"><span class="pfss-op-logo-frame"><img class="pfss-op-logo" src="${esc(SPEC.logo)}" alt="${esc(SPEC.displayName)}"><span class="pfss-op-logo-fallback" aria-hidden="true">${esc(logoFallback)}</span></span><div><div class="pfss-op-eyebrow">PFS · OPERATOR · ${esc(SPEC.capability.toUpperCase())}</div><h1 id="${esc(SPEC.id)}-title">${esc(SPEC.displayName)}</h1><p>${esc(SPEC.description)}</p></div></div>
-          <dl class="pfss-op-meta"><div><dt>Lifecycle</dt><dd>${statePill('ok', 'Ready')}</dd></div><div><dt>Version</dt><dd>${esc(SPEC.version)}</dd></div><div><dt>Profile</dt><dd>${esc(SPEC.control?.operatorDriver || SPEC.channel)}</dd></div><div class="pfss-op-context"><div><label>Namespace</label><select aria-label="Namespace"><option>${esc(SPEC.namespace)}</option></select></div><div><label>${hasManagedFleet() ? 'Instance' : 'Service'}</label><select aria-label="${hasManagedFleet() ? 'Instance' : 'Service'}"><option>${esc(SPEC.displayName)}</option></select></div></div></dl>
-          <div class="pfss-op-actions" aria-label="플랫폼 관리 작업">${management}</div>
+          <div class="pfss-op-brand"><span class="pfss-op-logo-frame"><img class="pfss-op-logo" src="${esc(SPEC.logo)}" alt="${esc(SPEC.displayName)}"><span class="pfss-op-logo-fallback" aria-hidden="true">${esc(logoFallback)}</span></span><div><div class="pfss-op-eyebrow">PFSS / ${esc(SPEC.capability.toUpperCase())}</div><h1 id="${esc(SPEC.id)}-title">${esc(SPEC.displayName)}</h1><p>${installed ? esc(SPEC.description) : `Namespace를 선택하거나 ${esc(SPEC.displayName)} 서비스를 생성하세요.`}</p></div></div>
+          <dl class="pfss-op-meta"><div><dt>Lifecycle</dt><dd>${lifecycle}</dd></div><div><dt>Version</dt><dd>${installed ? esc(SPEC.version) : '—'}</dd></div><div><dt>Profile</dt><dd>${installed ? esc(SPEC.control?.operatorDriver || SPEC.channel) : '미선택'}</dd></div><div class="pfss-op-tools"><div class="pfss-op-actions" aria-label="플랫폼 관리 작업">${management}</div><div class="pfss-op-context"><div class="pfss-op-context-unit"><div class="pfss-op-field"><label>Namespace</label><select data-namespace aria-label="Namespace 선택">${namespaceOptions}</select></div><button type="button" data-add aria-label="Namespace 추가" title="Namespace 추가">추가</button></div><div class="pfss-op-context-unit">${resourceField}<button type="button" data-refresh aria-label="운영 컨텍스트 새로고침" title="새로고침">${renewIcon}</button></div></div></div></dl>
         </header>
-        ${isManagement ? `<div class="pfss-op-scope"><span><b>관리 작업</b> · 실행 상태 탭과 분리된 Namespace/플랫폼 설정 영역입니다.</span><button type="button" data-tab="overview">선택한 서비스로 돌아가기</button></div>` : `<nav class="pfss-op-tabs" role="tablist" aria-label="${esc(SPEC.displayName)} 실행 상태 메뉴">${tabs}</nav>`}
+        ${isManagement ? `<div class="pfss-op-scope"><span><b>관리 작업</b> · 실행 상태 탭과 분리된 Namespace/플랫폼 설정 영역입니다.</span>${installed ? '<button type="button" data-tab="overview">선택한 서비스로 돌아가기</button>' : ''}</div>` : installed ? `<nav class="pfss-op-tabs" role="tablist" aria-label="${esc(SPEC.displayName)} 실행 상태 메뉴">${tabs}</nav>` : ''}
       </section>
-      <div data-content>${this.renderTab(active)}</div>`;
+      ${runtimeContent}`;
     const logo = this.querySelector('.pfss-op-logo');
     if (logo?.complete && logo.naturalWidth === 0) logo.classList.add('is-error');
     logo?.addEventListener('error', () => logo.classList.add('is-error'), { once: true });
@@ -136,6 +147,13 @@ class FoundationPluginElement extends HTMLElement {
       window.dispatchEvent(new PopStateEvent('popstate'));
     });
     this.querySelectorAll('[data-tab]').forEach((button) => button.addEventListener('click', () => this.navigate(button.dataset.tab)));
+    this.querySelector('[data-add]')?.addEventListener('click', () => this.navigate('provisioning'));
+    this.querySelector('[data-refresh]')?.addEventListener('click', () => void this.loadRuntimeEvidence());
+    this.querySelector('[data-namespace]')?.addEventListener('change', (event) => {
+      this._selectedNamespace = event.currentTarget.value;
+      this.render();
+      void this.loadRuntimeEvidence();
+    });
     this.querySelector('[data-create-claim]')?.addEventListener('click', () => void this.createClaim());
   }
 
@@ -288,12 +306,21 @@ class FoundationPluginElement extends HTMLElement {
 
   async loadRuntimeEvidence() {
     try {
-      const [infoResponse, planResponse] = await Promise.all([
+      const [infoResponse, planResponse, runtimeResponse, namespacesResponse] = await Promise.all([
         apiFetch('/api/info', { cache: 'no-store' }),
         apiFetch('/api/plan', { cache: 'no-store' }),
+        apiFetch('/api/runtime/status', { cache: 'no-store' }),
+        apiFetch('/api/namespaces', { cache: 'no-store' }),
       ]);
-      if (!infoResponse.ok || !planResponse.ok) throw new Error(`HTTP ${infoResponse.status}/${planResponse.status}`);
+      if (!infoResponse.ok || !planResponse.ok || !runtimeResponse.ok) throw new Error(`HTTP ${infoResponse.status}/${planResponse.status}/${runtimeResponse.status}`);
       const plan = await planResponse.json();
+      this._runtimeState = await runtimeResponse.json();
+      if (namespacesResponse.ok) {
+        const body = await namespacesResponse.json();
+        const namespaces = (body.items || []).map((item) => typeof item === 'string' ? item : item?.metadata?.name).filter(Boolean).sort();
+        if (namespaces.length) this._namespaces = namespaces;
+      }
+      this.render();
       this.querySelectorAll('[data-runtime-api]').forEach((node) => { node.innerHTML = statePill('ok', 'Ready'); });
       const operand = this.querySelector('[data-operand-state]');
       if (operand) operand.textContent = `${(plan.operands || []).length}개 operand 계획 확인`;
