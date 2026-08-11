@@ -39,14 +39,14 @@ const DEFAULT_FORM: KeycloakForm = {
   `],
   template: `
     <a class="vl-back" (click)="back()" (keydown.enter)="back()" role="button" tabindex="0"><os-cicon [icon]="iBack" [size]="16" /> PFSS 모듈</a>
-    <section class="pgp-page-frame kc-page-frame" aria-label="Keycloak plugin 개요와 메뉴">
+    <section class="pgp-page-frame" aria-label="Keycloak plugin 개요와 메뉴">
       <osp-plugin-page-header [model]="headerModel()" headingId="keycloak-plugin-title">
         <div pluginHeaderContext class="pgp-header-tools">
           <nav class="pgp-management-actions pgp-management-actions--header" aria-label="Keycloak 관리 작업">
-            <a class="pgp-management-action" href="/pfss/keycloak/cluster" aria-label="전체 서비스" title="전체 서비스" [class.active]="tab()==='cluster'"><os-cicon [icon]="iFleet" [size]="16" /><span>전체 서비스</span></a>
-            <a class="pgp-management-action" href="/pfss/keycloak/config" aria-label="설정 카탈로그" title="설정 카탈로그" [class.active]="tab()==='config'"><os-cicon [icon]="iCatalog" [size]="16" /><span>설정 카탈로그</span></a>
-            <a class="pgp-management-action pgp-management-action--primary" href="/pfss/keycloak/claims" aria-label="Keycloak 생성" title="Keycloak 생성" [class.active]="tab()==='claims'"><os-cicon [icon]="iAdd" [size]="16" /><span>Keycloak 생성</span></a>
-            <a class="pgp-management-action" href="/pfss/keycloak/operator" aria-label="엔진 관리" title="엔진 관리" [class.active]="tab()==='operator'"><os-cicon [icon]="iSettings" [size]="16" /><span>엔진 관리</span></a>
+            <a class="pgp-management-action" href="/pfss/keycloak/cluster" aria-label="전체 서비스" title="전체 서비스" [class.active]="tab()==='cluster'" [attr.aria-current]="tab()==='cluster'?'page':null"><os-cicon [icon]="iFleet" [size]="16" /><span>전체 서비스</span></a>
+            <a class="pgp-management-action" href="/pfss/keycloak/config" aria-label="설정 카탈로그" title="설정 카탈로그" [class.active]="tab()==='config'" [attr.aria-current]="tab()==='config'?'page':null"><os-cicon [icon]="iCatalog" [size]="16" /><span>설정 카탈로그</span></a>
+            <a class="pgp-management-action pgp-management-action--primary" href="/pfss/keycloak/claims" aria-label="Keycloak 생성" title="Keycloak 생성" [class.active]="tab()==='claims'" [attr.aria-current]="tab()==='claims'?'page':null"><os-cicon [icon]="iAdd" [size]="16" /><span>Keycloak 생성</span></a>
+            <a class="pgp-management-action" href="/pfss/keycloak/operator" aria-label="엔진 관리" title="엔진 관리" [class.active]="tab()==='operator'" [attr.aria-current]="tab()==='operator'?'page':null"><os-cicon [icon]="iSettings" [size]="16" /><span>엔진 관리</span></a>
           </nav>
           <div class="pgp-header-context" aria-label="Keycloak 운영 컨텍스트">
             <div class="pgp-header-context-unit">
