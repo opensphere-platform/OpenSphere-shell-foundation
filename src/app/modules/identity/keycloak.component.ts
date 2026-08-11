@@ -52,10 +52,12 @@ const DEFAULT_FORM: KeycloakForm = {
             <div class="pgp-header-context-unit">
               <clr-select-container class="pgp-header-context-field">
                 <label>Namespace</label>
-                <select clrSelect name="keycloakNamespace" aria-label="Keycloak Namespace 선택" [ngModel]="svc.ns" disabled>
+                <select clrSelect name="keycloakNamespace" aria-label="Keycloak Namespace 선택" [ngModel]="svc.ns">
                   <option [ngValue]="svc.ns">{{svc.ns}}</option>
                 </select>
               </clr-select-container>
+              <button class="btn btn-sm btn-link pgp-header-context-action" type="button"
+                aria-label="선택한 Namespace에 Keycloak 서비스 추가" title="Keycloak 서비스 추가" (click)="openTab('claims')">추가</button>
             </div>
             <div class="pgp-header-context-unit">
               <clr-select-container class="pgp-header-context-field" *ngIf="exists()">

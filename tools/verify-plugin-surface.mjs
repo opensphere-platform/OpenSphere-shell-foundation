@@ -64,6 +64,8 @@ assert.match(keycloakSurface, /managementActions\s*:\s*false/, 'Keycloak: 공통
 assert.match(keycloakSurface, /class="pgp-header-tools"[\s\S]*class="pgp-management-actions pgp-management-actions--header"/, 'Keycloak: PostgreSQL header tools 구조 누락');
 assert.match(keycloakSurface, /ListBoxes16[\s\S]*Catalog16[\s\S]*DataAdd16[\s\S]*Settings16/, 'Keycloak: PostgreSQL과 동일한 관리 action 아이콘 계약 누락');
 assert.match(keycloakSurface, /clr-select-container class="pgp-header-context-field"[\s\S]*select clrSelect name="keycloakNamespace"/, 'Keycloak: Namespace가 PostgreSQL 기준 Clarity Select가 아닙니다.');
+assert.doesNotMatch(keycloakSurface, /select clrSelect name="keycloakNamespace"[^>]*\sdisabled/, 'Keycloak: Namespace Select가 비활성 스타일로 PostgreSQL 기준과 달라졌습니다.');
+assert.match(keycloakSurface, /class="btn btn-sm btn-link pgp-header-context-action"[\s\S]*aria-label="선택한 Namespace에 Keycloak 서비스 추가"[\s\S]*>추가<\/button>/, 'Keycloak: PostgreSQL 기준 Namespace 인접 추가 action 누락');
 assert.match(keycloakSurface, /select clrSelect name="keycloakService"/, 'Keycloak: 서비스 선택기가 PostgreSQL 기준 Clarity Select가 아닙니다.');
 assert.doesNotMatch(keycloakSurface, /kc-context-field|kc-header-context|kc-refresh/, 'Keycloak: 별도 header/select 구현이 남아 있습니다.');
 assert.match(keycloakSurface, /\*ngIf="exists\(\)&&!isManagementView\(\)"/, 'Keycloak: 서비스가 없거나 관리 view일 때 운영 탭을 숨기는 계약 누락');
