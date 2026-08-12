@@ -36,7 +36,7 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: owner
-          image: opensphere-shell-foundation:oaa-owner-v4
+          image: ghcr.io/opensphere-platform/opensphere-shell-foundation@sha256:d1b2d5c800e6535fda3b135376f8c5ac8ae92f808416e159d7b608841a2426f8
           imagePullPolicy: IfNotPresent
           env:
             - { name: APP_VERSION, value: "0.2.3-oaa-owner" }
