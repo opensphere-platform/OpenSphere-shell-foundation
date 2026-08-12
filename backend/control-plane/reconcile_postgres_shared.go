@@ -464,6 +464,7 @@ func (r *postgresClaimReconciler) ensureSharedBindingSecret(ctx context.Context,
 func (r *postgresClaimReconciler) setSharedPostgresStatus(ctx context.Context, claim *unstructured.Unstructured, target postgresTarget, phase, readyStatus, reason, message string, bridgeTotal, bridgeReady int) (reconcile.Result, error) {
 	nn := types.NamespacedName{Namespace: claim.GetNamespace(), Name: claim.GetName()}
 	err := updateStatusRetry(ctx, r.direct, postgresClaimGVK, nn, func(o *unstructured.Unstructured) {
+		setNested(o, o.GetGeneration(), "status", "observedGeneration")
 		setNested(o, phase, "status", "phase")
 		_ = unstructured.SetNestedMap(o.Object, map[string]interface{}{"apiVersion": "stackgres.io/v1", "kind": "SGCluster", "name": target.ClusterName, "namespace": target.Namespace}, "status", "providerRef")
 		_ = unstructured.SetNestedMap(o.Object, map[string]interface{}{"name": sharedPostgresResourceStem(claim) + "-binding", "namespace": claim.GetNamespace()}, "status", "bindingRef")

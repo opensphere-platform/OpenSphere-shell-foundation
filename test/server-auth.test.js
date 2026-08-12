@@ -150,12 +150,12 @@ test('Foundation owner mutations independently enforce the platform lifecycle ga
   try {
     global.fetch = async () => ({
       ok: true, status: 200,
-      json: async () => ({ prerequisites: [{ key: 'cluster-manager', ready: true }, { key: 'his-binding', ready: false }] }),
+      json: async () => ({ prerequisites: [{ key: 'cluster-manager', ready: true }, { key: 'his-preflight', ready: false }] }),
     });
     await assert.rejects(requireFoundationLifecycle('token'), (error) => error.code === 409 && /his_preflight_not_ready/.test(error.msg));
     global.fetch = async () => ({
       ok: true, status: 200,
-      json: async () => ({ prerequisites: [{ key: 'cluster-manager', ready: true }, { key: 'his-binding', ready: true }] }),
+      json: async () => ({ prerequisites: [{ key: 'cluster-manager', ready: true }, { key: 'his-preflight', ready: true }] }),
     });
     await assert.doesNotReject(requireFoundationLifecycle('token'));
   } finally {

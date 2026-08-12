@@ -109,7 +109,10 @@ func (r *claimReconciler) Reconcile(ctx context.Context, req reconcile.Request) 
 	}
 	// endpoint/probe는 bind 필수 — 누락한 레지스트리 항목(install-only 모델 등)은 nil-deref 대신 Pending 처리.
 	if !hasEP || !hasPr || !installed {
-		if err := updateStatusRetry(ctx, r.direct, fcGVK, nn, func(o *unstructured.Unstructured) { setNested(o, "Pending", "status", "phase") }); err != nil {
+		if err := updateStatusRetry(ctx, r.direct, fcGVK, nn, func(o *unstructured.Unstructured) {
+			setNested(o, o.GetGeneration(), "status", "observedGeneration")
+			setNested(o, "Pending", "status", "phase")
+		}); err != nil {
 			return reconcile.Result{}, err
 		}
 		return reconcile.Result{RequeueAfter: 10 * time.Second}, nil
@@ -131,7 +134,9 @@ func (r *claimReconciler) Reconcile(ctx context.Context, req reconcile.Request) 
 	// Binding 발급(SSA) — finalizer + ownerRef→Claim(같은 ns, controller=true). endpoint는 모델별(observability=collector, identity=issuer).
 	binding := r.buildBinding(fc, bindingName, model, epOf())
 	if moduleProjection != nil {
-		moduleProjection.apply(binding)
+		if err := moduleProjection.apply(binding); err != nil {
+			return r.rejectServiceClaim(ctx, nn, "CredentialBearingEndpoint", err.Error())
+		}
 	}
 	if err := applyObj(ctx, r.direct, binding); err != nil {
 		return reconcile.Result{}, err
@@ -139,6 +144,7 @@ func (r *claimReconciler) Reconcile(ctx context.Context, req reconcile.Request) 
 	// Binding status — 구조적 스키마라 스키마 필드만(rttMs 정수). availability는 정직상 생략. probe도 모델별 대상.
 	rtt, connected := probeTCP(ctx, prOf())
 	if err := updateStatusRetry(ctx, r.direct, fbGVK, bnn, func(o *unstructured.Unstructured) {
+		setNested(o, o.GetGeneration(), "status", "observedGeneration")
 		if connected {
 			setNested(o, "Connected", "status", "phase")
 			setNested(o, int64(rtt), "status", "connection", "rttMs")
@@ -155,6 +161,7 @@ func (r *claimReconciler) Reconcile(ctx context.Context, req reconcile.Request) 
 
 	// Claim status — 스키마 필드만(phase enum[Pending,Bound,Failed], bindingRef). Bound=Binding 발급 완료(실연결성은 Binding.phase가 권위).
 	if err := updateStatusRetry(ctx, r.direct, fcGVK, nn, func(o *unstructured.Unstructured) {
+		setNested(o, o.GetGeneration(), "status", "observedGeneration")
 		setNested(o, "Bound", "status", "phase")
 		_ = unstructured.SetNestedMap(o.Object, map[string]interface{}{"name": bindingName, "namespace": fc.GetNamespace()}, "status", "bindingRef")
 	}); err != nil {

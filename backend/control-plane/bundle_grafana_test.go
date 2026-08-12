@@ -29,6 +29,18 @@ func TestGrafanaBundleUsesOperatorCRAndCanonicalOperandMirror(t *testing.T) {
 	if storageClass != "standard" {
 		t.Fatalf("storageClass=%q", storageClass)
 	}
+	volumes, found, err := unstructured.NestedSlice(grafana.Object, "spec", "deployment", "spec", "template", "spec", "volumes")
+	if err != nil || !found || len(volumes) != 1 {
+		t.Fatalf("grafana volumes=%#v found=%v err=%v", volumes, found, err)
+	}
+	volume, ok := volumes[0].(map[string]interface{})
+	if !ok || volume["name"] != "grafana-data" {
+		t.Fatalf("grafana data volume=%#v", volumes[0])
+	}
+	pvc, ok := volume["persistentVolumeClaim"].(map[string]interface{})
+	if !ok || pvc["claimName"] != grafanaName+"-pvc" {
+		t.Fatalf("grafana data PVC=%#v", volume["persistentVolumeClaim"])
+	}
 	selector := grafana.GetLabels()[grafanaSelectorKey]
 	if selector != grafanaSelectorValue {
 		t.Fatalf("cross-namespace content selector label=%q", selector)

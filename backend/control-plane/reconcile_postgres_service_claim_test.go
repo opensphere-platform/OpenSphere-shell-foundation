@@ -19,7 +19,12 @@ func testFoundationPostgresClaim(requestType string) *unstructured.Unstructured 
 }
 
 func TestFoundationPostgresInstanceRendersDedicatedPostgresClaim(t *testing.T) {
-	child, err := renderPostgresServiceClaim(testFoundationPostgresClaim("Instance"))
+	claim := testFoundationPostgresClaim("Instance")
+	_ = unstructured.SetNestedField(claim.Object, "postgresql-dev-single", "spec", "parameters", "plan")
+	_ = unstructured.SetNestedField(claim.Object, "18.4", "spec", "parameters", "postgresVersion")
+	_ = unstructured.SetNestedField(claim.Object, "Retain", "spec", "parameters", "deletionPolicy")
+	claim.SetAnnotations(map[string]string{"opensphere.io/display-name": "Orders PostgreSQL"})
+	child, err := renderPostgresServiceClaim(claim)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,11 +33,22 @@ func TestFoundationPostgresInstanceRendersDedicatedPostgresClaim(t *testing.T) {
 	}
 	mode, _, _ := unstructured.NestedString(child.Object, "spec", "isolation")
 	plan, _, _ := unstructured.NestedString(child.Object, "spec", "planRef", "name")
-	if mode != postgresModeDedicated || plan != "postgresql-compact-2" {
+	version, _, _ := unstructured.NestedString(child.Object, "spec", "postgresVersion")
+	deletionPolicy, _, _ := unstructured.NestedString(child.Object, "spec", "deletionPolicy")
+	if mode != postgresModeDedicated || plan != "postgresql-dev-single" || version != "18.4" || deletionPolicy != "Retain" {
 		t.Fatalf("unexpected dedicated contract mode=%s plan=%s", mode, plan)
 	}
 	if child.GetLabels()["foundation.opensphere.io/service-claim"] != "orders-service" {
 		t.Fatal("child PostgresClaim is not traceable to FoundationClaim")
+	}
+	if child.GetAnnotations()["opensphere.io/display-name"] != "Orders PostgreSQL" {
+		t.Fatal("display name was not propagated")
+	}
+}
+
+func TestFoundationPostgresInstanceDoesNotInventPlanOrVersion(t *testing.T) {
+	if _, err := renderPostgresServiceClaim(testFoundationPostgresClaim("Instance")); err == nil {
+		t.Fatal("Instance request without an explicit owner plan/version must be rejected")
 	}
 }
 
