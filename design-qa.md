@@ -41,6 +41,34 @@ final result: passed
 
 ---
 
+# Keycloak Release Metadata Right Alignment Design QA
+
+- 검증일: 2026-08-10
+- Source visual truth: `C:\Users\cmars\AppData\Local\Temp\codex-clipboard-a32d7bf5-22ed-40cc-b545-7be69161371b.png`
+- Implementation URL: `https://localhost:1114/pfss/keycloak`
+- Comparison evidence: `audit-evidence/2026-08-10-pfs-header-alignment/reference-vs-implementation.png`
+- Implementation screenshot: `audit-evidence/2026-08-10-pfs-header-alignment/keycloak-after.png`
+
+## Findings and fix
+
+1. Before: the four-column release metadata grid used a 27rem minimum Namespace track. At the verification viewport its right edge exceeded the PFS header boundary by about 198px.
+2. Fix: the header now reserves a bounded 60% right-hand metadata track; the release grid fills that track, uses a shrinkable Namespace column, and explicitly aligns itself to the end.
+3. After: Lifecycle, Version, Profile, and Namespace remain on one row; the metadata grid ends at the header content edge with the intended 10px inset and has 0px overflow.
+
+## Visual and runtime verification
+
+- Reference and browser-rendered implementation were reviewed together in one comparison image.
+- Typography, labels, values, header height, tab navigation, service logo, and surrounding layout remain intact.
+- Responsive rules below 1180px remain authoritative and were not broadened by the desktop alignment rule.
+- Browser console error entries after the final Keycloak render: 0.
+- Official version: `202608101419`.
+- Source revision: `b62f9b3d104de507346dfec10f7028005e8d6d1d`.
+- Foundation registration: Activated / Compatible / Current; workload Ready on exact digest `sha256:7d8e91f44c17aa11cbf2dc3d2eb50d74b2770b426bb96db295f0b765d55d2514`.
+
+final result: passed
+
+---
+
 # PostgreSQL Integrated Header Design QA
 
 - 검증일: 2026-08-06
