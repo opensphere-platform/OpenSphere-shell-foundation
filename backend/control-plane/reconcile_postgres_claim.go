@@ -179,6 +179,7 @@ func (r *postgresClaimReconciler) Reconcile(ctx context.Context, req reconcile.R
 		}
 	}
 	if err := updateStatusRetry(ctx, r.direct, postgresClaimGVK, nn, func(o *unstructured.Unstructured) {
+		setNested(o, o.GetGeneration(), "status", "observedGeneration")
 		setNested(o, phase, "status", "phase")
 		_ = unstructured.SetNestedMap(o.Object, map[string]interface{}{"apiVersion": "stackgres.io/v1", "kind": "SGCluster", "name": clusterName, "namespace": claim.GetNamespace()}, "status", "providerRef")
 		_ = unstructured.SetNestedMap(o.Object, map[string]interface{}{"name": bindingName, "namespace": claim.GetNamespace()}, "status", "bindingRef")

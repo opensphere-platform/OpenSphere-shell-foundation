@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net"
+	"net/url"
 	"strings"
 	"time"
 
@@ -32,10 +34,14 @@ type serviceDependencyBinding struct {
 	Endpoint    string
 }
 
-func (p serviceBindingProjection) apply(binding *unstructured.Unstructured) {
+func (p serviceBindingProjection) apply(binding *unstructured.Unstructured) error {
+	endpoint, err := credentialFreeEndpoint(p.Endpoint)
+	if err != nil {
+		return err
+	}
 	setNested(binding, p.Module, "spec", "module")
 	endpoints := []interface{}{map[string]interface{}{
-		"name": "primary", "uri": p.Endpoint, "protocol": endpointProtocol(p.Endpoint), "readOnly": false,
+		"name": "primary", "uri": endpoint, "protocol": endpointProtocol(endpoint), "readOnly": false,
 	}}
 	_ = unstructured.SetNestedSlice(binding.Object, endpoints, "spec", "endpoints")
 	capabilities := make([]interface{}, 0, len(p.Capabilities))
@@ -55,7 +61,11 @@ func (p serviceBindingProjection) apply(binding *unstructured.Unstructured) {
 			item["resourceRef"] = dependency.ResourceRef
 		}
 		if dependency.Endpoint != "" {
-			item["endpoint"] = dependency.Endpoint
+			dependencyEndpoint, err := credentialFreeEndpoint(dependency.Endpoint)
+			if err != nil {
+				return fmt.Errorf("dependency %s endpoint: %w", dependency.Module, err)
+			}
+			item["endpoint"] = dependencyEndpoint
 		}
 		dependencies = append(dependencies, item)
 	}
@@ -66,6 +76,29 @@ func (p serviceBindingProjection) apply(binding *unstructured.Unstructured) {
 	if p.ResourceRef != nil {
 		_ = unstructured.SetNestedMap(binding.Object, p.ResourceRef, "spec", "resourceRef")
 	}
+	return nil
+}
+
+// FoundationBinding is a discoverable contract. Credentials belong only in
+// the referenced Secret, never in spec endpoints or dependency projections.
+func credentialFreeEndpoint(endpoint string) (string, error) {
+	if endpoint == "" || !strings.Contains(endpoint, "://") {
+		return endpoint, nil
+	}
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", fmt.Errorf("invalid endpoint URI")
+	}
+	if parsed.User != nil {
+		return "", fmt.Errorf("credential-bearing endpoint URI is forbidden")
+	}
+	for key := range parsed.Query() {
+		lower := strings.ToLower(key)
+		if strings.Contains(lower, "password") || strings.Contains(lower, "secret") || strings.Contains(lower, "token") || strings.Contains(lower, "credential") || strings.Contains(lower, "api_key") || strings.Contains(lower, "apikey") {
+			return "", fmt.Errorf("credential-bearing endpoint query is forbidden")
+		}
+	}
+	return parsed.String(), nil
 }
 
 func endpointProtocol(endpoint string) string {
@@ -217,18 +250,8 @@ func (r *claimReconciler) resolvePostgresServiceBinding(ctx context.Context, cla
 	if err := r.direct.Get(ctx, types.NamespacedName{Namespace: bindingNamespace, Name: bindingName}, secret); err != nil {
 		return serviceBindingProjection{}, "PostgresBindingNotReady", nil
 	}
-	endpoint := secretString(secret, "uri")
-	if endpoint == "" {
-		host, port := secretString(secret, "host"), secretString(secret, "port")
-		if host != "" && port != "" {
-			endpoint = "postgresql://" + host + ":" + port
-		}
-	}
-	if endpoint == "" {
-		return serviceBindingProjection{}, "PostgresEndpointNotReady", nil
-	}
-	host, port := secretString(secret, "host"), secretString(secret, "port")
-	if host == "" || port == "" {
+	endpoint, host, port, ok := postgresPublicEndpoint(secret)
+	if !ok {
 		return serviceBindingProjection{}, "PostgresEndpointNotReady", nil
 	}
 	providerRef, _, _ := unstructured.NestedMap(target.Object, "status", "providerRef")
@@ -240,6 +263,19 @@ func (r *claimReconciler) resolvePostgresServiceBinding(ctx context.Context, cla
 		SecretRef:    map[string]interface{}{"name": bindingName, "namespace": bindingNamespace},
 		ResourceRef:  providerRef,
 	}, "", nil
+}
+
+func postgresPublicEndpoint(secret *unstructured.Unstructured) (endpoint, host, port string, ok bool) {
+	host, port = secretString(secret, "host"), secretString(secret, "port")
+	if host == "" || port == "" {
+		return "", host, port, false
+	}
+	database := secretString(secret, "database")
+	endpointURL := &url.URL{Scheme: "postgresql", Host: net.JoinHostPort(host, port)}
+	if database != "" {
+		endpointURL.Path = "/" + database
+	}
+	return endpointURL.String(), host, port, true
 }
 
 func secretString(secret *unstructured.Unstructured, key string) string {
@@ -259,6 +295,7 @@ func secretString(secret *unstructured.Unstructured, key string) string {
 
 func (r *claimReconciler) pendingServiceClaim(ctx context.Context, nn types.NamespacedName, reason string) (reconcile.Result, error) {
 	err := updateStatusRetry(ctx, r.direct, fcGVK, nn, func(o *unstructured.Unstructured) {
+		setNested(o, o.GetGeneration(), "status", "observedGeneration")
 		setNested(o, "Pending", "status", "phase")
 		setNested(o, reason, "status", "reason")
 		setNested(o, time.Now().UTC().Format(time.RFC3339), "status", "observedAt")
@@ -268,6 +305,7 @@ func (r *claimReconciler) pendingServiceClaim(ctx context.Context, nn types.Name
 
 func (r *claimReconciler) rejectServiceClaim(ctx context.Context, nn types.NamespacedName, reason, message string) (reconcile.Result, error) {
 	err := updateStatusRetry(ctx, r.direct, fcGVK, nn, func(o *unstructured.Unstructured) {
+		setNested(o, o.GetGeneration(), "status", "observedGeneration")
 		setNested(o, "Failed", "status", "phase")
 		setNested(o, reason, "status", "reason")
 		setNested(o, message, "status", "message")

@@ -37,8 +37,9 @@
       "basePath": "/api/plugins/foundation"
     },
     "cli": {
-      "enabled": false,
-      "reason": "Foundation CLI manifest is not published"
+      "enabled": true,
+      "namespace": "foundation",
+      "manifestPath": "/cli/manifest"
     },
     "manual": {
       "enabled": true,

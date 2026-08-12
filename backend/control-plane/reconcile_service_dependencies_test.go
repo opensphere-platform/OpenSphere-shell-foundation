@@ -57,7 +57,9 @@ func TestBindingProjectionPublishesOnlyReconciledDependencies(t *testing.T) {
 		BindingRef: map[string]interface{}{"name": "chat-db-binding", "namespace": "tenant-a"},
 		Endpoint:   "postgresql://chat-db.tenant-a.svc:5432",
 	}}}
-	projection.apply(binding)
+	if err := projection.apply(binding); err != nil {
+		t.Fatal(err)
+	}
 	dependencies, found, err := unstructured.NestedSlice(binding.Object, "spec", "dependencies")
 	if err != nil || !found || len(dependencies) != 1 {
 		t.Fatalf("dependencies=%v found=%t err=%v", dependencies, found, err)

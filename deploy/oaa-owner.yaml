@@ -78,9 +78,9 @@ spec:
   minAvailable: 1
   selector: { matchLabels: { app: foundation-oaa-owner } }
 ---
-# Only the OAA Gateway may call the owner facade. HTTP still independently
-# verifies the Supabase session, console-admins, AAL2, exact confirmation, and
-# the closed engine/model catalog.
+# Only the OAA Gateway and Console backend durable-operation worker may call the
+# owner facade. HTTP still independently verifies the Supabase session,
+# console-admins, AAL2, exact confirmation, and the closed engine/model catalog.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -93,4 +93,5 @@ spec:
   ingress:
     - from:
         - podSelector: { matchLabels: { app: opensphere-console-oaa-gateway } }
+        - podSelector: { matchLabels: { app: opensphere-console-backend } }
       ports: [{ protocol: TCP, port: 8080 }]

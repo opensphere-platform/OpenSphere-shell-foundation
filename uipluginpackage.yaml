@@ -39,7 +39,7 @@ spec:
     page: { enabled: true }
     navigation: { enabled: false, mode: none, reason: "Foundation owns navigation inside its page" }
     api: { enabled: true, basePath: /api/plugins/foundation }
-    cli: { enabled: false, reason: "Foundation CLI manifest is not published" }
+    cli: { enabled: true, namespace: foundation, manifestPath: /cli/manifest }
     manual: { enabled: true, sourceId: "plugin:foundation", mode: runtime }
     search: { enabled: false, mode: none, reason: "Foundation search is page-local" }
     notification: { enabled: true, frontend: false, backend: true }

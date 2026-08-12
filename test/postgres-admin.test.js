@@ -9,6 +9,7 @@ const {
   sanitizePostgresExtensions, postgresExtensionSpecDiff, stackGresExtensionVersions, postgresClaimResource,
   postgresRuntimeCatalogProjection, postgresPlanProjection, postgresClaimProjection, validatePostgresClaimPlan,
   postgresClaimConfirmation, requirePostgresClaimConfirm,
+  foundationPostgresClaimResource, foundationCliManifest,
   postgresProfileKind, sanitizePostgresProfileSpec, profileReferenceCounts, profileSpecDiff, postgresOperationPlan, postgresBackupPlan,
 } = require('../server.js');
 
@@ -159,6 +160,31 @@ test('R2D2 PostgreSQL projections do not expose credentials and owner routes rem
   assert.match(server, /\/api\/foundation\/oaa\/postgres\/status/);
   assert.match(server, /\/api\/foundation\/oaa\/postgres\/plan/);
   assert.match(server, /PostgresClaim Ready=True and observedGeneration equals metadata\.generation/);
+});
+
+test('external PostgreSQL control uses FoundationClaim and publishes the typed CLI contract', () => {
+  const request = {
+    name: 'orders', namespace: 'opensphere-foundation', alias: 'Orders database',
+    database: 'orders', owner: 'orders_app', plan: 'postgresql-dev-single',
+    postgresVersion: '18.4', deletionPolicy: 'Retain',
+    storage: { size: '20Gi', storageClass: 'ceph-rbd' }, extensions: [{ name: 'pg_stat_statements' }],
+  };
+  const claim = foundationPostgresClaimResource(request);
+  assert.equal(claim.kind, 'FoundationClaim');
+  assert.equal(claim.spec.model, 'data');
+  assert.equal(claim.spec.module, 'postgres');
+  assert.equal(claim.spec.request.type, 'Instance');
+  assert.equal(claim.spec.parameters.postgresVersion, '18.4');
+  assert.equal(JSON.stringify(claim).includes('password'), false);
+  const manifest = foundationCliManifest();
+  assert.equal(manifest.cli.commandPrefix, 'os foundation');
+  assert.ok(manifest.tools.some((tool) => tool.command === 'os foundation postgres plan create' && tool.supportsFile));
+  assert.ok(manifest.tools.some((tool) => tool.command === 'os foundation postgres apply <planId>' && tool.pathParams.includes('planId')));
+  assert.ok(manifest.tools.some((tool) => tool.command === 'os foundation operation watch <operationId>'));
+  const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+  assert.match(server, /executionModel: 'PostgresClaim', requestModel: 'FoundationClaim'/);
+  assert.match(server, /operationAction: plan\.action, action: 'Create', risk: 'medium'/);
+  assert.match(server, /stage === 'Accepted' \? 'Console'/);
 });
 
 test('PostgreSQL binding hosts and database URI stay namespace scoped', () => {
