@@ -11,6 +11,12 @@ const arg = process.argv.indexOf('--id');
 const id = arg >= 0 ? process.argv[arg + 1] : '';
 const spec = catalog.plugins.find((item) => item.id === id);
 if (!spec) throw new Error(`unknown Foundation plugin id: ${id || '(empty)'}`);
+if (spec.lifecycle !== 'registry-backed') {
+  throw new Error(`${id} is ${spec.lifecycle}, not a registry-backed PFSS plugin package`);
+}
+if (spec.packageId !== id || !spec.sourceRepository) {
+  throw new Error(`${id} is missing its independent package/source authority`);
+}
 const keyPath = process.env.DUPA_SIGNING_KEY;
 if (!keyPath) throw new Error('DUPA_SIGNING_KEY must point to the approved P-256 signing key');
 const keyId = process.env.DUPA_SIGNING_KEY_ID || 'opensphere-plugins-v4';

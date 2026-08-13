@@ -2,15 +2,20 @@ import { accessSync, constants, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
+const workspaceRoot = resolve(root, '..');
 const catalog = JSON.parse(readFileSync(resolve(root, 'plugins/catalog.json'), 'utf8'));
+const repositoryInventory = JSON.parse(readFileSync(resolve(workspaceRoot, 'repository-inventory.json'), 'utf8'));
 const mirrors = JSON.parse(readFileSync(resolve(root, 'oci/mirrors.json'), 'utf8'));
 const controls = JSON.parse(readFileSync(resolve(root, 'plugins/control-contracts.json'), 'utf8'));
 const engineSurface = readFileSync(resolve(root, 'src/app/foundation/engines.component.ts'), 'utf8');
 const operatorSurface = readFileSync(resolve(root, 'src/app/foundation/roadmap-module.component.ts'), 'utf8');
 const overviewSurface = readFileSync(resolve(root, 'src/app/foundation/overview.component.ts'), 'utf8');
 const engineAuthority = readFileSync(resolve(root, 'src/app/foundation/engines.service.ts'), 'utf8');
-if (catalog.schemaVersion !== 1 || catalog.hostRef !== 'foundation') throw new Error('invalid Foundation plugin catalog header');
-if (!Array.isArray(catalog.plugins) || catalog.plugins.length !== 18) throw new Error(`expected 18 Foundation-bundled plugins; PostgreSQL, OpenSearch and directory are separately governed, got ${catalog.plugins?.length}`);
+const hostSurface = readFileSync(resolve(root, 'src/app/app.component.ts'), 'utf8');
+if (catalog.schemaVersion !== 2 || catalog.hostRef !== 'foundation') throw new Error('invalid Foundation PFSS catalog header');
+if (!Array.isArray(catalog.plugins) || catalog.plugins.length !== 18) throw new Error(`expected 18 classified Foundation catalog entries, got ${catalog.plugins?.length}`);
+const lifecycleValues = new Set(['registry-backed', 'migration-required', 'planned', 'host-integration']);
+const activeRepositories = new Set((repositoryInventory.repositories ?? []).filter((item) => item.status === 'active').map((item) => item.path));
 const ids = new Set();
 const elements = new Set();
 const referencedMirrors = new Set();
@@ -38,13 +43,29 @@ for (const plugin of catalog.plugins) {
   if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(plugin.id)) throw new Error(`invalid plugin id ${plugin.id}`);
   if (ids.has(plugin.id)) throw new Error(`duplicate plugin id ${plugin.id}`);
   ids.add(plugin.id);
-  if (!/^osp-foundation-[a-z0-9-]+$/.test(plugin.element) || elements.has(plugin.element)) throw new Error(`invalid or duplicate element ${plugin.element}`);
-  elements.add(plugin.element);
-  if (!plugin.logo.startsWith('https://logos.opl.io.kr/i/')) throw new Error(`${plugin.id} violates the logo authority policy`);
-  if (plugin.route !== expectedRoutes.get(plugin.id)) {
-    throw new Error(`${plugin.id} must use canonical route ${expectedRoutes.get(plugin.id)}, got ${plugin.route}`);
+  if (!lifecycleValues.has(plugin.lifecycle)) throw new Error(`${plugin.id} has invalid lifecycle ${plugin.lifecycle}`);
+  if (plugin.lifecycle === 'registry-backed') {
+    if (plugin.packageId !== plugin.id) throw new Error(`${plugin.id} packageId must equal its canonical id`);
+    if (!activeRepositories.has(plugin.sourceRepository)) throw new Error(`${plugin.id} has no active canonical source repository ${plugin.sourceRepository}`);
+  } else if (plugin.packageId || plugin.sourceRepository) {
+    throw new Error(`${plugin.id} may not publish package/source authority while ${plugin.lifecycle}`);
   }
-  if (plugin.route.includes('/modules/')) throw new Error(`${plugin.id} uses the retired /modules/ route namespace`);
+  if (plugin.lifecycle === 'migration-required' && (!plugin.targetRepository || !plugin.blocker)) {
+    throw new Error(`${plugin.id} migration-required entry must publish targetRepository and blocker`);
+  }
+  const element = plugin.lifecycle === 'registry-backed' ? plugin.element : plugin.targetElement;
+  if (element) {
+    if (!/^osp-foundation-[a-z0-9-]+$/.test(element) || elements.has(element)) throw new Error(`invalid or duplicate element ${element}`);
+    elements.add(element);
+  }
+  if (!plugin.logo.startsWith('https://logos.opl.io.kr/i/')) throw new Error(`${plugin.id} violates the logo authority policy`);
+  const declaredRoute = plugin.route ?? plugin.targetRoute ?? plugin.managementRoute;
+  if (declaredRoute !== expectedRoutes.get(plugin.id)) {
+    throw new Error(`${plugin.id} must use canonical/target route ${expectedRoutes.get(plugin.id)}, got ${declaredRoute}`);
+  }
+  if (declaredRoute.includes('/modules/')) throw new Error(`${plugin.id} uses the retired /modules/ route namespace`);
+  if (plugin.lifecycle === 'planned' && (plugin.route || plugin.element)) throw new Error(`${plugin.id} planned entry may only declare targetRoute/targetElement`);
+  if (plugin.lifecycle === 'host-integration' && (plugin.route || plugin.element || plugin.targetElement)) throw new Error(`${plugin.id} host integration may only declare managementRoute`);
   if (!Array.isArray(plugin.operands) || plugin.operands.length < 1 || plugin.operands.some((x) => !/^mirror\/[a-z0-9-]+:edge$/.test(x))) throw new Error(`${plugin.id} has an invalid operand mirror plan`);
   plugin.operands.forEach((operand) => referencedMirrors.add(operand.slice('mirror/'.length, -':edge'.length)));
   accessSync(resolve(root, 'ui-shell/manual', plugin.manual), constants.R_OK);
@@ -108,12 +129,25 @@ const expectedEngineCards = [
   'keycloak', 'syncope', 'samba', 'opa', 'postgres', 'psmdb', 'valkey', 'rustfs', 'opensearch',
   'litellm', 'langfuse', 'stalwart', 'novu', 'mattermost', 'otel', 'tempo', 'loki', 'grafana-operator', 'ptm',
 ];
+const expectedCardLifecycle = new Map([
+  ['keycloak', 'migration-required'],
+  ...['syncope', 'samba', 'opa', 'postgres', 'psmdb', 'valkey', 'rustfs', 'opensearch'].map((id) => [id, 'registry-backed']),
+  ...['litellm', 'langfuse', 'stalwart', 'novu', 'mattermost', 'otel', 'tempo', 'loki', 'grafana-operator', 'ptm'].map((id) => [id, 'planned']),
+]);
 for (const id of expectedEngineCards) {
   const card = engineSurface.match(new RegExp(`id:\\s*'${id}'[\\s\\S]*?category:\\s*'[^']+'[\\s\\S]*?impl:\\s*'([^']+)'[\\s\\S]*?liveKey:\\s*'([^']*)'`));
   if (!card) throw new Error(`${id} is missing from the PFS module surface`);
-  if (card[1] !== 'real') throw new Error(`${id} regressed to non-Operator implementation state ${card[1]}`);
-  if (!card[2]) throw new Error(`${id} must expose a FoundationModel runtime authority key`);
-  if (!engineAuthority.includes(`${card[2]}: { model:`)) throw new Error(`${id} runtime authority ${card[2]} is not wired`);
+  if (card[1] !== expectedCardLifecycle.get(id)) throw new Error(`${id} card lifecycle must be ${expectedCardLifecycle.get(id)}, got ${card[1]}`);
+  if (card[1] !== 'planned' && !card[2]) throw new Error(`${id} must expose a FoundationModel runtime authority key`);
+  if (card[2] && !engineAuthority.includes(`${card[2]}: { model:`)) throw new Error(`${id} runtime authority ${card[2]} is not wired`);
+}
+for (const forbidden of ['PsmdbPluginComponent', 'ValkeyPluginComponent', 'RustFSPluginComponent', 'KeycloakComponent']) {
+  if (hostSurface.includes(forbidden)) throw new Error(`Foundation host must not directly import plugin runtime ${forbidden}`);
+}
+for (const planned of catalog.plugins.filter((item) => item.lifecycle === 'planned')) {
+  if (hostSurface.includes(`catalog('${planned.id}'`) || hostSurface.includes(`CATALOG_MODULES`)) {
+    throw new Error(`${planned.id} planned catalog entry leaked into operational navigation/route handling`);
+  }
 }
 if (!engineAuthority.includes('FoundationRegistryService')) throw new Error('PFS runtime state must consume the FoundationModel registry authority');
 if (!engineAuthority.includes('domain.observed.find')) throw new Error('PFS runtime state must consume reconciler observations');
@@ -122,4 +156,5 @@ for (const retired of ['Phase 1 관리 표면', 'reconciler 구현 후 활성화
   if (operatorSurface.includes(retired)) throw new Error(`operator surface regressed to retired placeholder copy: ${retired}`);
 }
 if (overviewSurface.includes('const PLANNED:')) throw new Error('PFS overview regressed to the retired roadmap-only domain model');
-process.stdout.write(`verified ${allPFSS.length} PFSS Operator contracts, ${catalog.plugins.length} bundled plugins and ${referencedMirrors.size} operand mirrors\n`);
+const registryBacked = catalog.plugins.filter((item) => item.lifecycle === 'registry-backed').length + separatelyGoverned.length;
+process.stdout.write(`verified ${allPFSS.length} PFSS contracts: ${registryBacked} registry-backed plugins, 1 migration, ${catalog.plugins.filter((item) => item.lifecycle === 'planned').length} planned entries and ${referencedMirrors.size} operand mirrors\n`);

@@ -9,6 +9,7 @@ export interface HostedPlugin {
   icon: 'db' | 'search' | 'storage' | 'key' | 'users';
   kind: 'plugin';                 // leaf — host(foundation subShell)와 구분
   hostRef: 'foundation';          // §2.7 필수 — 귀속. 트리에 글자로 렌더
+  lifecycle: 'registry-backed' | 'migration-required' | 'planned' | 'host-integration';
   capability: string;             // 'data.sql.postgres' 등 — 제공 역량(머신 식별)
   capabilityLabel: string;        // '관계형 DB' 등 — 칩 표시용
   desc: string;

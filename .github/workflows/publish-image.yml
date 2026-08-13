@@ -56,8 +56,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          value="$(jq -c '{include:[.plugins[] | {id:.id,image:("opensphere-plugin-" + .id)}]}' plugins/catalog.json)"
-          test "$(jq '.include | length' <<<"$value")" = 20
+          value="$(jq -c '{include:[.plugins[] | select(.lifecycle == "registry-backed") | {id:.id,image:("opensphere-plugin-" + .id)}]}' plugins/catalog.json)"
+          test "$(jq '.include | length' <<<"$value")" = 5
           echo "value=$value" >> "$GITHUB_OUTPUT"
 
   publish-shell:
@@ -423,13 +423,13 @@ jobs:
           while IFS=$'\t' read -r id image; do
             digest="$(crane digest "$REGISTRY/$image:$source_tag")"
             verify_custom_image "$id" "$image" "$digest" plugin
-          done < <(jq -r '.plugins[] | [.id,("opensphere-plugin-" + .id)] | @tsv' plugins/catalog.json)
+          done < <(jq -r '.plugins[] | select(.lifecycle == "registry-backed") | [.id,("opensphere-plugin-" + .id)] | @tsv' plugins/catalog.json)
 
           samba_repo='opensphere-plugin-directory'
           samba_digest="$(crane digest "$REGISTRY/$samba_repo:ga")"
           samba_revision="$(crane config "$REGISTRY/$samba_repo@$samba_digest" | jq -r '.config.Labels["io.opensphere.source-revision"] // "separately-governed"')"
           jq --arg repository "$samba_repo" --arg image "$REGISTRY/$samba_repo@$samba_digest" --arg revision "$samba_revision" \
-            '.components["samba-ad"]={repository:$repository,image:$image,sourceRevision:$revision,role:"plugin",governance:"separate-signed-package"}' \
+            '.components["directory"]={repository:$repository,image:$image,sourceRevision:$revision,role:"plugin",governance:"separate-signed-package",managedProvider:"samba-ad"}' \
             "$RUNNER_TEMP/foundation-bom.json" > "$RUNNER_TEMP/foundation-bom.next.json"
           mv "$RUNNER_TEMP/foundation-bom.next.json" "$RUNNER_TEMP/foundation-bom.json"
 
@@ -461,7 +461,7 @@ jobs:
           done < <(jq -r '[.plugins[].operands[]] | unique[]' plugins/catalog.json)
 
           jq -e '.kind == "OpenSphereFoundationReleaseBOM" and .status == "Active" and
-            (.components | length) == 23 and (.operands | length) == 29 and
+            (.components | length) == 8 and (.operands | length) == 29 and
             .components.shell.image and .components["control-plane"].image' \
             "$RUNNER_TEMP/foundation-bom.json" >/dev/null
           echo "anchor-digest=$SHELL_DIGEST" >> "$GITHUB_OUTPUT"
@@ -492,7 +492,7 @@ jobs:
             crane tag "$reference" "$release_tag"
             test "$(crane digest "$repository:$release_tag")" = "$digest"
           }
-          for key in $(jq -r '.components | keys[] | select(. != "shell" and . != "samba-ad")' "$bom"); do
+          for key in $(jq -r '.components | keys[] | select(. != "shell" and . != "directory")' "$bom"); do
             image="$(jq -r --arg key "$key" '.components[$key].image' "$bom")"
             publish_immutable_tag "$image"
             crane tag "$image" ga
@@ -500,7 +500,7 @@ jobs:
           anchor="$(jq -r '.components.shell.image' "$bom")"
           publish_immutable_tag "$anchor"
           crane tag "$anchor" ga
-          for key in $(jq -r '.components | keys[] | select(. != "samba-ad")' "$bom"); do
+          for key in $(jq -r '.components | keys[] | select(. != "directory")' "$bom"); do
             repository="$(jq -r --arg key "$key" '.components[$key].repository' "$bom")"
             expected="$(jq -r --arg key "$key" '.components[$key].image | split("@")[1]' "$bom")"
             test "$(crane digest "$REGISTRY/$repository:$release_tag")" = "$expected"

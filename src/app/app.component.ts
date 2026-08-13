@@ -1,10 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, ViewEncapsulation, computed, inject, signal } from '@angular/core';
 import { ClarityModule } from '@clr/angular';
-import { PsmdbPluginComponent } from './modules/psmdb/psmdb-plugin.component';
-import { ValkeyPluginComponent } from './modules/valkey/valkey-plugin.component';
-import { RustFSPluginComponent } from './modules/rustfs/rustfs-plugin.component';
-import { KeycloakComponent } from './modules/identity/keycloak.component';
 import { FoundationOverviewComponent } from './foundation/overview.component';
 import { FoundationEnginesComponent } from './foundation/engines.component';
 import { ControlPlaneComponent } from './foundation/control-plane.component';
@@ -34,16 +30,8 @@ const ICON: Record<string, any> = {
 interface NavChild { id: string; name: string; module?: string; tab?: string }
 interface NavGroup { id: string; label: string; iconKey: string; children: NavChild[] }
 
-const CATALOG_MODULES = new Set([
-  'syncope', 'opa', 'litellm', 'langfuse', 'stalwart', 'novu', 'mattermost',
-  'otel', 'tempo', 'loki', 'grafana-operator', 'ptm',
-]);
-
-// AI/Comm은 아직 FOUNDATION_PLUGINS registry에 등록되지 않은 로드맵 도메인이라 정적 목록으로 노출.
-// 실제 엔진이 배선되면 registry 엔트리로 승격하고 여기서 제거한다(2026-07-04).
-
-// Identity 그룹은 Keycloak/Samba-AD(live, registry 파생)에 Syncope(로드맵)를 얹은 혼합 그룹.
-// ADR-FND-002: IGA 단일권위는 Syncope. 별도 SCIM gateway는 멤버가 아니라 Syncope 내장 SCIM 2.0 또는 얇은 connector로 수렴한다.
+// Roadmap catalog는 PFSS module 계획 표면에만 표시한다. Package/Registration admission을
+// 통과하기 전에는 운영 route, navigation 또는 custom element activation을 만들지 않는다.
 
 // 로드맵 모듈 id → placeholder 페이지에 넘길 메타(이름/로고/모노그램/도메인 eyebrow).
 
@@ -57,7 +45,7 @@ const CATALOG_MODULES = new Set([
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, ClarityModule, CarbonIcon, PsmdbPluginComponent, ValkeyPluginComponent, RustFSPluginComponent, KeycloakComponent, FoundationOverviewComponent, FoundationEnginesComponent, ControlPlaneComponent, FoundationDeliveryComponent, PluginOutletComponent],
+  imports: [CommonModule, ClarityModule, CarbonIcon, FoundationOverviewComponent, FoundationEnginesComponent, ControlPlaneComponent, FoundationDeliveryComponent, PluginOutletComponent],
   encapsulation: ViewEncapsulation.ShadowDom,
   styleUrls: ['./app.component.css'],
   styles: [`
@@ -155,31 +143,29 @@ const CATALOG_MODULES = new Set([
         </nav>
 
         <app-foundation-overview *ngIf="vr.module() === 'overview'"></app-foundation-overview>
-        <app-foundation-engines *ngIf="((vr.module() === 'modules' && vr.tab() === 'overview') || catalogModule()) && !activePlugin()"></app-foundation-engines>
+        <app-foundation-engines *ngIf="vr.module() === 'modules' && vr.tab() === 'overview'"></app-foundation-engines>
         <app-control-plane *ngIf="vr.module() === 'control-plane'"></app-control-plane>
         <app-foundation-delivery *ngIf="vr.module() === 'delivery' && !activePlugin()"></app-foundation-delivery>
         <app-plugin-outlet *ngIf="activePlugin() as p" [plugin]="p"></app-plugin-outlet>
-        <app-psmdb-plugin *ngIf="vr.module() === 'psmdb' && !activePlugin()"></app-psmdb-plugin>
-        <app-valkey-plugin *ngIf="vr.module() === 'valkey' && !activePlugin()"></app-valkey-plugin>
-        <app-rustfs-plugin *ngIf="vr.module() === 'rustfs' && !activePlugin()"></app-rustfs-plugin>
-        <app-keycloak *ngIf="vr.module() === 'keycloak' && !activePlugin()"></app-keycloak>
         <section *ngIf="inactivePlugin() as p" class="pfs-module-management" aria-labelledby="pfs-module-management-title">
           <div class="pfs-module-management__heading">
             <div>
               <div class="pfs-module-management__eyebrow">PFSS MODULE MANAGEMENT</div>
               <h1 id="pfs-module-management-title">{{ p.name }}</h1>
-              <p>실행 UI가 아직 활성화되지 않았습니다. 관리 경로는 유지되며 준비 상태를 확인할 수 있습니다.</p>
+              <p *ngIf="p.lifecycle === 'registry-backed'">검증된 plugin UI가 아직 활성화되지 않았습니다. Registry 준비 상태를 확인할 수 있습니다.</p>
+              <p *ngIf="p.lifecycle === 'migration-required'">독립 Package/Registration 계약으로 이관되기 전까지 실행 UI와 변경 작업을 제공하지 않습니다.</p>
             </div>
             <a class="btn btn-primary" href="/manage/extensions">Extensions 관리</a>
           </div>
           <dl class="pfs-module-management__facts">
             <dt>정본 경로</dt><dd class="os-mono">/pfss/{{ routeId(p.id) }}</dd>
+            <dt>계약 상태</dt><dd>{{ p.lifecycle === 'migration-required' ? 'ContractMigrationRequired' : 'RegistryActivationPending' }}</dd>
             <dt>설치 선언</dt><dd>{{ reg.modelOf(p.id) ?? '확인 중' }}</dd>
             <dt>Runtime</dt><dd>{{ reg.health(p).label }}</dd>
-            <dt>UI 상태</dt><dd>Activation 대기</dd>
+            <dt>UI 상태</dt><dd>{{ p.lifecycle === 'migration-required' ? '직접 실행 차단' : 'Activation 대기' }}</dd>
           </dl>
           <clr-alert clrAlertType="warning" [clrAlertClosable]="false">
-            <clr-alert-item><span class="alert-text">서명·의존성·플랫폼 준비도 검증이 끝날 때까지 변경 작업은 차단됩니다.</span></clr-alert-item>
+            <clr-alert-item><span class="alert-text">{{ p.lifecycle === 'migration-required' ? '독립 source/image/Package/Registration 이관이 완료될 때까지 변경 작업은 차단됩니다.' : '서명·의존성·플랫폼 준비도 검증이 끝날 때까지 변경 작업은 차단됩니다.' }}</span></clr-alert-item>
           </clr-alert>
         </section>
         <clr-alert *ngIf="disabledModule()" clrAlertType="warning" [clrAlertClosable]="false">
@@ -207,19 +193,14 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private readonly openState = signal<Record<string, boolean>>({ data: true, identity: true });
 
-  /** 설치 전 관리도 lifecycle의 일부다. 모든 PFS 섹터를 상시 노출하고 각 Operator 표면으로 진입시킨다. */
+  /** Navigation은 Registry-backed 항목과 명시적 migration 대상만 투영한다. planned는 catalog 전용이다. */
   readonly groups = computed<NavGroup[]>(() => {
     const pick = (prefix: string): NavChild[] => this.reg.all
-      .filter((p) => p.capability.startsWith(prefix))
+      .filter((p) => p.capability.startsWith(prefix) && ['registry-backed', 'migration-required'].includes(p.lifecycle))
       .map((p) => ({ id:this.routeId(p.id), name:p.name }));
-    const catalog = (id:string,name:string):NavChild => ({id,name});
     return [
       { id:'identity', label:'Identity', iconKey:'identity', children:pick('identity.') },
       { id:'data', label:'Data', iconKey:'data', children:pick('data.') },
-      { id:'ai', label:'AI / Retrieval', iconKey:'search', children:[catalog('litellm','LiteLLM'),catalog('langfuse','Langfuse')] },
-      { id:'comm', label:'Communication', iconKey:'users', children:[catalog('stalwart','Stalwart'),catalog('novu','Novu'),catalog('mattermost','Mattermost')] },
-      { id:'observability', label:'Observability', iconKey:'control', children:[catalog('otel','OpenTelemetry Collector'),catalog('tempo','Grafana Tempo'),catalog('loki','Grafana Loki'),catalog('grafana-operator','Grafana Operator')] },
-      { id:'backup', label:'Backup / Restore', iconKey:'storage', children:[catalog('ptm','.ptm')] },
     ];
   });
 
@@ -259,7 +240,7 @@ export class AppComponent implements OnInit, OnDestroy {
   activePlugin(): HostedPlugin | undefined {
     const route = this.vr.module();
     const id = this.pluginId(route === 'delivery' ? this.vr.tab() : route);
-    const p = this.reg.all.find((x) => x.id === id && !!x.activation);
+    const p = this.reg.all.find((x) => x.id === id && x.lifecycle === 'registry-backed' && !!x.activation);
     if (!p) { return undefined; }
     return p.activation?.element && customElements.get(p.activation.element) ? p : undefined;
   }
@@ -267,9 +248,9 @@ export class AppComponent implements OnInit, OnDestroy {
   inactivePlugin(): HostedPlugin | undefined {
     const route = this.vr.module();
     const id = this.pluginId(route === 'delivery' ? this.vr.tab() : route);
-    if (!['samba', 'postgres'].includes(id)) return undefined;
-    const plugin = this.reg.all.find((item) => item.id === id && !!item.activation);
-    if (!plugin?.activation?.element || customElements.get(plugin.activation.element)) return undefined;
+    const plugin = this.reg.all.find((item) => item.id === id && ['registry-backed', 'migration-required'].includes(item.lifecycle));
+    if (!plugin) return undefined;
+    if (plugin.lifecycle === 'registry-backed' && (!plugin.activation?.element || customElements.get(plugin.activation.element))) return undefined;
     return plugin;
   }
 
@@ -283,11 +264,8 @@ export class AppComponent implements OnInit, OnDestroy {
     // must not keep behaving as a second, hidden plugin URL namespace.
     if (m === 'modules') { return this.vr.tab() !== 'overview'; }
     if (['overview', 'control-plane', 'delivery'].includes(m)) { return false; }
-    if (CATALOG_MODULES.has(m)) { return false; }
-    return !this.reg.all.some((p) => this.routeId(p.id) === m);
+    return !this.reg.all.some((p) => ['registry-backed', 'migration-required'].includes(p.lifecycle) && this.routeId(p.id) === m);
   }
-
-  catalogModule(): boolean { return CATALOG_MODULES.has(this.vr.module()); }
 
   /** 로드맵 모듈(AI/Comm) 페이지에 넘길 메타 — 해당 모듈이 아니면 undefined(placeholder 미표시). */
   private label(id: string): string {
