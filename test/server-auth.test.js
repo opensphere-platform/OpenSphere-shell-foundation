@@ -14,6 +14,12 @@ const {
   FOUNDATION_ENGINE_MODEL, FOUNDATION_CLAIM_MODELS,
 } = require('../server');
 
+test('Foundation lifecycle authority timeout exceeds the readiness computation boundary', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.match(source, /FOUNDATION_READINESS_TIMEOUT_MS\s*=\s*Number\([^\n]*\|\|\s*15000\)/);
+  assert.match(source, /platformReadinessAuthority[\s\S]*?AbortSignal\.timeout\(FOUNDATION_READINESS_TIMEOUT_MS\)/);
+});
+
 test('Valkey RESP boundary parses bounded protocol values and rejects malformed inputs', () => {
   assert.deepEqual(encodeRespCommand(['SET', 'hello', 'world']).toString('utf8'), '*3\r\n$3\r\nSET\r\n$5\r\nhello\r\n$5\r\nworld\r\n');
   assert.equal(parseResp(Buffer.from('+PONG\r\n')).value, 'PONG');
