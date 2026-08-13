@@ -55,6 +55,7 @@ const FND_NS = process.env.FOUNDATION_NS || 'opensphere-foundation';
 const CLUSTER_MANAGER_URL = process.env.CLUSTER_MANAGER_URL || 'http://cluster-manager.opensphere-console.svc.cluster.local:8080';
 const FOUNDATION_AUDIT_URL = (process.env.FOUNDATION_AUDIT_URL
   || 'http://opensphere-console-dupa-controller.opensphere-console.svc.cluster.local:8080').replace(/\/$/, '');
+const FOUNDATION_READINESS_TIMEOUT_MS = Number(process.env.FOUNDATION_READINESS_TIMEOUT_MS || 15000);
 const SAMBA_BOOTSTRAP_SECRET = process.env.SAMBA_BOOTSTRAP_SECRET || 'foundation-identity-samba-creds';
 const SAMBA_BOOTSTRAP_SECRET_KEY = 'domain-password';
 const VALKEY_SERVICE = process.env.VALKEY_SERVICE || `foundation-data-valkey.${FND_NS}.svc`;
@@ -1893,7 +1894,7 @@ async function platformReadinessAuthority(rawToken) {
   try {
     response = await fetch(`${FOUNDATION_AUDIT_URL}/api/admin/platform-readiness/status`, {
       headers: { authorization: `Bearer ${rawToken}`, accept: 'application/json' },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(FOUNDATION_READINESS_TIMEOUT_MS),
     });
   } catch {
     throw { code: 503, msg: 'Foundation lifecycle authority unavailable' };
