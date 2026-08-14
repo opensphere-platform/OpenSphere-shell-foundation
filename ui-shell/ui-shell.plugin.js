@@ -84,6 +84,9 @@ export async function activate(ctx) {
   hostContextInstalled = true;
   activeContext = ctx;
   await injectOnce(ctx, base);
+  const activeChildren = new Set(ctx.host?.children?.() ?? []);
+  const supportedProjections = window.__OPENSPHERE_FOUNDATION_CHILD_PROJECTIONS__ ?? [];
+  ctx.host?.reportProjections?.(supportedProjections.filter((projection) => activeChildren.has(projection.id)));
   ctx.extensions.registerPage({
     id: ctx.pluginId,
     title: 'Foundation',
