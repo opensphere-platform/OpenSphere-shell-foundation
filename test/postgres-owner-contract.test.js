@@ -17,6 +17,7 @@ const {
   POSTGRES_OWNER_SOURCE_REVISION,
   POSTGRES_OWNER_EVIDENCE_TTL_SECONDS,
 } = require('../server.js');
+const yaml = require('js-yaml');
 
 const IMPLEMENTED_ACTIONS = [
   'capability.read',
@@ -262,4 +263,24 @@ test('stale or missing owner evidence blocks success and never emits a receipt',
   }
   assert.equal(stale.evidenceRevision, FRESH_OWNER_EVIDENCE.evidenceRevision);
   assert.equal(missing.evidenceRevision, null);
+});
+
+test('PostgreSQL owner catalog consumers have read-only StorageClass discovery', () => {
+  const documents = [];
+  yaml.loadAll(
+    fs.readFileSync(path.join(__dirname, '../deploy/postgres-fleet-console-rbac.yaml'), 'utf8'),
+    (document) => document && documents.push(document),
+  );
+  const role = documents.find((document) => document.kind === 'ClusterRole'
+    && document.metadata?.name === 'opensphere-postgres-fleet-read');
+  assert.ok(role, 'opensphere-postgres-fleet-read ClusterRole must exist');
+  const storageRule = role.rules.find((rule) => rule.apiGroups?.includes('storage.k8s.io')
+    && rule.resources?.includes('storageclasses'));
+  assert.ok(storageRule, 'PostgreSQL catalog readers must be able to discover StorageClasses');
+  assert.deepEqual([...storageRule.verbs].sort(), ['get', 'list', 'watch']);
+
+  const binding = documents.find((document) => document.kind === 'ClusterRoleBinding'
+    && document.roleRef?.name === role.metadata.name);
+  assert.ok(binding?.subjects?.some((subject) => subject.kind === 'Group'
+    && subject.name === 'opensphere-console-admins'));
 });
