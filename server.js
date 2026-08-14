@@ -864,8 +864,27 @@ function postgresReadinessBlocker(code, component, message, affectedOperations, 
   };
 }
 
+function postgresCrdReadinessBlocker(result, {
+  component, missingCode, unavailableCode, missingMessage, missingAction, affectedOperations,
+}) {
+  if (result?.ok) return null;
+  if (Number(result?.status) === 404) return postgresReadinessBlocker(
+    missingCode, component, missingMessage, affectedOperations, 'PFSS', missingAction, false,
+  );
+  const status = Number(result?.status) || 0;
+  return postgresReadinessBlocker(
+    unavailableCode,
+    component,
+    `${component} readiness evidence could not be observed${status ? ` (HTTP ${status})` : ''}.`,
+    affectedOperations,
+    'PFSS',
+    `Restore delegated read access to CustomResourceDefinition/${component}`,
+    false,
+  );
+}
+
 function postgresReadinessProjection(blockers, checks, evidence, observedAt) {
-  const planningCodes = new Set(['POSTGRES_CLAIM_CRD_NOT_INSTALLED', 'POSTGRES_RUNTIME_CATALOG_INCOMPLETE', 'POSTGRES_ADDON_PLAN_UNAVAILABLE', 'POSTGRES_NAMESPACE_UNAVAILABLE']);
+  const planningCodes = new Set(['POSTGRES_CLAIM_CRD_NOT_INSTALLED', 'POSTGRES_CLAIM_CRD_UNOBSERVABLE', 'POSTGRES_RUNTIME_CATALOG_INCOMPLETE', 'POSTGRES_ADDON_PLAN_UNAVAILABLE', 'POSTGRES_NAMESPACE_UNAVAILABLE']);
   const readyToPlan = !blockers.some((item) => planningCodes.has(item.code));
   const actions = postgresOwnerActionDefinitions().filter((item) => !['capability.read', 'readiness.read'].includes(item.actionId));
   const nextActions = actions.map((action) => {
@@ -1034,12 +1053,20 @@ async function postgresOaaReadiness(req, res) {
     if (!controller.ok || desired < 1 || ready !== desired) blockers.push(postgresReadinessBlocker(
       'FOUNDATION_CONTROL_PLANE_NOT_READY', 'foundation-control-plane', `foundation-control-plane Ready ${ready}/${desired}`,
       ['cluster.create'], 'PFSS', 'Restore the foundation-control-plane Deployment to Ready', false));
-    if (!postgresCRD.ok) blockers.push(postgresReadinessBlocker(
-      'POSTGRES_CLAIM_CRD_NOT_INSTALLED', 'postgresclaims.provisioning.opensphere.io', 'PostgresClaim CRD is not installed.',
-      ['cluster.plan', 'cluster.create'], 'PFSS', 'Install the signed PFSS PostgreSQL contract bundle', false));
-    if (!stackgresCRD.ok) blockers.push(postgresReadinessBlocker(
-      'STACKGRES_CRD_NOT_INSTALLED', 'sgclusters.stackgres.io', 'StackGres SGCluster CRD is not installed.',
-      ['cluster.create'], 'PFSS', 'Install the approved StackGres operator bundle', false));
+    const postgresCrdBlocker = postgresCrdReadinessBlocker(postgresCRD, {
+      component: 'postgresclaims.provisioning.opensphere.io',
+      missingCode: 'POSTGRES_CLAIM_CRD_NOT_INSTALLED', unavailableCode: 'POSTGRES_CLAIM_CRD_UNOBSERVABLE',
+      missingMessage: 'PostgresClaim CRD is not installed.', missingAction: 'Install the signed PFSS PostgreSQL contract bundle',
+      affectedOperations: ['cluster.plan', 'cluster.create'],
+    });
+    if (postgresCrdBlocker) blockers.push(postgresCrdBlocker);
+    const stackgresCrdBlocker = postgresCrdReadinessBlocker(stackgresCRD, {
+      component: 'sgclusters.stackgres.io',
+      missingCode: 'STACKGRES_CRD_NOT_INSTALLED', unavailableCode: 'STACKGRES_CRD_UNOBSERVABLE',
+      missingMessage: 'StackGres SGCluster CRD is not installed.', missingAction: 'Install the approved StackGres operator bundle',
+      affectedOperations: ['cluster.create'],
+    });
+    if (stackgresCrdBlocker) blockers.push(stackgresCrdBlocker);
     const stackgresOperators = (deployments.json?.items || []).filter((item) => String(item?.metadata?.name || '').includes('stackgres'));
     const stackgresReady = deployments.ok && stackgresOperators.some((item) => Number(item?.status?.readyReplicas || 0) >= Number(item?.spec?.replicas || 1));
     if (!stackgresReady) blockers.push(postgresReadinessBlocker(
@@ -3669,7 +3696,8 @@ if (require.main === module) {
     stackGresExtensionVersions, stackGresExtensionCatalog, postgresClaimResource,
     foundationPostgresClaimResource, foundationPostgresClaimProjection, foundationCliManifest,
     postgresInstanceRequestSchema, postgresOwnerActionDefinitions, postgresOwnerContractProjection,
-    postgresReadinessEvidence, postgresReadinessBlocker, postgresReadinessStage, postgresReadinessProjection,
+    postgresReadinessEvidence, postgresReadinessBlocker, postgresCrdReadinessBlocker,
+    postgresReadinessStage, postgresReadinessProjection,
     postgresOperationOwnerEvidence, postgresOperationCompletion, postgresOperationWatchStage,
     postgresProfileKind, sanitizePostgresProfileSpec, profileReferenceCounts, profileSpecDiff,
     postgresOperationPlan, postgresBackupPlan,

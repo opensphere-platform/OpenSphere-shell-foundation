@@ -10,6 +10,7 @@ const {
   postgresOwnerContractProjection,
   postgresReadinessEvidence,
   postgresReadinessBlocker,
+  postgresCrdReadinessBlocker,
   postgresReadinessProjection,
   postgresOperationCompletion,
   postgresOperationWatchStage,
@@ -278,9 +279,32 @@ test('PostgreSQL owner catalog consumers have read-only StorageClass discovery',
     && rule.resources?.includes('storageclasses'));
   assert.ok(storageRule, 'PostgreSQL catalog readers must be able to discover StorageClasses');
   assert.deepEqual([...storageRule.verbs].sort(), ['get', 'list', 'watch']);
+  const crdRule = role.rules.find((rule) => rule.apiGroups?.includes('apiextensions.k8s.io')
+    && rule.resources?.includes('customresourcedefinitions'));
+  assert.ok(crdRule, 'PostgreSQL readiness consumers must be able to observe contract CRDs');
+  assert.deepEqual([...crdRule.verbs].sort(), ['get', 'list', 'watch']);
 
   const binding = documents.find((document) => document.kind === 'ClusterRoleBinding'
     && document.roleRef?.name === role.metadata.name);
   assert.ok(binding?.subjects?.some((subject) => subject.kind === 'Group'
     && subject.name === 'opensphere-console-admins'));
+});
+
+test('PostgreSQL readiness distinguishes absent CRDs from unobservable CRDs', () => {
+  const spec = {
+    component: 'postgresclaims.provisioning.opensphere.io',
+    missingCode: 'POSTGRES_CLAIM_CRD_NOT_INSTALLED',
+    unavailableCode: 'POSTGRES_CLAIM_CRD_UNOBSERVABLE',
+    missingMessage: 'PostgresClaim CRD is not installed.',
+    missingAction: 'Install the signed PFSS PostgreSQL contract bundle',
+    affectedOperations: ['cluster.plan', 'cluster.create'],
+  };
+  const missing = postgresCrdReadinessBlocker({ ok: false, status: 404 }, spec);
+  const forbidden = postgresCrdReadinessBlocker({ ok: false, status: 403 }, spec);
+  assert.equal(missing.code, 'POSTGRES_CLAIM_CRD_NOT_INSTALLED');
+  assert.equal(missing.remediation.action, spec.missingAction);
+  assert.equal(forbidden.code, 'POSTGRES_CLAIM_CRD_UNOBSERVABLE');
+  assert.match(forbidden.message, /could not be observed \(HTTP 403\)/);
+  assert.match(forbidden.remediation.action, /Restore delegated read access/);
+  assert.equal(postgresCrdReadinessBlocker({ ok: true, status: 200 }, spec), null);
 });
