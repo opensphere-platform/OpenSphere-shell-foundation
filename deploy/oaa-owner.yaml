@@ -22,8 +22,8 @@ spec:
   template:
     metadata:
       annotations:
-        io.opensphere.source-revision: "5ffeb1508a6580923a87a473684c3964fbb9626b"
-        io.opensphere.release-tag: "202608142228"
+        io.opensphere.source-revision: "c5f75e94fb15eb31bd7810a2f1d3cde47d0d9ae9"
+        io.opensphere.release-tag: "202608142241"
       labels:
         app: foundation-oaa-owner
         app.kubernetes.io/name: foundation-oaa-owner
@@ -39,10 +39,10 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: owner
-          image: ghcr.io/opensphere-platform/opensphere-shell-foundation@sha256:5acbd705a9985565a277c48f0768e25ea2fc957b934c1c262c146d9b294f6a15
+          image: ghcr.io/opensphere-platform/opensphere-shell-foundation@sha256:ae11dafb7942a2cce26e2cde7e960cd69ee454fcec6262f466b956957cd8fac4
           imagePullPolicy: IfNotPresent
           env:
-            - { name: APP_VERSION, value: "202608142228" }
+            - { name: APP_VERSION, value: "202608142241" }
             - { name: FOUNDATION_OWNER_ONLY, value: "true" }
             - { name: FOUNDATION_NS, value: opensphere-foundation }
             - { name: CONSOLE_IDENTITY_URL, value: http://opensphere-console-backend.opensphere-console.svc.cluster.local:8080 }
