@@ -55,12 +55,13 @@ export const FOUNDATION_PLUGINS: HostedPlugin[] = [
   // 2026-07-06(Samba-AD 편입): identity 엔진 2종의 consumePoint를 control-plane identity 번들 실물
   // (foundation-identity-*)로 정합 — 실물은 FoundationModel(identity) CR → reconciler(SSA)가 만든다.
   {
-    id: 'keycloak', name: 'Keycloak', icon: 'key', kind: 'plugin', hostRef: 'foundation', lifecycle: 'migration-required',
+    id: 'keycloak', name: 'Keycloak', icon: 'key', kind: 'plugin', hostRef: 'foundation', lifecycle: 'registry-backed',
     capability: 'identity.iam.workspace', capabilityLabel: '신원/SSO (IAM)',
     desc: 'workspace/사원 IAM·SSO capability · Keycloak(identity 번들 D-3, start-dev). Samba-AD LDAP federation. (Kanidm 콘솔과 무관)',
     consumePoint: 'foundation-identity-keycloak.opensphere-foundation.svc:8080',
     healthRef: 'keycloak', model: 'identity', view: { module: 'keycloak' },
     surface: PG_SURFACE,
+    activation: { packageId: 'keycloak', element: 'osp-foundation-keycloak' },
   },
   {
     id: 'samba', name: 'Directory Providers', icon: 'users', kind: 'plugin', hostRef: 'foundation', lifecycle: 'registry-backed',

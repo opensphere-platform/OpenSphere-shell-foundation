@@ -130,8 +130,7 @@ const expectedEngineCards = [
   'litellm', 'langfuse', 'stalwart', 'novu', 'mattermost', 'otel', 'tempo', 'loki', 'grafana-operator', 'ptm',
 ];
 const expectedCardLifecycle = new Map([
-  ['keycloak', 'migration-required'],
-  ...['syncope', 'samba', 'opa', 'postgres', 'psmdb', 'valkey', 'rustfs', 'opensearch'].map((id) => [id, 'registry-backed']),
+  ...['keycloak', 'syncope', 'samba', 'opa', 'postgres', 'psmdb', 'valkey', 'rustfs', 'opensearch'].map((id) => [id, 'registry-backed']),
   ...['litellm', 'langfuse', 'stalwart', 'novu', 'mattermost', 'otel', 'tempo', 'loki', 'grafana-operator', 'ptm'].map((id) => [id, 'planned']),
 ]);
 for (const id of expectedEngineCards) {
@@ -157,4 +156,4 @@ for (const retired of ['Phase 1 관리 표면', 'reconciler 구현 후 활성화
 }
 if (overviewSurface.includes('const PLANNED:')) throw new Error('PFS overview regressed to the retired roadmap-only domain model');
 const registryBacked = catalog.plugins.filter((item) => item.lifecycle === 'registry-backed').length + separatelyGoverned.length;
-process.stdout.write(`verified ${allPFSS.length} PFSS contracts: ${registryBacked} registry-backed plugins, 1 migration, ${catalog.plugins.filter((item) => item.lifecycle === 'planned').length} planned entries and ${referencedMirrors.size} operand mirrors\n`);
+process.stdout.write(`verified ${allPFSS.length} PFSS contracts: ${registryBacked} registry-backed plugins, ${catalog.plugins.filter((item) => item.lifecycle === 'migration-required').length} migrations, ${catalog.plugins.filter((item) => item.lifecycle === 'planned').length} planned entries and ${referencedMirrors.size} operand mirrors\n`);

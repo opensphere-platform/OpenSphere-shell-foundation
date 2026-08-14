@@ -8,6 +8,10 @@ const directoryRoot = process.env.DIRECTORY_PLUGIN_ROOT || process.env.SAMBA_PLU
   ? resolve(root, process.env.DIRECTORY_PLUGIN_ROOT || process.env.SAMBA_PLUGIN_ROOT)
   : resolve(root, '..', 'OpenSphere-plugin-directory');
 const readDirectory = (path) => readFileSync(resolve(directoryRoot, path), 'utf8');
+const keycloakRoot = process.env.KEYCLOAK_PLUGIN_ROOT
+  ? resolve(root, process.env.KEYCLOAK_PLUGIN_ROOT)
+  : resolve(root, '..', 'OpenSphere-plugin-keycloak');
+const readKeycloak = (path) => readFileSync(resolve(keycloakRoot, path), 'utf8');
 
 // Compatibility SemVer is shared by the signed module sources. The official
 // image version is injected separately as a KST release tag at build time.
@@ -41,7 +45,6 @@ assert.match(
 );
 
 const surfaces = [
-  ['Keycloak', 'src/app/modules/identity/keycloak.component.ts'],
   ['OPA', 'src/app/modules/identity/opa.component.ts'],
   ['Roadmap modules', 'src/app/foundation/roadmap-module.component.ts'],
   ['OpenTelemetry', 'src/app/foundation/otel/otel.component.ts'],
@@ -57,36 +60,37 @@ for (const [name, file] of surfaces) {
   }
 }
 
-const keycloakSurface = read('src/app/modules/identity/keycloak.component.ts');
-assert.match(keycloakSurface, /\[context\]="headerContext\(\)"/, 'Keycloak: Namespace·서비스 공통 header context 누락');
-assert.match(keycloakSurface, /headerContext\(\):PluginHeaderContextModel/, 'Keycloak: 공통 context model 누락');
-assert.match(keycloakSurface, /managedFleet:true/, 'Keycloak: PostgreSQL 기준 Fleet 관리 action 누락');
-assert.match(keycloakSurface, /\(namespaceAdd\)="openTab\('claims'\)"/, 'Keycloak: Namespace 인접 추가 action 배선 누락');
-assert.match(keycloakSurface, /\(refreshRequested\)="refresh\(\)"/, 'Keycloak: 공통 새로고침 action 배선 누락');
-assert.match(keycloakSurface, /\*ngIf="exists\(\)&&!isManagementView\(\)"/, 'Keycloak: 서비스가 없거나 관리 view일 때 운영 탭을 숨기는 계약 누락');
-assert.match(keycloakSurface, /관리 워크스페이스/, 'Keycloak: 관리 view와 운영 view 구분 누락');
-assert.match(keycloakSurface, /Profile Catalog/, 'Keycloak: 재사용 Profile 관리 surface 누락');
-assert.match(keycloakSurface, /Keycloak 서비스 생성/, 'Keycloak: Provisioning surface 누락');
-assert.match(keycloakSurface, /IdentityServiceClaim[\s\S]*Foundation Control Plane[\s\S]*Keycloak/, 'Keycloak: 요청-배정-실행 provisioning bridge 누락');
-assert.match(keycloakSurface, /Keycloak Service Fleet/, 'Keycloak: 관리 서비스 Fleet 누락');
-assert.doesNotMatch(keycloakSurface, /kc-page-frame/, 'Keycloak: PostgreSQL과 다른 header modifier가 남아 있습니다.');
+const keycloakSpec = JSON.parse(readKeycloak('plugin.json'));
+const keycloakSurface = readKeycloak('ui-shell/ui-shell.plugin.js');
+const keycloakServer = readKeycloak('server.js');
+assert.equal(keycloakSpec.id, 'keycloak', 'Keycloak: 독립 package id 누락');
+assert.equal(keycloakSpec.element, 'osp-foundation-keycloak', 'Keycloak: registry activation element 불일치');
+assert.equal(keycloakSpec.control.model, 'identity', 'Keycloak: FoundationModel/identity 권위 누락');
+assert.equal(keycloakSpec.control.parameterPath, 'identityEngines.keycloak', 'Keycloak: engine parameter path 누락');
+assert.match(keycloakSurface, /PFSS \/ \$\{esc\(SPEC\.capability\.toUpperCase\(\)\)\}/, 'Keycloak: PFSS 공통 header eyebrow 누락');
+assert.match(keycloakSurface, /pfss-op-context-field\{width:220px;min-width:220px\}/, 'Keycloak: Namespace·서비스 220px 공통 폭 누락');
+assert.match(keycloakSurface, /Keycloak 서비스 생성/, 'Keycloak: 독립 Provisioning surface 누락');
+assert.match(keycloakSurface, /data-db-mode[\s\S]*postgresql-prod-ha-pitr/, 'Keycloak: PostgreSQL PFSS 배정 선택 계약 누락');
+assert.match(keycloakSurface, /data-apply-runtime/, 'Keycloak: FoundationModel 설치 선언 action 누락');
+assert.match(keycloakServer, /FOUNDATION_API_URL/, 'Keycloak: governed Foundation host API 연결 누락');
+assert.match(keycloakServer, /POSTGRES_CLAIMS_PATH/, 'Keycloak: PostgreSQL PFSS catalog 연결 누락');
+assert.doesNotMatch(keycloakServer, /kubernetes\.default\.svc/, 'Keycloak: plugin이 Kubernetes API를 직접 사용합니다.');
 assert.match(appStyles, /\.pgp-header-context \{[^}]*grid-template-columns: repeat\(2, max-content\);[^}]*justify-content: end;/, 'Keycloak: Namespace·서비스 선택기를 좌우·우측 정렬하는 공통 header 계약 누락');
 assert.match(appStyles, /\.pgp-header-context-field \{[^}]*width: 220px;[^}]*min-width: 220px;/, 'Keycloak: Namespace·서비스 선택기 220px 공통 폭 계약 누락');
 assert.match(appStyles, /\.pgp-page-frame \.pfs-plugin-head \{ grid-template-columns: minmax\(11\.5rem, 0\.5fr\) minmax\(0, 1\.5fr\); gap: 10px;/, 'Keycloak: PostgreSQL 공통 header identity/metadata 비율 누락');
 assert.match(appStyles, /\.pgp-page-frame \.pfs-plugin-brand p \{[^}]*overflow: hidden;[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/, 'Keycloak: 긴 설명이 PostgreSQL 공통 header 높이를 확장할 수 있습니다.');
 assert.match(appStyles, /\.pgp-page-frame \.pfs-plugin-release > \.pgp-header-tools \{[^}]*overflow: visible;/, 'Keycloak: 공통 release overflow가 header 관리 아이콘을 잘라서는 안 됩니다.');
-assert.match(keycloakSurface, /description:this\.exists\(\)\?'Workforce IAM·SSO와 OIDC realm을 운영합니다\.':'Namespace를 선택하거나 Keycloak 서비스를 생성하세요\.'/,'Keycloak: runtime·bootstrap header 설명 계약이 누락되었습니다.');
+assert.match(keycloakSurface, /Bootstrap 대기/, 'Keycloak: bootstrap lifecycle 계약 누락');
 assert.match(appStyles, /\.pgp-management-actions--header \{ position: absolute; top: -0\.9rem; right: 4px;/, 'Keycloak: PostgreSQL 관리 아이콘 상대 위치 누락');
 assert.match(appStyles, /\.pgp-management-actions--header \.pgp-management-action \{[^}]*color: var\(--os-brand-500\);/, 'Keycloak: 관리 아이콘 기본 색상 공통 계약 누락');
 assert.match(appStyles, /\.pgp-management-actions--header \.pgp-management-action\.active,[\s\S]*\.pgp-management-actions--header \.pgp-management-action\.active os-cicon \{[^}]*background: transparent;[^}]*color: #5f1f8f;/, 'Keycloak: 관리 아이콘 active 색상 공통 계약 누락');
 assert.match(appStyles, /\.pgp-workspace--full \{ width: 100%; max-width: none; \}/, 'Keycloak: 전체 폭 workspace가 PostgreSQL 기준 82rem 제한을 해제하지 못했습니다.');
-assert.match(keycloakSurface, /class="pgp-empty-state"[\s\S]*class="pgp-empty-copy"[\s\S]*Keycloak 서비스 생성/, 'Keycloak: PostgreSQL 공통 빈 상태 생성 surface를 사용하지 않습니다.');
-assert.doesNotMatch(keycloakSurface, /class="kc-empty"|\.kc-empty/, 'Keycloak: 별도 빈 상태 구현이 PostgreSQL 공통 규칙과 병존합니다.');
+assert.match(keycloakSurface, /class="pfss-op-empty"[\s\S]*Keycloak 서비스 생성/, 'Keycloak: 독립 plugin 공통 빈 상태 생성 surface를 사용하지 않습니다.');
+assert.doesNotMatch(keycloakSurface, /class="kc-empty"|\.kc-empty/, 'Keycloak: 폐기된 내장 빈 상태 구현이 독립 plugin에 재유입됐습니다.');
 assert.match(appStyles, /\.pgp-empty-copy h2 \{[^}]*font-size: 1\.2rem;[^}]*line-height: 1\.3;/, 'Keycloak: 빈 상태 제목 타이포가 PostgreSQL 기준과 다릅니다.');
 assert.match(appStyles, /\.pgp-empty-copy p \{[^}]*font-size: 0\.72rem;[^}]*line-height: 1\.5;/, 'Keycloak: 빈 상태 설명 타이포가 PostgreSQL 기준과 다릅니다.');
-assert.match(keycloakSurface, /PostgreSQL PFSS 플랜[\s\S]*postgresql-prod-ha-pitr/, 'Keycloak: 설치 단계 PostgreSQL 플랜 선택 계약 누락');
-assert.match(keycloakSurface, /openTab\(id:string\)\{this\.vr\.setModule\('keycloak'\)/, 'Keycloak: 관리 action이 다른 PFSS 모듈로 이동할 수 있음');
-assert.match(keycloakSurface, /\['operator','cluster','config','claims'\]\.includes\(wanted\)/, 'Keycloak: 관리 workspace 딥링크 복원 계약 누락');
+assert.match(keycloakSurface, /PostgreSQL PFSS plan[\s\S]*postgresql-prod-ha-pitr/, 'Keycloak: 설치 단계 PostgreSQL plan 선택 계약 누락');
+assert.match(keycloakSurface, /SPEC\.route/, 'Keycloak: 독립 route 기반 딥링크 계약 누락');
 assert.doesNotMatch(keycloakSurface, /embedded[- ]h2|start-dev/i, 'Keycloak: 폐기된 embedded H2 설치 가정이 UI에 재유입됨');
 
 const sharedShell = read('src/app/shared/plugin-page-shell.component.ts');

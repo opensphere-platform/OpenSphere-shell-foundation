@@ -166,7 +166,7 @@ export class FoundationEnginesComponent {
   readonly cards: EngineCard[] = [
     {
       id: 'keycloak', name: 'Keycloak', provider: 'keycloak.org', version: '26.x', logo: 'keycloak', mono: 'KC', detail: true, module: 'keycloak',
-      category: 'identity', impl: 'migration-required', liveKey: 'keycloak',
+      category: 'identity', impl: 'registry-backed', liveKey: 'keycloak',
       role: '사원 workforce realm과 OIDC provider. customer realm은 별도 결정 항목으로 남아 있다.',
       wiring: 'Keycloak plugin 화면에서 realm, workload, federation 상태를 관리한다.',
     },
