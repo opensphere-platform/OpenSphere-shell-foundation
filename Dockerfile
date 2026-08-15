@@ -17,6 +17,8 @@ ARG OS_MODULE_SIGNATURE
 ARG OS_RELEASE_TAG
 ARG OS_SOURCE_REVISION
 ARG OS_MODULE_KEY_ID=opensphere-plugins-v4
+RUN test -n "${OS_SOURCE_REVISION}" \
+    && echo "${OS_SOURCE_REVISION}" | grep -Eq '^[a-f0-9]{40}$'
 LABEL org.opencontainers.image.title="OpenSphere Platform Foundation Service Stack" \
       org.opencontainers.image.version=$OS_RELEASE_TAG \
       org.opencontainers.image.revision=$OS_SOURCE_REVISION \
