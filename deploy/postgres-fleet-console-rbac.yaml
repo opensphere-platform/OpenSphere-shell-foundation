@@ -13,6 +13,16 @@ rules:
   - apiGroups: ["provisioning.opensphere.io"]
     resources: [postgresclaims]
     verbs: [get, list, watch]
+  # The PostgreSQL owner catalog publishes selectable StorageClasses.  Keep this
+  # projection read-only and in the same role as the rest of the fleet catalog.
+  - apiGroups: ["storage.k8s.io"]
+    resources: [storageclasses]
+    verbs: [get, list, watch]
+  # Readiness must distinguish an absent PFSS/StackGres contract from one that
+  # the delegated operator cannot observe.
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: [customresourcedefinitions]
+    verbs: [get, list, watch]
   - apiGroups: [""]
     resources: [pods, services, events, namespaces]
     verbs: [get, list, watch]

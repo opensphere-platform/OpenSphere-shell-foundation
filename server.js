@@ -94,6 +94,11 @@ const POSTGRES_PROFILE_KINDS = Object.freeze({
   objectStorage: Object.freeze({ apiVersion: 'stackgres.io/v1beta1', apiKind: 'SGObjectStorage', resource: 'sgobjectstorages' }),
 });
 const POSTGRES_RUNTIME_CATALOG = 'opensphere-stackgres';
+const POSTGRES_OWNER_CONTRACT_VERSION = 'v1';
+const POSTGRES_OWNER_SOURCE_REVISION = String(process.env.OS_SOURCE_REVISION
+  || process.env.SOURCE_REVISION || process.env.APP_VERSION || VERSION || 'unknown').trim() || 'unknown';
+const POSTGRES_OWNER_EVIDENCE_TTL_SECONDS = Math.max(15, Math.min(3600,
+  Number(process.env.POSTGRES_OWNER_EVIDENCE_TTL_SECONDS || 60) || 60));
 const pgPools = new Map();
 const pgCredentialCache = new Map();
 let stackGresExtensionCache = { fetchedAt: 0, body: null };
@@ -519,6 +524,7 @@ function foundationPostgresClaimProjection(resource) {
     namespace: String(resource?.metadata?.namespace || ''),
     name: String(resource?.metadata?.name || ''),
     uid: String(resource?.metadata?.uid || ''),
+    resourceVersion: String(resource?.metadata?.resourceVersion || ''),
     generation: Number(resource?.metadata?.generation || 0),
     observedGeneration: Number(resource?.status?.observedGeneration || 0),
     phase: String(resource?.status?.phase || 'Pending'),
@@ -598,6 +604,7 @@ function postgresPlanProjection(resource) {
     : [];
   return {
     name: String(resource?.metadata?.name || ''),
+    resourceVersion: String(resource?.metadata?.resourceVersion || ''),
     lifecycle: String(spec.lifecycle || ''),
     profile: String(spec.profile || ''),
     provider: String(spec.provider || ''),
@@ -628,6 +635,8 @@ function postgresClaimProjection(resource) {
   return {
     namespace: String(resource?.metadata?.namespace || ''),
     name: String(resource?.metadata?.name || ''),
+    uid: String(resource?.metadata?.uid || ''),
+    resourceVersion: String(resource?.metadata?.resourceVersion || ''),
     displayName: String(resource?.metadata?.annotations?.['opensphere.io/display-name'] || ''),
     generation: Number(resource?.metadata?.generation || 0),
     plan: String(resource?.spec?.planRef?.name || ''),
@@ -690,6 +699,222 @@ async function loadPostgresRuntimeCatalog(actor) {
   return catalog;
 }
 
+function postgresInstanceRequestSchema() {
+  return {
+    type: 'object', additionalProperties: false,
+    required: ['name', 'namespace', 'alias', 'database', 'owner', 'plan', 'postgresVersion', 'deletionPolicy', 'reason'],
+    properties: {
+      name: { type: 'string' }, namespace: { type: 'string' }, alias: { type: 'string' },
+      database: { type: 'string' }, owner: { type: 'string' }, plan: { type: 'string' },
+      postgresVersion: { type: 'string' }, deletionPolicy: { type: 'string', enum: ['Retain', 'Delete'], default: 'Retain' },
+      storage: { type: 'object', additionalProperties: false, properties: {
+        size: { type: 'string' }, storageClass: { type: 'string' },
+      } },
+      profileRefs: { type: 'object', additionalProperties: false, properties: {
+        instanceProfile: { type: 'string' }, postgresConfig: { type: 'string' },
+        poolingConfig: { type: 'string' }, objectStorage: { type: 'string' },
+      } },
+      extensions: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name'], properties: {
+        name: { type: 'string' }, version: { type: 'string' }, publisher: { type: 'string' }, repository: { type: 'string' },
+      } } },
+      reason: { type: 'string' },
+    },
+  };
+}
+
+function postgresOwnerActionDefinitions() {
+  const availableInWebShell = (reason) => ({ available: true, reason });
+  return [
+    {
+      actionId: 'capability.read', toolId: 'foundation.capabilities', requestType: 'Instance',
+      command: 'os foundation capabilities', method: 'GET', path: '/api/foundation/oaa/postgres/capabilities',
+      executionClass: 'console-api', risk: 'low', riskClass: 'R0', scope: 'read',
+      inputSchema: { type: 'object', properties: { capability: { type: 'string', enum: ['data.sql.postgres'] } } },
+      webShell: availableInWebShell('Uses the same canonical Foundation Owner API capability contract as CLI and R2D2.'),
+      description: 'Discover PFSS control capabilities',
+    },
+    {
+      actionId: 'readiness.read', toolId: 'foundation.readiness', requestType: 'Instance',
+      command: 'os foundation readiness', method: 'GET', path: '/api/foundation/oaa/postgres/readiness',
+      executionClass: 'console-api', risk: 'low', riskClass: 'R0', scope: 'read',
+      inputSchema: { type: 'object', properties: { capability: { type: 'string', enum: ['data.sql.postgres'] } } },
+      webShell: availableInWebShell('Read-only readiness is served by the canonical Foundation Owner API.'),
+      description: 'Evaluate PFSS PostgreSQL plan and execution readiness',
+    },
+    {
+      actionId: 'catalog.read', toolId: 'foundation.postgres.catalog', requestType: 'Instance',
+      command: 'os foundation postgres catalog', method: 'GET', path: '/api/foundation/oaa/postgres/catalog',
+      executionClass: 'console-api', risk: 'low', riskClass: 'R0', scope: 'read', inputSchema: { type: 'object', properties: {} },
+      webShell: availableInWebShell('Read-only catalog data is served by the canonical Foundation Owner API.'),
+      description: 'Read the authoritative PostgreSQL runtime and plan catalog',
+    },
+    {
+      actionId: 'cluster.plan', toolId: 'foundation.postgres.plan.create', requestType: 'Instance',
+      command: 'os foundation postgres plan create', method: 'POST', path: '/api/foundation/oaa/postgres/durable-plan',
+      executionClass: 'console-api', risk: 'medium', riskClass: 'R2', scope: 'write-plan', inputSchema: postgresInstanceRequestSchema(),
+      supportsFile: true,
+      webShell: availableInWebShell('Creates only the canonical durable Owner plan; execution still requires a separate exact-confirmation apply.'),
+      description: 'Create a durable PostgreSQL operation plan',
+    },
+    {
+      actionId: 'cluster.create', toolId: 'foundation.postgres.apply', requestType: 'Instance',
+      command: 'os foundation postgres apply <planId>', method: 'POST', path: '/api/foundation/oaa/postgres/durable-apply/{planId}',
+      executionClass: 'console-api', risk: 'medium', riskClass: 'R2', scope: 'write', explicitAction: true,
+      pathParams: ['planId'], approval: 'exact-confirmation',
+      inputSchema: { type: 'object', additionalProperties: false, required: ['confirm'], properties: { confirm: { type: 'string' } } },
+      webShell: availableInWebShell('Uses the canonical AAL2 exact-confirmation durable Owner apply path.'),
+      description: 'Accept an unexpired durable PostgreSQL plan',
+    },
+    {
+      actionId: 'cluster.status', toolId: 'foundation.postgres.status', requestType: 'Instance',
+      command: 'os foundation postgres status <namespace> <name>', method: 'GET',
+      path: '/api/foundation/oaa/postgres/claims/{namespace}/{name}', pathParams: ['namespace', 'name'],
+      executionClass: 'console-api', risk: 'low', riskClass: 'R0', scope: 'read', inputSchema: { type: 'object', properties: {} },
+      webShell: availableInWebShell('Reads the canonical FoundationClaim and PostgresClaim status projection.'),
+      description: 'Read reconciled FoundationClaim and PostgresClaim status',
+    },
+    {
+      actionId: 'operation.watch', toolId: 'foundation.operation.watch', requestType: 'Instance',
+      command: 'os foundation operation watch <operationId>', method: 'GET',
+      path: '/api/foundation/oaa/operations/{operationId}', pathParams: ['operationId'],
+      executionClass: 'console-api', risk: 'low', riskClass: 'R0', scope: 'read', inputSchema: { type: 'object', properties: {} },
+      webShell: availableInWebShell('Watches the same durable operationId and postcondition receipt used by every channel.'),
+      description: 'Watch durable operation progress and postconditions',
+    },
+  ];
+}
+
+function postgresOwnerAction(actionId) {
+  const action = postgresOwnerActionDefinitions().find((item) => item.actionId === actionId);
+  if (!action) throw new Error(`unknown PostgreSQL owner action: ${actionId}`);
+  return action;
+}
+
+function postgresOwnerActionBinding(action) {
+  return {
+    method: action.method, path: action.path,
+    ...(action.pathParams?.length ? { pathParams: [...action.pathParams] } : {}),
+    ...(action.approval ? { approval: action.approval } : {}),
+  };
+}
+
+function postgresOwnerContractProjection(actionId) {
+  const action = postgresOwnerAction(actionId);
+  return {
+    contractVersion: POSTGRES_OWNER_CONTRACT_VERSION,
+    sourceRevision: POSTGRES_OWNER_SOURCE_REVISION,
+    capabilityId: 'data.sql.postgres', requestType: action.requestType,
+    semanticIdentity: {
+      capabilityId: 'data.sql.postgres', requestType: action.requestType,
+      actionId: action.actionId, toolId: action.toolId,
+    },
+    actionBinding: postgresOwnerActionBinding(action),
+  };
+}
+
+function postgresOwnerActionProjection(action) {
+  return {
+    ...postgresOwnerContractProjection(action.actionId),
+    actionId: action.actionId, toolId: action.toolId, requestType: action.requestType,
+    executionClass: action.executionClass, risk: action.risk, riskClass: action.riskClass,
+    scope: action.scope, webShell: { ...action.webShell }, actionBinding: postgresOwnerActionBinding(action),
+    inputSchema: action.inputSchema,
+  };
+}
+
+function postgresReadinessEvidence(id, source, result, observedAt, revision) {
+  const observedMs = Date.parse(observedAt);
+  const expiresAt = new Date(observedMs + POSTGRES_OWNER_EVIDENCE_TTL_SECONDS * 1000).toISOString();
+  const resolvedRevision = String(revision || result?.json?.metadata?.resourceVersion
+    || result?.body?.sourceRevision || result?.body?.evidenceRevision
+    || `${result?.ok ? 'observed' : 'unavailable'}:${result?.status || 'unknown'}`);
+  return {
+    id, source, revision: resolvedRevision, observedAt,
+    ttlSeconds: POSTGRES_OWNER_EVIDENCE_TTL_SECONDS, expiresAt,
+    stale: Date.now() > Date.parse(expiresAt), status: result?.ok ? 'Observed' : 'Unavailable',
+  };
+}
+
+const POSTGRES_READINESS_STAGE_BY_BLOCKER = Object.freeze({
+  POSTGRES_CLAIM_CRD_NOT_INSTALLED: 'Contract',
+  FOUNDATION_CONTROL_PLANE_NOT_READY: 'Provider',
+  STACKGRES_CRD_NOT_INSTALLED: 'Provider',
+  STACKGRES_OPERATOR_NOT_READY: 'Provider',
+  POSTGRES_RUNTIME_CATALOG_INCOMPLETE: 'Catalog',
+  POSTGRES_ADDON_PLAN_UNAVAILABLE: 'Catalog',
+  POSTGRES_NAMESPACE_UNAVAILABLE: 'Infrastructure',
+  DYNAMIC_STORAGE_NOT_READY: 'Infrastructure',
+  HIS_PREFLIGHT_NOT_READY: 'Infrastructure',
+  OPERATION_LEDGER_NOT_READY: 'Governance',
+  INDEPENDENT_AAL2_APPROVAL_REQUIRED: 'Governance',
+});
+const POSTGRES_READINESS_STAGE_ORDER = Object.freeze(['OwnerAPI', 'Contract', 'Provider', 'Catalog', 'Infrastructure', 'Governance', 'Ready']);
+
+function postgresReadinessStage(blockers) {
+  if (!blockers.length) return 'Ready';
+  return blockers.map((item) => item.stage || 'OwnerAPI')
+    .sort((a, b) => POSTGRES_READINESS_STAGE_ORDER.indexOf(a) - POSTGRES_READINESS_STAGE_ORDER.indexOf(b))[0];
+}
+
+function postgresReadinessBlocker(code, component, message, affectedOperations, owner, action, automatic = false, evidenceRefs = [component]) {
+  return {
+    id: `data.sql.postgres/${code}`, code, stage: POSTGRES_READINESS_STAGE_BY_BLOCKER[code] || 'OwnerAPI',
+    component, message, affectedOperations, blocksActions: affectedOperations,
+    evidenceRefs, remediation: { owner, action, automatic },
+  };
+}
+
+function postgresCrdReadinessBlocker(result, {
+  component, missingCode, unavailableCode, missingMessage, missingAction, affectedOperations,
+}) {
+  if (result?.ok) return null;
+  if (Number(result?.status) === 404) return postgresReadinessBlocker(
+    missingCode, component, missingMessage, affectedOperations, 'PFSS', missingAction, false,
+  );
+  const status = Number(result?.status) || 0;
+  return postgresReadinessBlocker(
+    unavailableCode,
+    component,
+    `${component} readiness evidence could not be observed${status ? ` (HTTP ${status})` : ''}.`,
+    affectedOperations,
+    'PFSS',
+    `Restore delegated read access to CustomResourceDefinition/${component}`,
+    false,
+  );
+}
+
+function postgresReadinessProjection(blockers, checks, evidence, observedAt) {
+  const planningCodes = new Set(['POSTGRES_CLAIM_CRD_NOT_INSTALLED', 'POSTGRES_CLAIM_CRD_UNOBSERVABLE', 'POSTGRES_RUNTIME_CATALOG_INCOMPLETE', 'POSTGRES_ADDON_PLAN_UNAVAILABLE', 'POSTGRES_NAMESPACE_UNAVAILABLE']);
+  const readyToPlan = !blockers.some((item) => planningCodes.has(item.code));
+  const actions = postgresOwnerActionDefinitions().filter((item) => !['capability.read', 'readiness.read'].includes(item.actionId));
+  const nextActions = actions.map((action) => {
+    const blockedBy = blockers.filter((item) => item.blocksActions.includes(action.actionId)).map((item) => item.id);
+    const required = [...(action.pathParams || []), ...(action.inputSchema?.required || [])];
+    return {
+      ...postgresOwnerActionProjection(action), supported: true, available: blockedBy.length === 0, blockedBy,
+      missingInputs: { required, schema: action.inputSchema },
+    };
+  });
+  const evidenceRevision = crypto.createHash('sha256')
+    .update(evidence.map((item) => `${item.id}:${item.revision}`).join('|')).digest('hex');
+  const stale = evidence.some((item) => item.stale);
+  return {
+    ...postgresOwnerContractProjection('readiness.read'),
+    schema: 'foundation.control-readiness/v1', capability: 'data.sql.postgres',
+    state: blockers.length ? 'Blocked' : 'Ready', stage: postgresReadinessStage(blockers),
+    readyToPlan, readyToExecute: blockers.length === 0 && !stale,
+    checks, blockers, evidenceRevision, evidence, observedAt,
+    source: { kind: 'FoundationOwnerAPI', name: 'data.sql.postgres', revision: POSTGRES_OWNER_SOURCE_REVISION },
+    staleness: {
+      ttlSeconds: POSTGRES_OWNER_EVIDENCE_TTL_SECONDS, stale,
+      expiresAt: evidence.map((item) => item.expiresAt).sort()[0] || observedAt,
+    },
+    missingInputs: nextActions.filter((item) => item.missingInputs.required.length)
+      .map((item) => ({ actionId: item.actionId, toolId: item.toolId, ...item.missingInputs })),
+    nextActions,
+  };
+}
+
 async function postgresOaaStatus(req, res) {
   if (req.method !== 'GET') return jsonRes(res, 405, { error: 'read-only endpoint' });
   try {
@@ -720,6 +945,7 @@ async function postgresOaaStatus(req, res) {
     const clusters = ((clusterResult.ok ? clusterResult.json?.items : []) || []).map(postgresClusterProjection)
       .sort((a, b) => Number(b.ready) - Number(a.ready) || a.displayName.localeCompare(b.displayName));
     return jsonRes(res, 200, {
+      ...postgresOwnerContractProjection('cluster.status'),
       schema: 'foundation.postgres.owner-status/v1alpha1', owner: 'PFSS / data.sql.postgres',
       capabilities: ['status-read', 'claim-plan', 'claim-create'], runtimeCatalog, plans,
       managedNamespaces, claims, clusters, refreshedAt: new Date().toISOString(),
@@ -759,6 +985,7 @@ async function postgresOaaPlan(req, res) {
       validated = validation.json || resource;
     }
     return jsonRes(res, 200, {
+      ...postgresOwnerContractProjection('cluster.plan'),
       schema: 'foundation.postgres.claim-plan/v1alpha1', owner: 'PFSS / data.sql.postgres',
       executionModel: 'FoundationClaim',
       target: `FoundationClaim/${resource.metadata.namespace}/${resource.metadata.name}`,
@@ -788,19 +1015,18 @@ async function postgresOaaCapabilities(req, res) {
     await verifyToken(requestToken(req));
     const requested = new URL(req.url || '/', 'http://localhost').searchParams.get('capability');
     if (requested && requested !== 'data.sql.postgres') return jsonRes(res, 404, { error: `unknown Foundation capability: ${requested}` });
+    const actions = postgresOwnerActionDefinitions();
     return jsonRes(res, 200, {
+      ...postgresOwnerContractProjection('capability.read'),
       schema: 'foundation.control-capabilities/v1', owner: 'PFSS', capability: 'data.sql.postgres',
-      operations: ['catalog.read', 'cluster.plan', 'cluster.create', 'cluster.status', 'operation.watch'],
+      operations: actions.filter((item) => !['capability.read', 'readiness.read'].includes(item.actionId)).map((item) => item.actionId),
+      actions: actions.map(postgresOwnerActionProjection), supportedRequestTypes: ['Instance'],
       approvalPolicy: 'exact-confirmation', executionModel: 'PostgresClaim', requestModel: 'FoundationClaim',
       controller: 'foundation-control-plane', provider: 'stackgres',
     });
   } catch (e) {
     return jsonRes(res, typeof e.code === 'number' ? e.code : 401, { error: e.msg || e.message || String(e) });
   }
-}
-
-function postgresReadinessBlocker(code, component, message, affectedOperations, owner, action, automatic = false) {
-  return { code, component, message, affectedOperations, remediation: { owner, action, automatic } };
 }
 
 async function postgresOaaReadiness(req, res) {
@@ -821,17 +1047,26 @@ async function postgresOaaReadiness(req, res) {
       consoleAdminRead('/api/oaa/operations?limit=1', rawToken).then((body) => ({ ok: true, body })).catch((error) => ({ ok: false, error })),
     ]);
     const blockers = [];
+    const observedAt = new Date().toISOString();
     const desired = Number(controller.json?.spec?.replicas || 0);
     const ready = Number(controller.json?.status?.readyReplicas || 0);
     if (!controller.ok || desired < 1 || ready !== desired) blockers.push(postgresReadinessBlocker(
       'FOUNDATION_CONTROL_PLANE_NOT_READY', 'foundation-control-plane', `foundation-control-plane Ready ${ready}/${desired}`,
       ['cluster.create'], 'PFSS', 'Restore the foundation-control-plane Deployment to Ready', false));
-    if (!postgresCRD.ok) blockers.push(postgresReadinessBlocker(
-      'POSTGRES_CLAIM_CRD_NOT_INSTALLED', 'postgresclaims.provisioning.opensphere.io', 'PostgresClaim CRD is not installed.',
-      ['cluster.plan', 'cluster.create'], 'PFSS', 'Install the signed PFSS PostgreSQL contract bundle', false));
-    if (!stackgresCRD.ok) blockers.push(postgresReadinessBlocker(
-      'STACKGRES_CRD_NOT_INSTALLED', 'sgclusters.stackgres.io', 'StackGres SGCluster CRD is not installed.',
-      ['cluster.create'], 'PFSS', 'Install the approved StackGres operator bundle', false));
+    const postgresCrdBlocker = postgresCrdReadinessBlocker(postgresCRD, {
+      component: 'postgresclaims.provisioning.opensphere.io',
+      missingCode: 'POSTGRES_CLAIM_CRD_NOT_INSTALLED', unavailableCode: 'POSTGRES_CLAIM_CRD_UNOBSERVABLE',
+      missingMessage: 'PostgresClaim CRD is not installed.', missingAction: 'Install the signed PFSS PostgreSQL contract bundle',
+      affectedOperations: ['cluster.plan', 'cluster.create'],
+    });
+    if (postgresCrdBlocker) blockers.push(postgresCrdBlocker);
+    const stackgresCrdBlocker = postgresCrdReadinessBlocker(stackgresCRD, {
+      component: 'sgclusters.stackgres.io',
+      missingCode: 'STACKGRES_CRD_NOT_INSTALLED', unavailableCode: 'STACKGRES_CRD_UNOBSERVABLE',
+      missingMessage: 'StackGres SGCluster CRD is not installed.', missingAction: 'Install the approved StackGres operator bundle',
+      affectedOperations: ['cluster.create'],
+    });
+    if (stackgresCrdBlocker) blockers.push(stackgresCrdBlocker);
     const stackgresOperators = (deployments.json?.items || []).filter((item) => String(item?.metadata?.name || '').includes('stackgres'));
     const stackgresReady = deployments.ok && stackgresOperators.some((item) => Number(item?.status?.readyReplicas || 0) >= Number(item?.spec?.replicas || 1));
     if (!stackgresReady) blockers.push(postgresReadinessBlocker(
@@ -861,27 +1096,38 @@ async function postgresOaaReadiness(req, res) {
     const hisPreflight = prerequisites.find((item) => item.key === 'his-preflight');
     if (!lifecycleResult.ok || !hisPreflight?.ready) blockers.push(postgresReadinessBlocker(
       'HIS_PREFLIGHT_NOT_READY', String(hisPreflight?.component || 'his-preflight'), String(hisPreflight?.message || 'HIS storage/network/DNS preflight is not ready.'),
-      ['cluster.create'], 'Cluster Manager / HIS', String(hisPreflight?.remediation || 'Restore HIS storage, network, and DNS preflight readiness'), false));
+      ['cluster.create'], 'Cluster Manager / HIS', String(hisPreflight?.remediation || 'Restore HIS storage, network, and DNS preflight readiness'), false, ['his-preflight']));
     if (!operationLedgerResult.ok) blockers.push(postgresReadinessBlocker(
       'OPERATION_LEDGER_NOT_READY', 'console.module_operation', 'Console durable operation ledger is unavailable.',
       ['cluster.create', 'operation.watch'], 'Console', 'Restore the Console module operation API and database ledger', false));
     if (actor.assurance !== 'aal2') blockers.push(postgresReadinessBlocker(
       'INDEPENDENT_AAL2_APPROVAL_REQUIRED', 'console-identity', 'The CLI initiator is AAL1; execution requires an independent AAL2 browser-session approver.',
       ['cluster.create'], 'Console', 'Obtain the operation-bound independent AAL2 approval', false));
-    const planningCodes = new Set(['POSTGRES_CLAIM_CRD_NOT_INSTALLED', 'POSTGRES_RUNTIME_CATALOG_INCOMPLETE', 'POSTGRES_ADDON_PLAN_UNAVAILABLE', 'POSTGRES_NAMESPACE_UNAVAILABLE']);
-    const readyToPlan = !blockers.some((item) => planningCodes.has(item.code));
-    return jsonRes(res, 200, {
-      schema: 'foundation.control-readiness/v1', capability: 'data.sql.postgres',
-      state: blockers.length ? 'Blocked' : 'Ready', readyToPlan, readyToExecute: blockers.length === 0,
-      checks: {
-        ownerAPI: true, foundationControlPlane: controller.ok && desired > 0 && ready === desired,
-        postgresClaimCRD: postgresCRD.ok, stackgresCRD: stackgresCRD.ok, stackgresOperator: stackgresReady,
-        runtimeCatalog: Boolean(runtimeCatalog?.versions?.length), addOnPlans: availablePlans.length,
-        namespaces: managedNamespaces.length, storageClasses: dynamicStorage.length,
-        delegatedIdentity: Boolean(actor.subject), delegatedAssurance: actor.assurance || 'aal1', operationLedger: operationLedgerResult.ok,
-      },
-      blockers, observedAt: new Date().toISOString(),
-    });
+    const stackgresRevision = crypto.createHash('sha256').update(JSON.stringify(stackgresOperators.map((item) => ({
+      uid: item?.metadata?.uid || '', generation: item?.metadata?.generation || 0,
+      observedGeneration: item?.status?.observedGeneration || 0, readyReplicas: item?.status?.readyReplicas || 0,
+    })))).digest('hex');
+    const evidence = [
+      postgresReadinessEvidence('foundation-control-plane', 'Kubernetes Deployment/opensphere-system/foundation-control-plane', controller, observedAt),
+      postgresReadinessEvidence('postgresclaims.provisioning.opensphere.io', 'Kubernetes CustomResourceDefinition/postgresclaims.provisioning.opensphere.io', postgresCRD, observedAt),
+      postgresReadinessEvidence('sgclusters.stackgres.io', 'Kubernetes CustomResourceDefinition/sgclusters.stackgres.io', stackgresCRD, observedAt),
+      postgresReadinessEvidence('stackgres-operator', 'Kubernetes Deployment list/stackgres operator', deployments, observedAt, stackgresRevision),
+      postgresReadinessEvidence(POSTGRES_RUNTIME_CATALOG, `Kubernetes PostgresRuntimeCatalog/${POSTGRES_RUNTIME_CATALOG}`, runtimeResult, observedAt),
+      postgresReadinessEvidence('catalog.opensphere.io/AddOnPlan', 'Kubernetes AddOnPlan list', plansResult, observedAt),
+      postgresReadinessEvidence('foundation-managed-namespace', 'Kubernetes Namespace list/Foundation admission labels', namespacesResult, observedAt),
+      postgresReadinessEvidence('storage.k8s.io/StorageClass', 'Kubernetes StorageClass list', storageResult, observedAt),
+      postgresReadinessEvidence('his-preflight', 'Cluster Manager platform readiness authority', lifecycleResult, observedAt),
+      postgresReadinessEvidence('console.module_operation', 'Console durable operation ledger', operationLedgerResult, observedAt),
+      postgresReadinessEvidence('console-identity', 'Console evaluated identity assurance', { ok: Boolean(actor.subject) }, observedAt, `assurance:${actor.assurance || 'aal1'}`),
+    ];
+    const checks = {
+      ownerAPI: true, foundationControlPlane: controller.ok && desired > 0 && ready === desired,
+      postgresClaimCRD: postgresCRD.ok, stackgresCRD: stackgresCRD.ok, stackgresOperator: stackgresReady,
+      runtimeCatalog: Boolean(runtimeCatalog?.versions?.length), addOnPlans: availablePlans.length,
+      namespaces: managedNamespaces.length, storageClasses: dynamicStorage.length,
+      delegatedIdentity: Boolean(actor.subject), delegatedAssurance: actor.assurance || 'aal1', operationLedger: operationLedgerResult.ok,
+    };
+    return jsonRes(res, 200, postgresReadinessProjection(blockers, checks, evidence, observedAt));
   } catch (e) {
     return jsonRes(res, typeof e.code === 'number' ? e.code : 503, { error: e.msg || e.message || String(e) });
   }
@@ -908,11 +1154,19 @@ async function postgresOaaCatalog(req, res) {
     const storageClasses = (storageResult.json?.items || []).filter((item) => String(item?.provisioner || '').trim())
       .map((item) => ({ name: String(item.metadata?.name || ''), provisioner: String(item.provisioner),
         isDefault: item.metadata?.annotations?.['storageclass.kubernetes.io/is-default-class'] === 'true' }));
+    const observedAt = new Date().toISOString();
+    const evidenceRevision = crypto.createHash('sha256').update(JSON.stringify({
+      runtime: runtimeCatalog.resourceVersion,
+      plans: plans.map((item) => [item.name, item.resourceVersion]),
+      namespacesResourceVersion: namespacesResult.json?.metadata?.resourceVersion || '',
+      storageResourceVersion: storageResult.json?.metadata?.resourceVersion || '',
+    })).digest('hex');
     return jsonRes(res, 200, {
+      ...postgresOwnerContractProjection('catalog.read'),
       schema: 'foundation.postgres.catalog/v1', owner: 'PFSS', capability: 'data.sql.postgres',
       namespaces, plans, runtimeCatalog, storageClasses,
       defaults: { postgresVersion: runtimeCatalog.defaultVersion, authority: 'PostgresRuntimeCatalog', source: POSTGRES_RUNTIME_CATALOG },
-      refreshedAt: new Date().toISOString(),
+      evidenceRevision, observedAt, refreshedAt: observedAt,
     });
   } catch (e) {
     return jsonRes(res, typeof e.code === 'number' ? e.code : 502, { error: e.msg || e.message || String(e) });
@@ -945,7 +1199,11 @@ async function postgresOaaApply(req, res) {
       const same = JSON.stringify(existing.json?.spec || {}) === JSON.stringify(resource.spec)
         && existing.json?.metadata?.annotations?.['opensphere.io/display-name'] === resource.metadata.annotations['opensphere.io/display-name'];
       if (!same) throw { code: 409, msg: `FoundationClaim ${resource.metadata.namespace}/${resource.metadata.name} already exists with a different contract` };
-      return jsonRes(res, 200, { accepted: true, created: false, idempotencyKey, claim: foundationPostgresClaimProjection(existing.json) });
+      return jsonRes(res, 200, {
+        ...postgresOwnerContractProjection('cluster.create'),
+        accepted: true, created: false, idempotencyKey, operationId: null, operationLineage: 'legacy-direct',
+        claim: foundationPostgresClaimProjection(existing.json),
+      });
     }
     if (existing.status !== 404) throw { code: existing.status, msg: k8sFailure(existing) };
     const validation = await k8sJson('POST', `${path}?dryRun=All&fieldManager=opensphere-foundation-oaa`, resource, actor);
@@ -956,7 +1214,9 @@ async function postgresOaaApply(req, res) {
     if (!created.ok) throw { code: created.status, msg: k8sFailure(created) };
     await publishFoundationAudit(actor, 'foundation-postgres-create', target, 'accepted', reason);
     return jsonRes(res, 202, {
+      ...postgresOwnerContractProjection('cluster.create'),
       accepted: true, created: true, idempotencyKey, owner: 'PFSS',
+      operationId: null, operationLineage: 'legacy-direct',
       target: { kind: 'FoundationClaim', namespace: resource.metadata.namespace, name: resource.metadata.name,
         uid: created.json?.metadata?.uid || '', generation: created.json?.metadata?.generation || 1 },
       claim: foundationPostgresClaimProjection(created.json),
@@ -986,6 +1246,7 @@ async function postgresOaaClaimStatus(req, res, namespace, name) {
     if (postgresClaim?.ready && !foundationClaim.ready) stage = 'BindingIssuing';
     if (foundationClaim.ready && postgresClaim?.ready) stage = 'Ready';
     return jsonRes(res, 200, {
+      ...postgresOwnerContractProjection('cluster.status'),
       schema: 'foundation.postgres.operation-status/v1', stage,
       foundationClaim, postgresClaim,
       ready: stage === 'Ready', owner: stage === 'Ready' ? null : 'PFSS', observedAt: new Date().toISOString(),
@@ -996,37 +1257,26 @@ async function postgresOaaClaimStatus(req, res, namespace, name) {
 }
 
 function foundationCliManifest() {
-  const requestSchema = {
-    type: 'object', additionalProperties: false,
-    required: ['name', 'namespace', 'alias', 'database', 'owner', 'plan', 'postgresVersion', 'deletionPolicy', 'reason'],
-    properties: {
-      name: { type: 'string' }, namespace: { type: 'string' }, alias: { type: 'string' },
-      database: { type: 'string' }, owner: { type: 'string' }, plan: { type: 'string' },
-      postgresVersion: { type: 'string' }, deletionPolicy: { type: 'string', enum: ['Retain', 'Delete'], default: 'Retain' },
-      storage: { type: 'object', additionalProperties: false, properties: {
-        size: { type: 'string' }, storageClass: { type: 'string' },
-      } },
-      profileRefs: { type: 'object', additionalProperties: false, properties: {
-        instanceProfile: { type: 'string' }, postgresConfig: { type: 'string' },
-        poolingConfig: { type: 'string' }, objectStorage: { type: 'string' },
-      } },
-      extensions: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name'], properties: {
-        name: { type: 'string' }, version: { type: 'string' }, publisher: { type: 'string' }, repository: { type: 'string' },
-      } } },
-      reason: { type: 'string' },
-    },
-  };
+  const actions = postgresOwnerActionDefinitions();
   return {
     kind: 'OpenSphereCLICommandManifest', schemaVersion: 'v1',
+    contractVersion: POSTGRES_OWNER_CONTRACT_VERSION, sourceRevision: POSTGRES_OWNER_SOURCE_REVISION,
+    capabilityId: 'data.sql.postgres', requestTypes: ['Instance'],
+    compatibility: { additiveResponses: true, unknownResponseFields: 'ignore', unknownRequestFields: 'reject' },
     cli: { commandPrefix: 'os foundation' },
-    tools: [
-      { id: 'foundation.capabilities', command: 'os foundation capabilities', method: 'GET', path: '/api/foundation/oaa/postgres/capabilities', risk: 'low', scope: 'read', inputSchema: { type: 'object', properties: { capability: { type: 'string', enum: ['data.sql.postgres'] } } }, description: 'Discover PFSS control capabilities' },
-      { id: 'foundation.readiness', command: 'os foundation readiness', method: 'GET', path: '/api/foundation/oaa/postgres/readiness', risk: 'low', scope: 'read', inputSchema: { type: 'object', properties: { capability: { type: 'string', enum: ['data.sql.postgres'] } } }, description: 'Evaluate PFSS PostgreSQL plan and execution readiness' },
-      { id: 'foundation.postgres.catalog', command: 'os foundation postgres catalog', method: 'GET', path: '/api/foundation/oaa/postgres/catalog', risk: 'low', scope: 'read', inputSchema: { type: 'object', properties: {} }, description: 'Read the authoritative PostgreSQL runtime and plan catalog' },
-      { id: 'foundation.postgres.plan.create', command: 'os foundation postgres plan create', method: 'POST', path: '/api/foundation/oaa/postgres/durable-plan', risk: 'medium', scope: 'write-plan', inputSchema: requestSchema, supportsFile: true, description: 'Create a durable PostgreSQL operation plan' },
-      { id: 'foundation.postgres.apply', command: 'os foundation postgres apply <planId>', method: 'POST', path: '/api/foundation/oaa/postgres/durable-apply/{planId}', risk: 'medium', scope: 'write', explicitAction: true, pathParams: ['planId'], inputSchema: { type: 'object', additionalProperties: false, required: ['confirm'], properties: { confirm: { type: 'string' } } }, description: 'Accept an unexpired durable PostgreSQL plan' },
-      { id: 'foundation.operation.watch', command: 'os foundation operation watch <operationId>', method: 'GET', path: '/api/foundation/oaa/operations/{operationId}', risk: 'low', scope: 'read', pathParams: ['operationId'], inputSchema: { type: 'object', properties: {} }, description: 'Watch durable operation progress and postconditions' },
-    ],
+    tools: actions.map((action) => ({
+      ...postgresOwnerContractProjection(action.actionId),
+      id: action.toolId, actionId: action.actionId,
+      contractVersion: POSTGRES_OWNER_CONTRACT_VERSION, sourceRevision: POSTGRES_OWNER_SOURCE_REVISION,
+      capabilityId: 'data.sql.postgres', requestType: action.requestType,
+      command: action.command, method: action.method, path: action.path,
+      executionClass: action.executionClass, risk: action.risk, riskClass: action.riskClass, scope: action.scope,
+      ...(action.supportsFile ? { supportsFile: true } : {}),
+      ...(action.explicitAction ? { explicitAction: true } : {}),
+      ...(action.pathParams?.length ? { pathParams: [...action.pathParams] } : {}),
+      inputSchema: action.inputSchema, webShell: { ...action.webShell },
+      actionBinding: postgresOwnerActionBinding(action), description: action.description,
+    })),
   };
 }
 
@@ -1055,7 +1305,10 @@ async function postgresOaaDurablePlan(req, res) {
     requireClosedOwnerBody(body, ['name', 'namespace', 'alias', 'database', 'owner', 'plan', 'postgresVersion', 'deletionPolicy', 'storage', 'extensions', 'profileRefs', 'reason']);
     return forwardConsoleDurable(req, res, 'POST', '/api/oaa/operations/plan', {
       action: 'create-postgres-cluster', target: body, reason: body.reason,
-    }, (plan) => ({ ...plan, operationAction: plan.action, action: 'Create', risk: 'medium' }));
+    }, (plan) => ({
+      ...plan, ...postgresOwnerContractProjection('cluster.plan'),
+      operationAction: plan.action, action: 'Create', risk: 'medium', riskClass: 'R2', requestType: 'Instance',
+    }));
   } catch (e) {
     return jsonRes(res, typeof e.code === 'number' ? e.code : 400, { error: e.msg || e.message || String(e) });
   }
@@ -1067,10 +1320,105 @@ async function postgresOaaDurableApply(req, res, planId) {
     if (!/^pgplan-[0-9a-f-]{36}$/i.test(planId)) throw { code: 400, msg: 'invalid PostgreSQL plan ID' };
     const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
     requireClosedOwnerBody(body, ['confirm']);
-    return forwardConsoleDurable(req, res, 'POST', '/api/oaa/operations', { planId, confirmation: String(body.confirm || '') });
+    return forwardConsoleDurable(req, res, 'POST', '/api/oaa/operations', { planId, confirmation: String(body.confirm || '') },
+      (operation) => ({ ...operation, ...postgresOwnerContractProjection('cluster.create') }));
   } catch (e) {
     return jsonRes(res, typeof e.code === 'number' ? e.code : 400, { error: e.msg || e.message || String(e) });
   }
+}
+
+function postgresOperationOwnerEvidence(foundationResult, postgresResult, observedAt = new Date().toISOString()) {
+  const foundationClaim = foundationResult?.ok ? foundationPostgresClaimProjection(foundationResult.json) : null;
+  const postgresClaim = postgresResult?.ok ? postgresClaimProjection(postgresResult.json) : null;
+  const sources = [
+    foundationClaim ? {
+      kind: 'FoundationClaim', namespace: foundationClaim.namespace, name: foundationClaim.name,
+      uid: foundationClaim.uid, resourceVersion: foundationClaim.resourceVersion,
+      generation: foundationClaim.generation, observedGeneration: foundationClaim.observedGeneration,
+      ready: foundationClaim.ready,
+    } : null,
+    postgresClaim ? {
+      kind: 'PostgresClaim', namespace: postgresClaim.namespace, name: postgresClaim.name,
+      uid: postgresClaim.uid, resourceVersion: postgresClaim.resourceVersion,
+      generation: postgresClaim.generation, observedGeneration: postgresClaim.observedGeneration,
+      ready: postgresClaim.ready,
+    } : null,
+  ].filter(Boolean);
+  const missing = !foundationClaim || !postgresClaim;
+  const generationStale = sources.some((item) => item.generation <= 0
+    || item.observedGeneration !== item.generation);
+  const expiresAt = new Date(Date.parse(observedAt) + POSTGRES_OWNER_EVIDENCE_TTL_SECONDS * 1000).toISOString();
+  const ttlExpired = Date.now() > Date.parse(expiresAt);
+  const stale = missing || generationStale || ttlExpired;
+  const evidenceRevision = missing ? null : crypto.createHash('sha256').update(JSON.stringify({
+    contractVersion: POSTGRES_OWNER_CONTRACT_VERSION,
+    sourceRevision: POSTGRES_OWNER_SOURCE_REVISION,
+    sources,
+  })).digest('hex');
+  return {
+    evidenceRevision, observedAt, source: 'kubernetes-api',
+    ttlSeconds: POSTGRES_OWNER_EVIDENCE_TTL_SECONDS, expiresAt,
+    missing, stale,
+    reasons: [
+      ...(missing ? ['OwnerEvidenceMissing'] : []),
+      ...(generationStale ? ['ObservedGenerationStale'] : []),
+      ...(ttlExpired ? ['EvidenceTTLExpired'] : []),
+    ],
+    sources,
+  };
+}
+
+function postgresOperationCompletion(operation, ownerStatus, ownerEvidence, operationId = operation?.operationId) {
+  const operationPhase = String(operation?.phase || '');
+  const verificationState = String(operation?.verificationState || '');
+  const verifierId = String(operation?.verifierId || '').trim();
+  const ownerRequired = operation?.action === 'create-postgres-cluster';
+  const ownerReady = !ownerRequired || ownerStatus?.stage === 'Ready';
+  const evidenceReady = !ownerRequired || Boolean(ownerEvidence?.evidenceRevision)
+    && ownerEvidence?.missing !== true && ownerEvidence?.stale !== true;
+  const durableVerified = verificationState === 'succeeded' && verifierId.length > 0;
+  const success = operationPhase === 'Succeeded' && durableVerified && ownerReady && evidenceReady;
+  const terminalFailurePhases = new Set([
+    'Failed', 'VerificationFailed', 'Inconclusive', 'TimedOut', 'RolledBack', 'Cancelled',
+    'AuthorizationExpired', 'PreflightBlocked',
+  ]);
+  const terminal = success || terminalFailurePhases.has(operationPhase);
+  let state = operationPhase || 'Unknown';
+  if (success) state = 'Succeeded';
+  else if (operationPhase === 'Succeeded' && !durableVerified) state = 'VerificationPending';
+  else if (operationPhase === 'Succeeded' && !evidenceReady) state = 'OwnerEvidencePending';
+  else if (operationPhase === 'Succeeded' && !ownerReady) state = 'OwnerReadinessPending';
+
+  const completion = {
+    terminal,
+    success,
+    verified: success,
+    state,
+    stale: ownerRequired ? ownerEvidence?.stale !== false : false,
+    evidenceRevision: ownerRequired ? ownerEvidence?.evidenceRevision || null : null,
+  };
+  if (success) {
+    const actionContract = postgresOwnerContractProjection('cluster.create');
+    completion.receipt = {
+      operationId: String(operation?.operationId || operationId || ''),
+      verifierId,
+      verificationState,
+      verifiedAt: operation?.verifiedAt || operation?.updatedAt || null,
+      updatedAt: operation?.updatedAt || null,
+      semanticIdentity: actionContract.semanticIdentity,
+      actionBinding: actionContract.actionBinding,
+      ownerEvidenceRevision: ownerEvidence.evidenceRevision,
+    };
+  }
+  return completion;
+}
+
+function postgresOperationWatchStage(operation, ownerStatus, completion) {
+  const acceptedPhases = new Set(['AwaitingApproval', 'Queued', 'Claimed', 'Preflighting', 'Executing']);
+  const resourceStage = ownerStatus?.stage || (acceptedPhases.has(operation?.phase) ? 'Accepted' : operation?.phase);
+  // Keep ownerStatus.stage as the resource reconciliation stage, but never expose
+  // top-level Ready until the durable operation has also been independently verified.
+  return resourceStage === 'Ready' && !completion?.success ? completion?.state : resourceStage;
 }
 
 async function postgresOaaOperationWatch(req, res, operationId) {
@@ -1086,11 +1434,14 @@ async function postgresOaaOperationWatch(req, res, operationId) {
     if (!operationResponse.ok) return jsonRes(res, operationResponse.status, operation);
     const target = operation.target || {};
     let ownerStatus = null;
+    let ownerEvidence = null;
     if (operation.action === 'create-postgres-cluster' && target.namespace && target.name) {
+      const observedAt = new Date().toISOString();
       const [foundation, postgres] = await Promise.all([
         k8sJson('GET', `${FOUNDATION_API}/namespaces/${target.namespace}/foundationclaims/${target.name}`, undefined, actor),
         k8sJson('GET', `/apis/provisioning.opensphere.io/v1beta1/namespaces/${target.namespace}/postgresclaims/${target.name}`, undefined, actor),
       ]);
+      ownerEvidence = postgresOperationOwnerEvidence(foundation, postgres, observedAt);
       if (foundation.ok) {
         const foundationClaim = foundationPostgresClaimProjection(foundation.json);
         const postgresClaim = postgres.ok ? postgresClaimProjection(postgres.json) : null;
@@ -1099,13 +1450,13 @@ async function postgresOaaOperationWatch(req, res, operationId) {
         if (postgresClaim?.conditions?.some((item) => item.reason === 'DatabaseRequestReconciling')) stage = 'DatabaseBootstrapping';
         if (postgresClaim?.ready && !foundationClaim.ready) stage = 'BindingIssuing';
         if (foundationClaim.ready && postgresClaim?.ready) stage = 'Ready';
-        ownerStatus = { stage, foundationClaim, postgresClaim, owner: stage === 'Ready' ? null : 'PFSS' };
+        ownerStatus = { stage, foundationClaim, postgresClaim, evidence: ownerEvidence, owner: stage === 'Ready' ? null : 'PFSS' };
       }
     }
-    const acceptedPhases = new Set(['AwaitingApproval', 'Queued', 'Claimed', 'Preflighting', 'Executing']);
-    const stage = ownerStatus?.stage || (acceptedPhases.has(operation.phase) ? 'Accepted' : operation.phase);
-    return jsonRes(res, 200, { ...operation, stage, operationPhase: operation.phase,
-      owner: ownerStatus?.owner ?? (stage === 'Accepted' ? 'Console' : null), ownerStatus });
+    const completion = postgresOperationCompletion(operation, ownerStatus, ownerEvidence, operationId);
+    const stage = postgresOperationWatchStage(operation, ownerStatus, completion);
+    return jsonRes(res, 200, { ...operation, ...postgresOwnerContractProjection('operation.watch'), stage, operationPhase: operation.phase,
+      owner: ownerStatus?.owner ?? (stage === 'Accepted' ? 'Console' : null), ownerStatus, completion });
   } catch (e) {
     return jsonRes(res, typeof e.code === 'number' ? e.code : 503, { error: e.msg || e.message || String(e) });
   }
@@ -3344,10 +3695,15 @@ if (require.main === module) {
     postgresExtensionName, postgresExtensionVersion, sanitizePostgresExtensions, postgresExtensionSpecDiff,
     stackGresExtensionVersions, stackGresExtensionCatalog, postgresClaimResource,
     foundationPostgresClaimResource, foundationPostgresClaimProjection, foundationCliManifest,
+    postgresInstanceRequestSchema, postgresOwnerActionDefinitions, postgresOwnerContractProjection,
+    postgresReadinessEvidence, postgresReadinessBlocker, postgresCrdReadinessBlocker,
+    postgresReadinessStage, postgresReadinessProjection,
+    postgresOperationOwnerEvidence, postgresOperationCompletion, postgresOperationWatchStage,
     postgresProfileKind, sanitizePostgresProfileSpec, profileReferenceCounts, profileSpecDiff,
     postgresOperationPlan, postgresBackupPlan,
     foundationBootstrapState,
     HIS_STATUS_SCHEMA, FOUNDATION_CORE_CRDS,
     FOUNDATION_ENGINE_MODEL, FOUNDATION_CLAIM_MODELS, POSTGRES_ADMIN, POSTGRES_DEFAULT_ID,
+    POSTGRES_OWNER_CONTRACT_VERSION, POSTGRES_OWNER_SOURCE_REVISION, POSTGRES_OWNER_EVIDENCE_TTL_SECONDS,
   };
 }
