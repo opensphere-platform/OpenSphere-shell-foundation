@@ -68,6 +68,19 @@ test('PostgreSQL owner publishes one additive v1 semantic action catalog', () =>
   }
 });
 
+test('Foundation image build fails closed without the exact source revision used by both owner manifests', () => {
+  const dockerfile = fs.readFileSync(path.join(__dirname, '..', 'Dockerfile'), 'utf8');
+  assert.match(dockerfile, /ARG OS_SOURCE_REVISION/);
+  assert.match(dockerfile, /test -n "\$\{OS_SOURCE_REVISION\}"/);
+  assert.match(dockerfile, /grep -Eq '\^\[a-f0-9\]\{40\}\$'/);
+  assert.match(dockerfile, /OS_SOURCE_REVISION=\$OS_SOURCE_REVISION/);
+  const exactSourceRevision = /^[a-f0-9]{40}$/;
+  assert.equal(exactSourceRevision.test('a'.repeat(40)), true, 'full canonical revision is accepted');
+  for (const invalid of ['', 'a'.repeat(39), 'A'.repeat(40), 'a'.repeat(41), `../${'a'.repeat(40)}`]) {
+    assert.equal(exactSourceRevision.test(invalid), false, `noncanonical revision must fail: ${invalid}`);
+  }
+});
+
 test('capability endpoints and manifest share stable semantic identity', () => {
   const manifest = foundationCliManifest();
   for (const actionId of IMPLEMENTED_ACTIONS) {
