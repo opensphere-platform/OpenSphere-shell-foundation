@@ -37,6 +37,7 @@ test('PostgreSQL owner publishes one additive v1 semantic action catalog', () =>
   assert.ok(actions.every((item) => item.requestType === 'Instance'));
   assert.ok(actions.every((item) => item.executionClass === 'console-api'));
   assert.ok(actions.every((item) => typeof item.webShell.available === 'boolean' && item.webShell.reason));
+  assert.ok(actions.every((item) => item.webShell.available === true), 'all canonical Owner actions must be available to the attested Web Shell channel');
   assert.equal(actions.some((item) => /database|access|backup|restore|scale|extension/i.test(item.actionId)), false);
 
   const manifest = foundationCliManifest();

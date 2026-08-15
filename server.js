@@ -723,14 +723,14 @@ function postgresInstanceRequestSchema() {
 }
 
 function postgresOwnerActionDefinitions() {
-  const unavailableInWebShell = (reason) => ({ available: false, reason });
+  const availableInWebShell = (reason) => ({ available: true, reason });
   return [
     {
       actionId: 'capability.read', toolId: 'foundation.capabilities', requestType: 'Instance',
       command: 'os foundation capabilities', method: 'GET', path: '/api/foundation/oaa/postgres/capabilities',
       executionClass: 'console-api', risk: 'low', riskClass: 'R0', scope: 'read',
       inputSchema: { type: 'object', properties: { capability: { type: 'string', enum: ['data.sql.postgres'] } } },
-      webShell: unavailableInWebShell('Web Shell capability discovery is not yet bound to the canonical Owner API action.'),
+      webShell: availableInWebShell('Uses the same canonical Foundation Owner API capability contract as CLI and R2D2.'),
       description: 'Discover PFSS control capabilities',
     },
     {
@@ -738,14 +738,14 @@ function postgresOwnerActionDefinitions() {
       command: 'os foundation readiness', method: 'GET', path: '/api/foundation/oaa/postgres/readiness',
       executionClass: 'console-api', risk: 'low', riskClass: 'R0', scope: 'read',
       inputSchema: { type: 'object', properties: { capability: { type: 'string', enum: ['data.sql.postgres'] } } },
-      webShell: unavailableInWebShell('Web Shell readiness is not yet bound to the canonical Owner API action.'),
+      webShell: availableInWebShell('Read-only readiness is served by the canonical Foundation Owner API.'),
       description: 'Evaluate PFSS PostgreSQL plan and execution readiness',
     },
     {
       actionId: 'catalog.read', toolId: 'foundation.postgres.catalog', requestType: 'Instance',
       command: 'os foundation postgres catalog', method: 'GET', path: '/api/foundation/oaa/postgres/catalog',
       executionClass: 'console-api', risk: 'low', riskClass: 'R0', scope: 'read', inputSchema: { type: 'object', properties: {} },
-      webShell: unavailableInWebShell('Web Shell still uses PFSS-specific catalog projections; canonical Owner catalog binding is pending.'),
+      webShell: availableInWebShell('Read-only catalog data is served by the canonical Foundation Owner API.'),
       description: 'Read the authoritative PostgreSQL runtime and plan catalog',
     },
     {
@@ -753,7 +753,7 @@ function postgresOwnerActionDefinitions() {
       command: 'os foundation postgres plan create', method: 'POST', path: '/api/foundation/oaa/postgres/durable-plan',
       executionClass: 'console-api', risk: 'medium', riskClass: 'R2', scope: 'write-plan', inputSchema: postgresInstanceRequestSchema(),
       supportsFile: true,
-      webShell: unavailableInWebShell('Web Shell has not migrated instance creation to the durable Owner plan binding.'),
+      webShell: availableInWebShell('Creates only the canonical durable Owner plan; execution still requires a separate exact-confirmation apply.'),
       description: 'Create a durable PostgreSQL operation plan',
     },
     {
@@ -762,7 +762,7 @@ function postgresOwnerActionDefinitions() {
       executionClass: 'console-api', risk: 'medium', riskClass: 'R2', scope: 'write', explicitAction: true,
       pathParams: ['planId'], approval: 'exact-confirmation',
       inputSchema: { type: 'object', additionalProperties: false, required: ['confirm'], properties: { confirm: { type: 'string' } } },
-      webShell: unavailableInWebShell('Web Shell has not migrated instance creation to the durable Owner apply binding.'),
+      webShell: availableInWebShell('Uses the canonical AAL2 exact-confirmation durable Owner apply path.'),
       description: 'Accept an unexpired durable PostgreSQL plan',
     },
     {
@@ -770,7 +770,7 @@ function postgresOwnerActionDefinitions() {
       command: 'os foundation postgres status <namespace> <name>', method: 'GET',
       path: '/api/foundation/oaa/postgres/claims/{namespace}/{name}', pathParams: ['namespace', 'name'],
       executionClass: 'console-api', risk: 'low', riskClass: 'R0', scope: 'read', inputSchema: { type: 'object', properties: {} },
-      webShell: unavailableInWebShell('Web Shell status projection is not yet bound to the canonical Owner claim-status action.'),
+      webShell: availableInWebShell('Reads the canonical FoundationClaim and PostgresClaim status projection.'),
       description: 'Read reconciled FoundationClaim and PostgresClaim status',
     },
     {
@@ -778,7 +778,7 @@ function postgresOwnerActionDefinitions() {
       command: 'os foundation operation watch <operationId>', method: 'GET',
       path: '/api/foundation/oaa/operations/{operationId}', pathParams: ['operationId'],
       executionClass: 'console-api', risk: 'low', riskClass: 'R0', scope: 'read', inputSchema: { type: 'object', properties: {} },
-      webShell: unavailableInWebShell('Web Shell does not yet watch the shared durable operationId lineage.'),
+      webShell: availableInWebShell('Watches the same durable operationId and postcondition receipt used by every channel.'),
       description: 'Watch durable operation progress and postconditions',
     },
   ];
