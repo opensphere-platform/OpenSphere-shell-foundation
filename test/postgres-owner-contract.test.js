@@ -98,12 +98,12 @@ test('capability endpoints and manifest share stable semantic identity', () => {
 
   const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
   const functionBody = (name, nextName) => server.slice(server.indexOf(`async function ${name}`), server.indexOf(`async function ${nextName}`));
-  assert.match(functionBody('postgresOaaCapabilities', 'postgresOaaReadiness'), /postgresOwnerContractProjection\('capability\.read'\)/);
-  assert.match(functionBody('postgresOaaReadiness', 'postgresOaaCatalog'), /postgresReadinessProjection/);
-  assert.match(functionBody('postgresOaaCatalog', 'postgresOaaApply'), /postgresOwnerContractProjection\('catalog\.read'\)/);
-  assert.match(functionBody('postgresOaaPlan', 'postgresOaaCapabilities'), /postgresOwnerContractProjection\('cluster\.plan'\)/);
-  assert.match(functionBody('postgresOaaApply', 'postgresOaaClaimStatus'), /postgresOwnerContractProjection\('cluster\.create'\)/);
-  assert.match(functionBody('postgresOaaOperationWatch', 'postgresRuntimes'), /postgresOwnerContractProjection\('operation\.watch'\)/);
+  assert.match(functionBody('postgresOsaaCapabilities', 'postgresOsaaReadiness'), /postgresOwnerContractProjection\('capability\.read'\)/);
+  assert.match(functionBody('postgresOsaaReadiness', 'postgresOsaaCatalog'), /postgresReadinessProjection/);
+  assert.match(functionBody('postgresOsaaCatalog', 'postgresOsaaApply'), /postgresOwnerContractProjection\('catalog\.read'\)/);
+  assert.match(functionBody('postgresOsaaPlan', 'postgresOsaaCapabilities'), /postgresOwnerContractProjection\('cluster\.plan'\)/);
+  assert.match(functionBody('postgresOsaaApply', 'postgresOsaaClaimStatus'), /postgresOwnerContractProjection\('cluster\.create'\)/);
+  assert.match(functionBody('postgresOsaaOperationWatch', 'postgresRuntimes'), /postgresOwnerContractProjection\('operation\.watch'\)/);
 });
 
 test('readiness v1 adds stage, evidence freshness, blockers, missing inputs and next actions', () => {
@@ -245,7 +245,7 @@ test('verified durable success emits the canonical completion receipt', () => {
     },
     actionBinding: {
       method: 'POST',
-      path: '/api/foundation/oaa/postgres/durable-apply/{planId}',
+      path: '/api/foundation/osaa/postgres/durable-apply/{planId}',
       pathParams: ['planId'],
       approval: 'exact-confirmation',
     },

@@ -508,7 +508,7 @@ function foundationPostgresClaimResource(body) {
     metadata: {
       name: postgres.metadata.name, namespace: postgres.metadata.namespace,
       labels: {
-        'opensphere.io/managed-by': 'foundation-oaa',
+        'opensphere.io/managed-by': 'foundation-osaa',
         'foundation.opensphere.io/model': 'data',
         'foundation.opensphere.io/module': 'postgres',
       },
@@ -727,7 +727,7 @@ function postgresOwnerActionDefinitions() {
   return [
     {
       actionId: 'capability.read', toolId: 'foundation.capabilities', requestType: 'Instance',
-      command: 'os foundation capabilities', method: 'GET', path: '/api/foundation/oaa/postgres/capabilities',
+      command: 'os foundation capabilities', method: 'GET', path: '/api/foundation/osaa/postgres/capabilities',
       executionClass: 'console-api', risk: 'low', riskClass: 'R0', scope: 'read',
       inputSchema: { type: 'object', properties: { capability: { type: 'string', enum: ['data.sql.postgres'] } } },
       webShell: availableInWebShell('Uses the same canonical Foundation Owner API capability contract as CLI and R2D2.'),
@@ -735,7 +735,7 @@ function postgresOwnerActionDefinitions() {
     },
     {
       actionId: 'readiness.read', toolId: 'foundation.readiness', requestType: 'Instance',
-      command: 'os foundation readiness', method: 'GET', path: '/api/foundation/oaa/postgres/readiness',
+      command: 'os foundation readiness', method: 'GET', path: '/api/foundation/osaa/postgres/readiness',
       executionClass: 'console-api', risk: 'low', riskClass: 'R0', scope: 'read',
       inputSchema: { type: 'object', properties: { capability: { type: 'string', enum: ['data.sql.postgres'] } } },
       webShell: availableInWebShell('Read-only readiness is served by the canonical Foundation Owner API.'),
@@ -743,14 +743,14 @@ function postgresOwnerActionDefinitions() {
     },
     {
       actionId: 'catalog.read', toolId: 'foundation.postgres.catalog', requestType: 'Instance',
-      command: 'os foundation postgres catalog', method: 'GET', path: '/api/foundation/oaa/postgres/catalog',
+      command: 'os foundation postgres catalog', method: 'GET', path: '/api/foundation/osaa/postgres/catalog',
       executionClass: 'console-api', risk: 'low', riskClass: 'R0', scope: 'read', inputSchema: { type: 'object', properties: {} },
       webShell: availableInWebShell('Read-only catalog data is served by the canonical Foundation Owner API.'),
       description: 'Read the authoritative PostgreSQL runtime and plan catalog',
     },
     {
       actionId: 'cluster.plan', toolId: 'foundation.postgres.plan.create', requestType: 'Instance',
-      command: 'os foundation postgres plan create', method: 'POST', path: '/api/foundation/oaa/postgres/durable-plan',
+      command: 'os foundation postgres plan create', method: 'POST', path: '/api/foundation/osaa/postgres/durable-plan',
       executionClass: 'console-api', risk: 'medium', riskClass: 'R2', scope: 'write-plan', inputSchema: postgresInstanceRequestSchema(),
       supportsFile: true,
       webShell: availableInWebShell('Creates only the canonical durable Owner plan; execution still requires a separate exact-confirmation apply.'),
@@ -758,7 +758,7 @@ function postgresOwnerActionDefinitions() {
     },
     {
       actionId: 'cluster.create', toolId: 'foundation.postgres.apply', requestType: 'Instance',
-      command: 'os foundation postgres apply <planId>', method: 'POST', path: '/api/foundation/oaa/postgres/durable-apply/{planId}',
+      command: 'os foundation postgres apply <planId>', method: 'POST', path: '/api/foundation/osaa/postgres/durable-apply/{planId}',
       executionClass: 'console-api', risk: 'medium', riskClass: 'R2', scope: 'write', explicitAction: true,
       pathParams: ['planId'], approval: 'exact-confirmation',
       inputSchema: { type: 'object', additionalProperties: false, required: ['confirm'], properties: { confirm: { type: 'string' } } },
@@ -768,7 +768,7 @@ function postgresOwnerActionDefinitions() {
     {
       actionId: 'cluster.status', toolId: 'foundation.postgres.status', requestType: 'Instance',
       command: 'os foundation postgres status <namespace> <name>', method: 'GET',
-      path: '/api/foundation/oaa/postgres/claims/{namespace}/{name}', pathParams: ['namespace', 'name'],
+      path: '/api/foundation/osaa/postgres/claims/{namespace}/{name}', pathParams: ['namespace', 'name'],
       executionClass: 'console-api', risk: 'low', riskClass: 'R0', scope: 'read', inputSchema: { type: 'object', properties: {} },
       webShell: availableInWebShell('Reads the canonical FoundationClaim and PostgresClaim status projection.'),
       description: 'Read reconciled FoundationClaim and PostgresClaim status',
@@ -776,7 +776,7 @@ function postgresOwnerActionDefinitions() {
     {
       actionId: 'operation.watch', toolId: 'foundation.operation.watch', requestType: 'Instance',
       command: 'os foundation operation watch <operationId>', method: 'GET',
-      path: '/api/foundation/oaa/operations/{operationId}', pathParams: ['operationId'],
+      path: '/api/foundation/osaa/operations/{operationId}', pathParams: ['operationId'],
       executionClass: 'console-api', risk: 'low', riskClass: 'R0', scope: 'read', inputSchema: { type: 'object', properties: {} },
       webShell: availableInWebShell('Watches the same durable operationId and postcondition receipt used by every channel.'),
       description: 'Watch durable operation progress and postconditions',
@@ -915,7 +915,7 @@ function postgresReadinessProjection(blockers, checks, evidence, observedAt) {
   };
 }
 
-async function postgresOaaStatus(req, res) {
+async function postgresOsaaStatus(req, res) {
   if (req.method !== 'GET') return jsonRes(res, 405, { error: 'read-only endpoint' });
   try {
     const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
@@ -955,7 +955,7 @@ async function postgresOaaStatus(req, res) {
   }
 }
 
-async function postgresOaaPlan(req, res) {
+async function postgresOsaaPlan(req, res) {
   if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
   try {
     // Planning is read-only and remains available while execution readiness is
@@ -1009,7 +1009,7 @@ async function postgresOaaPlan(req, res) {
   }
 }
 
-async function postgresOaaCapabilities(req, res) {
+async function postgresOsaaCapabilities(req, res) {
   if (req.method !== 'GET') return jsonRes(res, 405, { error: 'read-only endpoint' });
   try {
     await verifyToken(requestToken(req));
@@ -1029,7 +1029,7 @@ async function postgresOaaCapabilities(req, res) {
   }
 }
 
-async function postgresOaaReadiness(req, res) {
+async function postgresOsaaReadiness(req, res) {
   if (req.method !== 'GET') return jsonRes(res, 405, { error: 'read-only endpoint' });
   const rawToken = requestToken(req);
   try {
@@ -1044,7 +1044,7 @@ async function postgresOaaReadiness(req, res) {
       k8sJson('GET', '/api/v1/namespaces', undefined, actor),
       k8sJson('GET', '/apis/storage.k8s.io/v1/storageclasses', undefined, actor),
       platformReadinessAuthority(rawToken).then((body) => ({ ok: true, body })).catch((error) => ({ ok: false, error })),
-      consoleAdminRead('/api/oaa/operations?limit=1', rawToken).then((body) => ({ ok: true, body })).catch((error) => ({ ok: false, error })),
+      consoleAdminRead('/api/osaa/operations?limit=1', rawToken).then((body) => ({ ok: true, body })).catch((error) => ({ ok: false, error })),
     ]);
     const blockers = [];
     const observedAt = new Date().toISOString();
@@ -1133,7 +1133,7 @@ async function postgresOaaReadiness(req, res) {
   }
 }
 
-async function postgresOaaCatalog(req, res) {
+async function postgresOsaaCatalog(req, res) {
   if (req.method !== 'GET') return jsonRes(res, 405, { error: 'read-only endpoint' });
   try {
     const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
@@ -1173,7 +1173,7 @@ async function postgresOaaCatalog(req, res) {
   }
 }
 
-async function postgresOaaApply(req, res) {
+async function postgresOsaaApply(req, res) {
   if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
   let actor;
   try {
@@ -1206,7 +1206,7 @@ async function postgresOaaApply(req, res) {
       });
     }
     if (existing.status !== 404) throw { code: existing.status, msg: k8sFailure(existing) };
-    const validation = await k8sJson('POST', `${path}?dryRun=All&fieldManager=opensphere-foundation-oaa`, resource, actor);
+    const validation = await k8sJson('POST', `${path}?dryRun=All&fieldManager=opensphere-foundation-osaa`, resource, actor);
     if (!validation.ok) throw { code: validation.status, msg: `FoundationClaim dry-run rejected: ${k8sFailure(validation)}` };
     const target = `FoundationClaim/${resource.metadata.namespace}/${resource.metadata.name}`;
     await publishFoundationAudit(actor, 'foundation-postgres-create', target, 'attempt', `${reason}; idempotency=${idempotencyKey}`);
@@ -1227,7 +1227,7 @@ async function postgresOaaApply(req, res) {
   }
 }
 
-async function postgresOaaClaimStatus(req, res, namespace, name) {
+async function postgresOsaaClaimStatus(req, res, namespace, name) {
   if (req.method !== 'GET') return jsonRes(res, 405, { error: 'read-only endpoint' });
   try {
     const actor = requireConsoleAdmin(await verifyToken(requestToken(req)));
@@ -1298,12 +1298,12 @@ async function forwardConsoleDurable(req, res, method, pathname, payload, projec
   }
 }
 
-async function postgresOaaDurablePlan(req, res) {
+async function postgresOsaaDurablePlan(req, res) {
   if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
   try {
     const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
     requireClosedOwnerBody(body, ['name', 'namespace', 'alias', 'database', 'owner', 'plan', 'postgresVersion', 'deletionPolicy', 'storage', 'extensions', 'profileRefs', 'reason']);
-    return forwardConsoleDurable(req, res, 'POST', '/api/oaa/operations/plan', {
+    return forwardConsoleDurable(req, res, 'POST', '/api/osaa/operations/plan', {
       action: 'create-postgres-cluster', target: body, reason: body.reason,
     }, (plan) => ({
       ...plan, ...postgresOwnerContractProjection('cluster.plan'),
@@ -1314,13 +1314,13 @@ async function postgresOaaDurablePlan(req, res) {
   }
 }
 
-async function postgresOaaDurableApply(req, res, planId) {
+async function postgresOsaaDurableApply(req, res, planId) {
   if (req.method !== 'POST') return jsonRes(res, 405, { error: 'method not allowed' });
   try {
     if (!/^pgplan-[0-9a-f-]{36}$/i.test(planId)) throw { code: 400, msg: 'invalid PostgreSQL plan ID' };
     const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
     requireClosedOwnerBody(body, ['confirm']);
-    return forwardConsoleDurable(req, res, 'POST', '/api/oaa/operations', { planId, confirmation: String(body.confirm || '') },
+    return forwardConsoleDurable(req, res, 'POST', '/api/osaa/operations', { planId, confirmation: String(body.confirm || '') },
       (operation) => ({ ...operation, ...postgresOwnerContractProjection('cluster.create') }));
   } catch (e) {
     return jsonRes(res, typeof e.code === 'number' ? e.code : 400, { error: e.msg || e.message || String(e) });
@@ -1421,13 +1421,13 @@ function postgresOperationWatchStage(operation, ownerStatus, completion) {
   return resourceStage === 'Ready' && !completion?.success ? completion?.state : resourceStage;
 }
 
-async function postgresOaaOperationWatch(req, res, operationId) {
+async function postgresOsaaOperationWatch(req, res, operationId) {
   if (req.method !== 'GET') return jsonRes(res, 405, { error: 'read-only endpoint' });
   if (!/^[0-9a-f-]{36}$/i.test(operationId)) return jsonRes(res, 400, { error: 'invalid operation ID' });
   try {
     const rawToken = requestToken(req);
     const actor = requireConsoleAdmin(await verifyToken(rawToken));
-    const operationResponse = await fetch(`${CONSOLE_IDENTITY_URL}/api/oaa/operations/${operationId}`, {
+    const operationResponse = await fetch(`${CONSOLE_IDENTITY_URL}/api/osaa/operations/${operationId}`, {
       headers: { authorization: `Bearer ${rawToken}`, accept: 'application/json' }, signal: AbortSignal.timeout(10000),
     });
     const operation = await operationResponse.json().catch(() => ({}));
@@ -2529,7 +2529,7 @@ async function foundationClaimCreate(req, res) {
       apiVersion: 'foundation.opensphere.io/v1alpha1', kind: 'FoundationClaim',
       metadata: {
         name, namespace: FND_NS,
-        labels: { 'opensphere.io/managed-by': 'foundation-oaa', 'foundation.opensphere.io/model': model },
+        labels: { 'opensphere.io/managed-by': 'foundation-osaa', 'foundation.opensphere.io/model': model },
       },
       spec: { model },
     });
@@ -2589,7 +2589,7 @@ async function identityDirectoryClaimCreate(req, res) {
       apiVersion: 'foundation.opensphere.io/v1alpha1', kind: 'IdentityDirectoryClaim',
       metadata: {
         name, namespace: FND_NS,
-        labels: { 'opensphere.io/managed-by': 'foundation-oaa', 'foundation.opensphere.io/provider': 'samba-ad' },
+        labels: { 'opensphere.io/managed-by': 'foundation-osaa', 'foundation.opensphere.io/provider': 'samba-ad' },
       },
       spec: { provider: 'samba-ad' },
     });
@@ -3590,25 +3590,25 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/foundation/his-status') return hisStatusProxy(req, res);
     if (p === '/api/foundation/establishment/status') return foundationEstablishmentStatus(req, res);
     if (p === '/api/foundation/bootstrap/plan') return foundationBootstrapPlan(req, res);
-    if (p === '/api/foundation/oaa/status') return foundationStatus(req, res);
-    if (p === '/api/foundation/oaa/postgres/status') return postgresOaaStatus(req, res);
-    if (p === '/api/foundation/oaa/postgres/capabilities') return postgresOaaCapabilities(req, res);
-    if (p === '/api/foundation/oaa/postgres/readiness') return postgresOaaReadiness(req, res);
-    if (p === '/api/foundation/oaa/postgres/catalog') return postgresOaaCatalog(req, res);
-    if (p === '/api/foundation/oaa/postgres/plan') return postgresOaaPlan(req, res);
-    if (p === '/api/foundation/oaa/postgres/apply') return postgresOaaApply(req, res);
-    if (p === '/api/foundation/oaa/postgres/durable-plan') return postgresOaaDurablePlan(req, res);
-    const postgresDurableApplyPath = p.match(/^\/api\/foundation\/oaa\/postgres\/durable-apply\/(pgplan-[0-9a-f-]{36})$/i);
-    if (postgresDurableApplyPath) return postgresOaaDurableApply(req, res, postgresDurableApplyPath[1]);
-    const postgresOperationPath = p.match(/^\/api\/foundation\/oaa\/operations\/([0-9a-f-]{36})$/i);
-    if (postgresOperationPath) return postgresOaaOperationWatch(req, res, postgresOperationPath[1]);
-    const postgresClaimStatusPath = p.match(/^\/api\/foundation\/oaa\/postgres\/claims\/([^/]+)\/([^/]+)$/);
-    if (postgresClaimStatusPath) return postgresOaaClaimStatus(req, res, decodeURIComponent(postgresClaimStatusPath[1]), decodeURIComponent(postgresClaimStatusPath[2]));
-    if (p === '/api/foundation/oaa/engines/lifecycle') return foundationEngineLifecycle(req, res);
-    if (p === '/api/foundation/oaa/claims/create') return foundationClaimCreate(req, res);
-    if (p === '/api/foundation/oaa/claims/release') return foundationClaimRelease(req, res);
-    if (p === '/api/foundation/oaa/identity-directory/claims/create') return identityDirectoryClaimCreate(req, res);
-    if (p === '/api/foundation/oaa/identity-directory/claims/release') return identityDirectoryClaimRelease(req, res);
+    if (p === '/api/foundation/osaa/status') return foundationStatus(req, res);
+    if (p === '/api/foundation/osaa/postgres/status') return postgresOsaaStatus(req, res);
+    if (p === '/api/foundation/osaa/postgres/capabilities') return postgresOsaaCapabilities(req, res);
+    if (p === '/api/foundation/osaa/postgres/readiness') return postgresOsaaReadiness(req, res);
+    if (p === '/api/foundation/osaa/postgres/catalog') return postgresOsaaCatalog(req, res);
+    if (p === '/api/foundation/osaa/postgres/plan') return postgresOsaaPlan(req, res);
+    if (p === '/api/foundation/osaa/postgres/apply') return postgresOsaaApply(req, res);
+    if (p === '/api/foundation/osaa/postgres/durable-plan') return postgresOsaaDurablePlan(req, res);
+    const postgresDurableApplyPath = p.match(/^\/api\/foundation\/osaa\/postgres\/durable-apply\/(pgplan-[0-9a-f-]{36})$/i);
+    if (postgresDurableApplyPath) return postgresOsaaDurableApply(req, res, postgresDurableApplyPath[1]);
+    const postgresOperationPath = p.match(/^\/api\/foundation\/osaa\/operations\/([0-9a-f-]{36})$/i);
+    if (postgresOperationPath) return postgresOsaaOperationWatch(req, res, postgresOperationPath[1]);
+    const postgresClaimStatusPath = p.match(/^\/api\/foundation\/osaa\/postgres\/claims\/([^/]+)\/([^/]+)$/);
+    if (postgresClaimStatusPath) return postgresOsaaClaimStatus(req, res, decodeURIComponent(postgresClaimStatusPath[1]), decodeURIComponent(postgresClaimStatusPath[2]));
+    if (p === '/api/foundation/osaa/engines/lifecycle') return foundationEngineLifecycle(req, res);
+    if (p === '/api/foundation/osaa/claims/create') return foundationClaimCreate(req, res);
+    if (p === '/api/foundation/osaa/claims/release') return foundationClaimRelease(req, res);
+    if (p === '/api/foundation/osaa/identity-directory/claims/create') return identityDirectoryClaimCreate(req, res);
+    if (p === '/api/foundation/osaa/identity-directory/claims/release') return identityDirectoryClaimRelease(req, res);
     if (FOUNDATION_OWNER_ONLY) return jsonRes(res, 404, { error: 'Foundation owner endpoint not found' });
     if (p.startsWith('/api/k8s/')) return k8sProxy(req, res, req.url);
     if (p.startsWith('/api/opensearch')) return opensearchProxy(req, res, req.url);

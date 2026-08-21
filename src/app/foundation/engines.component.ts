@@ -215,7 +215,7 @@ export class FoundationEnginesComponent {
     {
       id: 'opensearch', name: 'OpenSearch', provider: 'opensearch.org', version: '3.7.0', logo: 'opensearch', mono: 'OS', detail: true, module: 'opensearch',
       category: 'data', impl: 'registry-backed', liveKey: 'opensearch',
-      role: '공용 검색·인덱스 capability. manual, OAA retrieval, catalog search, logs, vector/search workload의 기반.',
+      role: '공용 검색·인덱스 capability. manual, OSAA retrieval, catalog search, logs, vector/search workload의 기반.',
       wiring: '버전·heap·스토리지 계획과 노드·PVC·이벤트·소비 계약을 한 plugin에서 관리한다.',
     },
     {

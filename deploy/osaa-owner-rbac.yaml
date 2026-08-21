@@ -1,4 +1,4 @@
-# Foundation-owned OAA facade RBAC.
+# Foundation-owned OSAA facade RBAC.
 #
 # The existing Foundation server validates the Supabase session, console-admins,
 # AAL2, a closed engine/model catalog, a management reason, and an exact
@@ -8,10 +8,10 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: foundation-oaa-owner
+  name: foundation-osaa-owner
   labels:
     opensphere.io/managed-by: foundation
-    opensphere.io/purpose: oaa-owner-facade
+    opensphere.io/purpose: osaa-owner-facade
 rules:
   - apiGroups: [foundation.opensphere.io]
     resources: [foundationmodels]
@@ -24,14 +24,14 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: foundation-oaa-owner
+  name: foundation-osaa-owner
   labels:
     opensphere.io/managed-by: foundation
-    opensphere.io/purpose: oaa-owner-facade
+    opensphere.io/purpose: osaa-owner-facade
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: foundation-oaa-owner
+  name: foundation-osaa-owner
 subjects:
   - kind: ServiceAccount
     name: opensphere-foundation
@@ -40,11 +40,11 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: foundation-oaa-owner
+  name: foundation-osaa-owner
   namespace: opensphere-foundation
   labels:
     opensphere.io/managed-by: foundation
-    opensphere.io/purpose: oaa-owner-facade
+    opensphere.io/purpose: osaa-owner-facade
 rules:
   - apiGroups: [foundation.opensphere.io]
     resources: [foundationclaims]
@@ -62,15 +62,15 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: foundation-oaa-owner
+  name: foundation-osaa-owner
   namespace: opensphere-foundation
   labels:
     opensphere.io/managed-by: foundation
-    opensphere.io/purpose: oaa-owner-facade
+    opensphere.io/purpose: osaa-owner-facade
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: foundation-oaa-owner
+  name: foundation-osaa-owner
 subjects:
   - kind: ServiceAccount
     name: opensphere-foundation

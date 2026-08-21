@@ -70,14 +70,14 @@ test('Foundation delegates Console identity validation to the Supabase authority
     return {
       ok: true,
       status: 200,
-      json: async () => ({ subject: 'subject-1', username: 'cmars', groups: ['console-admins'], permissions: ['oaa.system.read'], assurance: 'aal2' }),
+      json: async () => ({ subject: 'subject-1', username: 'cmars', groups: ['console-admins'], permissions: ['osaa.system.read'], assurance: 'aal2' }),
     };
   });
   assert.match(call.url, /\/api\/identity\/session$/);
   assert.equal(call.init.headers.authorization, 'Bearer supabase-access-token');
   assert.deepEqual(actor, {
     username: 'cmars', subject: 'subject-1', groups: ['console-admins'],
-    permissions: ['oaa.system.read'], assurance: 'aal2', provider: 'supabase',
+    permissions: ['osaa.system.read'], assurance: 'aal2', provider: 'supabase',
   });
 });
 
@@ -247,11 +247,11 @@ test('Foundation bootstrap plan opens only after support readiness and never byp
 
 test('Foundation owner workload is isolated from the generic proxy and uses least privilege', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
-  const deploy = fs.readFileSync(path.join(__dirname, '..', 'deploy', 'oaa-owner.yaml'), 'utf8');
-  const rbac = fs.readFileSync(path.join(__dirname, '..', 'deploy', 'oaa-owner-rbac.yaml'), 'utf8');
+  const deploy = fs.readFileSync(path.join(__dirname, '..', 'deploy', 'osaa-owner.yaml'), 'utf8');
+  const rbac = fs.readFileSync(path.join(__dirname, '..', 'deploy', 'osaa-owner-rbac.yaml'), 'utf8');
   assert.ok(source.indexOf('if (FOUNDATION_OWNER_ONLY)') < source.indexOf("if (p.startsWith('/api/k8s/'))"));
   assert.match(deploy, /FOUNDATION_OWNER_ONLY, value: "true"/);
-  assert.match(deploy, /podSelector: \{ matchLabels: \{ app: opensphere-console-oaa-gateway \} \}/);
+  assert.match(deploy, /podSelector: \{ matchLabels: \{ app: opensphere-console-osaa-gateway \} \}/);
   assert.match(rbac, /resourceNames: \[identity, data\][\s\S]*verbs: \[patch\]/);
   assert.match(rbac, /resources: \[identitydirectoryclaims\][\s\S]*verbs: \[get, list, watch, create, delete\]/);
   assert.doesNotMatch(rbac, /resources: \[secrets\]/);

@@ -1,15 +1,15 @@
-# Foundation-owned, closed OAA control facade. It deliberately runs separately
+# Foundation-owned, closed OSAA control facade. It deliberately runs separately
 # from the DUPA-managed Foundation UI workload so the signed extension image
 # remains immutable. FOUNDATION_OWNER_ONLY disables UI, generic Kubernetes
 # proxy, websocket exec, and background notification loops in this workload.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: foundation-oaa-owner
+  name: foundation-osaa-owner
   namespace: opensphere-console
   labels:
-    app: foundation-oaa-owner
-    app.kubernetes.io/name: foundation-oaa-owner
+    app: foundation-osaa-owner
+    app.kubernetes.io/name: foundation-osaa-owner
     app.kubernetes.io/component: owner-api
     app.kubernetes.io/part-of: foundation-control-plane
     opensphere.io/managed-by: foundation
@@ -18,15 +18,15 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
-  selector: { matchLabels: { app: foundation-oaa-owner } }
+  selector: { matchLabels: { app: foundation-osaa-owner } }
   template:
     metadata:
       annotations:
         io.opensphere.source-revision: "c5f75e94fb15eb31bd7810a2f1d3cde47d0d9ae9"
         io.opensphere.release-tag: "202608142241"
       labels:
-        app: foundation-oaa-owner
-        app.kubernetes.io/name: foundation-oaa-owner
+        app: foundation-osaa-owner
+        app.kubernetes.io/name: foundation-osaa-owner
         app.kubernetes.io/component: owner-api
         app.kubernetes.io/part-of: foundation-control-plane
         opensphere.io/managed-by: foundation
@@ -62,39 +62,39 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: foundation-oaa-owner
+  name: foundation-osaa-owner
   namespace: opensphere-console
   labels:
-    app: foundation-oaa-owner
+    app: foundation-osaa-owner
     opensphere.io/managed-by: foundation
 spec:
-  selector: { app: foundation-oaa-owner }
+  selector: { app: foundation-osaa-owner }
   ports: [{ name: http, port: 8080, targetPort: http }]
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: foundation-oaa-owner
+  name: foundation-osaa-owner
   namespace: opensphere-console
   labels: { opensphere.io/managed-by: foundation }
 spec:
   minAvailable: 1
-  selector: { matchLabels: { app: foundation-oaa-owner } }
+  selector: { matchLabels: { app: foundation-osaa-owner } }
 ---
-# Only the OAA Gateway and Console backend durable-operation worker may call the
+# Only the OSAA Gateway and Console backend durable-operation worker may call the
 # owner facade. HTTP still independently verifies the Supabase session,
 # console-admins, AAL2, exact confirmation, and the closed engine/model catalog.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: foundation-oaa-owner
+  name: foundation-osaa-owner
   namespace: opensphere-console
   labels: { opensphere.io/managed-by: foundation }
 spec:
-  podSelector: { matchLabels: { app: foundation-oaa-owner } }
+  podSelector: { matchLabels: { app: foundation-osaa-owner } }
   policyTypes: [Ingress]
   ingress:
     - from:
-        - podSelector: { matchLabels: { app: opensphere-console-oaa-gateway } }
+        - podSelector: { matchLabels: { app: opensphere-console-osaa-gateway } }
         - podSelector: { matchLabels: { app: opensphere-console-backend } }
       ports: [{ protocol: TCP, port: 8080 }]
