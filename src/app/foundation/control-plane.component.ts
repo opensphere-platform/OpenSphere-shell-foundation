@@ -113,7 +113,7 @@ import { PluginPageHeaderComponent, PluginPageHeaderModel } from '../shared/plug
         <ol class="cp-admin-list">
           <li>HIS Preflight와 Platform Support Profile의 선행 gate를 확인합니다.</li>
           <li>Foundation core·typed 계약 CRD와 최소권한 RBAC를 적용합니다.</li>
-          <li><b>foundation-control-plane</b>과 <b>foundation-oaa-owner</b>를 exact digest로 배포합니다.</li>
+          <li><b>foundation-control-plane</b>과 <b>foundation-osaa-owner</b>를 exact digest로 배포합니다.</li>
           <li>Controller Ready, FoundationModel schema, Claim→Binding 증거를 검증합니다.</li>
         </ol>
       </article>

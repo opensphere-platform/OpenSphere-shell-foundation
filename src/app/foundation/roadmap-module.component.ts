@@ -57,7 +57,7 @@ const DEFINITIONS: Record<string, Partial<RoadmapDefinition>> = {
   },
   litellm: {
     namespace: FOUNDATION_NAMESPACE, profile: 'model-gateway', docs: 'https://docs.litellm.ai/',
-    prerequisites: ['Provider credential Secret', 'PostgreSQL capability', 'OpenSearch vector capability', 'OAA Gateway 계약'],
+    prerequisites: ['Provider credential Secret', 'PostgreSQL capability', 'OpenSearch vector capability', 'OSAA Gateway 계약'],
     components: ['LiteLLM proxy', 'Provider registry', 'Budget/rate policy', 'Embedding route adapter'],
     consumers: ['FoundationClaim/Route', 'FoundationClaim/Access', 'endpointRef·secretRef Binding'],
     protection: ['Provider 키 화면 노출 금지', '요청/비용 감사', '모델별 rate limit'],

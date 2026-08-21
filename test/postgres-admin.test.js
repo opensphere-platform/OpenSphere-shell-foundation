@@ -157,8 +157,8 @@ test('R2D2 PostgreSQL projections do not expose credentials and owner routes rem
   assert.equal(claim.ready, true);
   assert.equal(Object.hasOwn(claim, 'credentials'), false);
   const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
-  assert.match(server, /\/api\/foundation\/oaa\/postgres\/status/);
-  assert.match(server, /\/api\/foundation\/oaa\/postgres\/plan/);
+  assert.match(server, /\/api\/foundation\/osaa\/postgres\/status/);
+  assert.match(server, /\/api\/foundation\/osaa\/postgres\/plan/);
   assert.match(server, /PostgresClaim Ready=True and observedGeneration equals metadata\.generation/);
 });
 
@@ -210,7 +210,8 @@ test('Foundation retains PostgreSQL governed endpoints but no longer compiles it
   assert.doesNotMatch(app, /PostgresPluginComponent|app-postgres-plugin/);
   assert.doesNotMatch(app, /if \(id === 'postgres'\) return undefined/);
   assert.match(app, /<app-plugin-outlet \*ngIf="activePlugin\(\) as p"/);
-  assert.match(app, /\['samba', 'postgres'\]\.includes\(id\)/);
+  assert.match(app, /x\.lifecycle === 'registry-backed' && !!x\.activation/);
+  assert.match(app, /\['registry-backed', 'migration-required'\]\.includes\(item\.lifecycle\)/);
 });
 
 test('StackGres profile catalog accepts only typed, safe native profile specs', () => {

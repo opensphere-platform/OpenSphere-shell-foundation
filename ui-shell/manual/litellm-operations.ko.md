@@ -4,7 +4,7 @@
 Operator 계약이 등록되어 있으며 현재 lifecycle은 FoundationModel의 desired/observed 상태로 결정됩니다. 다중 LLM provider의 model/embedding route, 예산과 rate policy를 제공하는 model gateway입니다.
 
 ## 2. 전제조건
-provider credential Secret, PostgreSQL, OpenSearch vector capability, OAA Gateway 계약이 필요합니다.
+provider credential Secret, PostgreSQL, OpenSearch vector capability, OSAA Gateway 계약이 필요합니다.
 
 ## 3. 설치·운영 계약
 proxy, provider registry, budget policy와 route adapter의 서명 BOM을 확정하고 요청 성공률, 지연, 비용, rate limit과 이벤트를 실제 backend 상태로 표시합니다.

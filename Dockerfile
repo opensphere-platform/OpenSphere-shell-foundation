@@ -17,6 +17,8 @@ ARG OS_MODULE_SIGNATURE
 ARG OS_RELEASE_TAG
 ARG OS_SOURCE_REVISION
 ARG OS_MODULE_KEY_ID=opensphere-plugins-v4
+RUN test -n "${OS_SOURCE_REVISION}" \
+    && echo "${OS_SOURCE_REVISION}" | grep -Eq '^[a-f0-9]{40}$'
 LABEL org.opencontainers.image.title="OpenSphere Platform Foundation Service Stack" \
       org.opencontainers.image.version=$OS_RELEASE_TAG \
       org.opencontainers.image.revision=$OS_SOURCE_REVISION \
@@ -40,6 +42,7 @@ COPY ui-shell/ /app/plugins/
 COPY --chmod=0644 module-package.json module-package.json.sig /app/plugins/
 COPY --from=build /app/dist/foundation/browser /app/www
 ENV PLUGINS_DIR=/app/plugins WWW_DIR=/app/www PORT=8080 \
+    OS_SOURCE_REVISION=$OS_SOURCE_REVISION \
     NODE_EXTRA_CA_CERTS=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 EXPOSE 8080
 USER 1000

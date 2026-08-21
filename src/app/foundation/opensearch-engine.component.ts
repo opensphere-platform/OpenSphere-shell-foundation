@@ -81,7 +81,7 @@ const PLUGIN_NAMESPACE = 'opensphere-console';
               </clr-dg-row>
             </clr-datagrid>
             <p class="os-sub" *ngIf="installSteps().length === 0">
-              설치 버튼을 누르면 Plugin 등록, CLI, Manual/OAA/Search, Metrics, Grafana, Logs, Operand 선언,
+              설치 버튼을 누르면 Plugin 등록, CLI, Manual/OSAA/Search, Metrics, Grafana, Logs, Operand 선언,
               FoundationModel 적용, control-plane reconcile 단계를 순서대로 기록합니다.
             </p>
           </div>
