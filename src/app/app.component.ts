@@ -92,7 +92,10 @@ interface NavGroup { id: string; label: string; iconKey: string; children: NavCh
 
     @media (max-width: 760px) {
       .os-shell { grid-template-columns: minmax(0, 1fr); }
-      .cm-nav { display: none; }
+      /* Host navigation is part of the PFSS contract. Narrow content may move
+         it above the child surface, but must never remove the nine Registry
+         Plugin entry points. Child UI bundles still load only after selection. */
+      .cm-nav { display: block; width: 100%; min-height: auto; border-bottom: 1px solid #e0e0e0; }
       .os-content { padding: 0.85rem 0.8rem 1.5rem; }
       .cc-crumbs { margin: -0.85rem -0.8rem 0.75rem; padding: 0.4rem 0.8rem; }
     }
