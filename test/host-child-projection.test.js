@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), 'utf8');
 
-test('Foundation reports only compiled and active child management surfaces', () => {
+test('Foundation reports Registry-approved child management surfaces', () => {
   const main = read('src', 'main.ts');
   const entry = read('ui-shell', 'ui-shell.plugin.js');
   const registry = read('src', 'app', 'registry', 'plugins.registry.ts');
@@ -19,4 +19,13 @@ test('Foundation reports only compiled and active child management surfaces', ()
   assert.match(entry, /reportProjections\?\.\(supportedProjections\.filter/);
   assert.match(registry, /packageId: 'keycloak', element: 'osp-foundation-keycloak'/);
   assert.match(registry, /view: \{ module: 'keycloak' \}/);
+});
+
+test('responsive layout preserves Host navigation while child UI remains route scoped', () => {
+  const component = read('src', 'app', 'app.component.ts');
+
+  assert.match(component, /@media \(max-width: 760px\)[\s\S]*\.cm-nav \{ display: block; width: 100%; min-height: auto;/);
+  assert.doesNotMatch(component, /@media \(max-width: 760px\)[\s\S]{0,180}\.cm-nav \{ display: none;/);
+  assert.match(component, /goChild\(child: NavChild\)[\s\S]*this\.vr\.setModule/);
+  assert.match(component, /customElements\.get\(p\.activation\.element\)/);
 });
