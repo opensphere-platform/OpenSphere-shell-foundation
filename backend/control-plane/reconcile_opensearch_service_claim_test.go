@@ -148,6 +148,25 @@ func TestOpenSearchBundleUsesSecuredUpstreamOperatorCluster(t *testing.T) {
 	}
 }
 
+func TestOpenSearchReadinessDoesNotDependOnOptionalHealthProjection(t *testing.T) {
+	cluster := object(openSearchClusterGVK, "opensphere-foundation", "opensphere-search")
+	cluster.Object["status"] = map[string]interface{}{
+		"phase": "RUNNING", "health": "unknown", "availableNodes": int64(2),
+	}
+	if !openSearchStatusReady(cluster, 2) {
+		t.Fatal("RUNNING cluster with every requested node ready must not remain Installing")
+	}
+	cluster.Object["status"].(map[string]interface{})["health"] = "red"
+	if openSearchStatusReady(cluster, 2) {
+		t.Fatal("explicit red health must fail closed")
+	}
+	cluster.Object["status"].(map[string]interface{})["health"] = "unknown"
+	cluster.Object["status"].(map[string]interface{})["availableNodes"] = int64(1)
+	if openSearchStatusReady(cluster, 2) {
+		t.Fatal("partial replica readiness must remain Installing")
+	}
+}
+
 func TestOpenSearchSecurityDocumentsBindAdminPassword(t *testing.T) {
 	hash, err := bcrypt.GenerateFromPassword([]byte("a-strong-platform-password"), 4)
 	if err != nil {

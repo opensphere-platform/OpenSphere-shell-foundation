@@ -218,9 +218,17 @@ func opensearchReady(ctx context.Context, r *modelReconciler, fm *unstructured.U
 	if err != nil {
 		return false
 	}
-	phase, _, _ := unstructured.NestedString(c.Object, "status", "phase")
-	health, _, _ := unstructured.NestedString(c.Object, "status", "health")
-	return phase == "RUNNING" && (health == "green" || health == "yellow")
+	return openSearchStatusReady(c, opensearchParams(fm, r.cfg).replicas)
+}
+
+func openSearchStatusReady(cluster *unstructured.Unstructured, expectedReplicas int64) bool {
+	if cluster == nil {
+		return false
+	}
+	phase, _, _ := unstructured.NestedString(cluster.Object, "status", "phase")
+	health, _, _ := unstructured.NestedString(cluster.Object, "status", "health")
+	ready, _, _ := unstructured.NestedInt64(cluster.Object, "status", "availableNodes")
+	return phase == "RUNNING" && ready >= expectedReplicas && health != "red"
 }
 
 func opensearchGone(ctx context.Context, r *modelReconciler, fm *unstructured.Unstructured) bool {
@@ -241,22 +249,22 @@ func observeOpenSearch(ctx context.Context, r *modelReconciler, fm *unstructured
 	}
 	cluster, err := r.getOpenSearchCluster(ctx, opensearchNS(r.cfg, fm))
 	var ready int64
-	phase, health := "", "unknown"
+	health := "unknown"
 	if err == nil {
 		ready, _, _ = unstructured.NestedInt64(cluster.Object, "status", "availableNodes")
-		phase, _, _ = unstructured.NestedString(cluster.Object, "status", "phase")
 		health, _, _ = unstructured.NestedString(cluster.Object, "status", "health")
 	}
 	up := "0"
-	healthy := phase == "RUNNING" && (health == "green" || health == "yellow")
-	if healthy {
+	readyHealthy := err == nil && openSearchStatusReady(cluster, o.replicas)
+	reportedHealthy := health == "green" || health == "yellow"
+	if readyHealthy {
 		up = "1"
 	}
 	return []interface{}{
-		mk("opensearch_up", "bool", up, healthy, "OpenSearchCluster.status.phase"),
+		mk("opensearch_up", "bool", up, readyHealthy, "OpenSearchCluster.status.phase+availableNodes"),
 		mk("opensearch_namespace", "", opensearchNS(r.cfg, fm), true, "spec.parameters.namespace"),
-		mk("opensearch_ready_replicas", "count", fmt.Sprintf("%d/%d", ready, o.replicas), healthy, "OpenSearchCluster.status.availableNodes"),
-		mk("opensearch_health", "", health, healthy, "OpenSearchCluster.status.health"),
+		mk("opensearch_ready_replicas", "count", fmt.Sprintf("%d/%d", ready, o.replicas), readyHealthy, "OpenSearchCluster.status.availableNodes"),
+		mk("opensearch_health", "", health, reportedHealthy, "OpenSearchCluster.status.health"),
 		mk("opensearch_endpoint", "", opensearchEndpoint(r.cfg, fm), true, "Service"),
 		mk("opensearch_storage", "", o.storageSize+" @ "+o.storageClass, true, "StatefulSet.volumeClaimTemplates"),
 		mk("opensearch_heap", "", o.javaOpts, true, "OPENSEARCH_JAVA_OPTS"),
