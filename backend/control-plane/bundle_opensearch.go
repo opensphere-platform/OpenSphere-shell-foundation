@@ -13,6 +13,7 @@ import (
 const osStatefulSetName = "opensphere-search"
 const openSearchAdminSecretName = osStatefulSetName + "-admin-credentials"
 const openSearchSecurityConfigSecretName = osStatefulSetName + "-security-config"
+const openSearchInitHelperImage = "ghcr.io/opensphere-platform/mirror/busybox:1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662"
 
 var statefulSetGVK = schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "StatefulSet"}
 var openSearchClusterGVK = schema.GroupVersionKind{Group: "opensearch.opster.io", Version: "v1", Kind: "OpenSearchCluster"}
@@ -84,6 +85,11 @@ func buildOpenSearchBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstr
 			"namespace": ns,
 		},
 		"spec": map[string]interface{}{
+			// Do not allow the upstream operator to inject its mutable
+			// docker.io/busybox:latest default into Foundation workloads.
+			"initHelper": map[string]interface{}{
+				"image": openSearchInitHelperImage, "imagePullPolicy": "IfNotPresent",
+			},
 			"general": map[string]interface{}{
 				"serviceName":      osStatefulSetName,
 				"version":          o.version,

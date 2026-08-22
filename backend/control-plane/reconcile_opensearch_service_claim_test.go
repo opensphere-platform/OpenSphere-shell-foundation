@@ -124,6 +124,10 @@ func TestOpenSearchBundleUsesSecuredUpstreamOperatorCluster(t *testing.T) {
 	if dashboardsEnabled || !replicasFound || dashboardsReplicas != 1 || !versionFound || dashboardsVersion != "3.7.0" {
 		t.Fatalf("disabled Dashboards must still satisfy the operator schema: %#v", cluster.Object["spec"].(map[string]interface{})["dashboards"])
 	}
+	initHelperImage, found, _ := unstructured.NestedString(cluster.Object, "spec", "initHelper", "image")
+	if !found || initHelperImage != openSearchInitHelperImage || !strings.Contains(initHelperImage, "@sha256:") {
+		t.Fatalf("OpenSearch init helper must be an immutable Foundation mirror: %q", initHelperImage)
+	}
 }
 
 func TestOpenSearchSecurityDocumentsBindAdminPassword(t *testing.T) {
