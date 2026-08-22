@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -97,12 +98,16 @@ func TestOpenSearchBundleUsesSecuredUpstreamOperatorCluster(t *testing.T) {
 		t.Fatal(err)
 	}
 	var cluster *unstructured.Unstructured
+	var networkPolicy *unstructured.Unstructured
 	for _, item := range objects {
 		if item.GetKind() == "StatefulSet" {
 			t.Fatal("OpenSearch must not regress to a directly managed StatefulSet")
 		}
 		if item.GetKind() == "OpenSearchCluster" {
 			cluster = item
+		}
+		if item.GetKind() == "NetworkPolicy" {
+			networkPolicy = item
 		}
 	}
 	if cluster == nil || cluster.GetAPIVersion() != "opensearch.opster.io/v1" {
@@ -131,6 +136,15 @@ func TestOpenSearchBundleUsesSecuredUpstreamOperatorCluster(t *testing.T) {
 	podSecurityContext, _, _ := unstructured.NestedMap(cluster.Object, "spec", "general", "podSecurityContext")
 	if _, blocksRootInit := podSecurityContext["runAsNonRoot"]; blocksRootInit || podSecurityContext["runAsUser"] != int64(1000) {
 		t.Fatalf("OpenSearch process must remain UID 1000 without blocking the operator root init helper: %#v", podSecurityContext)
+	}
+	ingress, _, _ := unstructured.NestedSlice(networkPolicy.Object, "spec", "ingress")
+	transportPorts := ingress[0].(map[string]interface{})["ports"].([]interface{})
+	if len(transportPorts) != 2 || transportPorts[1].(map[string]interface{})["port"] != int64(9300) {
+		t.Fatalf("same-namespace OpenSearch transport must be explicit: %#v", transportPorts)
+	}
+	apiRule := ingress[1].(map[string]interface{})
+	if len(apiRule["ports"].([]interface{})) != 1 || !strings.Contains(fmt.Sprint(apiRule["from"]), "opensphere-system") {
+		t.Fatalf("OpenSearch API access must stay separate from transport access: %#v", apiRule)
 	}
 }
 

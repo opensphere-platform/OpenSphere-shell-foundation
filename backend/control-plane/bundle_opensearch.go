@@ -147,17 +147,27 @@ func buildOpenSearchBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstr
 }
 
 func openSearchNetworkPolicy(ns, owner string) *unstructured.Unstructured {
-	platformNamespaces := map[string]interface{}{"matchExpressions": []interface{}{map[string]interface{}{"key": "kubernetes.io/metadata.name", "operator": "In", "values": []interface{}{ns, "opensphere-console", "monitoring"}}}}
+	sameNamespace := map[string]interface{}{"matchLabels": map[string]interface{}{"kubernetes.io/metadata.name": ns}}
+	apiNamespaces := map[string]interface{}{"matchExpressions": []interface{}{map[string]interface{}{"key": "kubernetes.io/metadata.name", "operator": "In", "values": []interface{}{"opensphere-console", "opensphere-system", "monitoring"}}}}
 	managedConsumers := map[string]interface{}{"matchLabels": map[string]interface{}{"opensphere.io/managed-by": "foundation", "opensphere.io/purpose": "pfss-service"}}
 	u := &unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": map[string]interface{}{"name": osStatefulSetName + "-internal", "namespace": ns},
 		"spec": map[string]interface{}{
 			"podSelector": map[string]interface{}{"matchLabels": map[string]interface{}{"opster.io/opensearch-cluster": osStatefulSetName}},
 			"policyTypes": []interface{}{"Ingress"},
-			"ingress": []interface{}{map[string]interface{}{
-				"from":  []interface{}{map[string]interface{}{"namespaceSelector": platformNamespaces}, map[string]interface{}{"namespaceSelector": managedConsumers}},
-				"ports": []interface{}{map[string]interface{}{"protocol": "TCP", "port": int64(9200)}},
-			}},
+			"ingress": []interface{}{
+				map[string]interface{}{
+					"from": []interface{}{map[string]interface{}{"namespaceSelector": sameNamespace}},
+					"ports": []interface{}{
+						map[string]interface{}{"protocol": "TCP", "port": int64(9200)},
+						map[string]interface{}{"protocol": "TCP", "port": int64(9300)},
+					},
+				},
+				map[string]interface{}{
+					"from":  []interface{}{map[string]interface{}{"namespaceSelector": apiNamespaces}, map[string]interface{}{"namespaceSelector": managedConsumers}},
+					"ports": []interface{}{map[string]interface{}{"protocol": "TCP", "port": int64(9200)}},
+				},
+			},
 		},
 	}}
 	stampLabels(u, "data", owner)
