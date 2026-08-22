@@ -128,6 +128,10 @@ func TestOpenSearchBundleUsesSecuredUpstreamOperatorCluster(t *testing.T) {
 	if !found || initHelperImage != openSearchInitHelperImage || !strings.Contains(initHelperImage, "@sha256:") {
 		t.Fatalf("OpenSearch init helper must be an immutable Foundation mirror: %q", initHelperImage)
 	}
+	podSecurityContext, _, _ := unstructured.NestedMap(cluster.Object, "spec", "general", "podSecurityContext")
+	if _, blocksRootInit := podSecurityContext["runAsNonRoot"]; blocksRootInit || podSecurityContext["runAsUser"] != int64(1000) {
+		t.Fatalf("OpenSearch process must remain UID 1000 without blocking the operator root init helper: %#v", podSecurityContext)
+	}
 }
 
 func TestOpenSearchSecurityDocumentsBindAdminPassword(t *testing.T) {

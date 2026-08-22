@@ -98,7 +98,10 @@ func buildOpenSearchBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstr
 				"imagePullSecrets": []interface{}{map[string]interface{}{"name": "opensphere-ghcr-pull"}},
 				"setVMMaxMapCount": false,
 				"podSecurityContext": map[string]interface{}{
-					"runAsNonRoot": true, "runAsUser": int64(1000), "runAsGroup": int64(1000), "fsGroup": int64(1000),
+					// The upstream volume-permission init helper explicitly runs as
+					// UID 0. Keep the OpenSearch process identity at 1000 without a
+					// contradictory Pod-wide runAsNonRoot constraint.
+					"runAsUser": int64(1000), "runAsGroup": int64(1000), "fsGroup": int64(1000),
 				},
 				"securityContext": map[string]interface{}{
 					"allowPrivilegeEscalation": false, "privileged": false,
