@@ -16,6 +16,6 @@ test('Foundation control-plane passes non-secret Samba model values to plugin re
 
 test('Samba plugin service default points at the signed extension namespace', () => {
   const main = fs.readFileSync(path.join(__dirname, '..', 'backend', 'control-plane', 'main.go'), 'utf8');
-  assert.match(main, /samba-ad\.opensphere-console\.svc:8080/);
+  assert.match(main, /directory\.opensphere-console\.svc:8080/);
   assert.doesNotMatch(main, /samba-ad\.opensphere-system\.svc:8080/);
 });

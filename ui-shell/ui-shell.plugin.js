@@ -79,15 +79,20 @@ async function contributeFoundationManuals(ctx) {
 
 export async function activate(ctx) {
   const base = (ctx.api?.baseUrl ?? '').replace(/\/$/, '');
+  const activeChildren = new Set(ctx.host?.children?.() ?? []);
   const contexts = window.__OPENSPHERE_HOST_CONTEXTS__ ||= Object.create(null);
   contexts.foundation = {
     api: { baseUrl: base, fetch: ctx.api?.fetch },
     routing: ctx.routing,
+    // Immutable for the life of this document. Main Shell pins one verified
+    // Registry composition per document, so Foundation can distinguish
+    // "module package activated" from the independent service desired state
+    // without querying a second Registry.
+    registry: { activeChildren: Object.freeze([...activeChildren]) },
   };
   hostContextInstalled = true;
   activeContext = ctx;
   await injectOnce(ctx, base);
-  const activeChildren = new Set(ctx.host?.children?.() ?? []);
   const supportedProjections = window.__OPENSPHERE_FOUNDATION_CHILD_PROJECTIONS__ ?? [];
   ctx.host?.reportProjections?.(supportedProjections.filter((projection) => activeChildren.has(projection.id)));
   ctx.extensions.registerPage({

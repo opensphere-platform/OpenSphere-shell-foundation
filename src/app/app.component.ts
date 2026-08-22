@@ -155,17 +155,17 @@ interface NavGroup { id: string; label: string; iconKey: string; children: NavCh
             <div>
               <div class="pfs-module-management__eyebrow">PFSS MODULE MANAGEMENT</div>
               <h1 id="pfs-module-management-title">{{ p.name }}</h1>
-              <p *ngIf="p.lifecycle === 'registry-backed'">검증된 plugin UI가 아직 활성화되지 않았습니다. Registry 준비 상태를 확인할 수 있습니다.</p>
+              <p *ngIf="p.lifecycle === 'registry-backed'">이 PFSS 모듈은 현재 Main Shell Registry 구성에 설치되어 있지 않습니다.</p>
               <p *ngIf="p.lifecycle === 'migration-required'">독립 Package/Registration 계약으로 이관되기 전까지 실행 UI와 변경 작업을 제공하지 않습니다.</p>
             </div>
             <a class="btn btn-primary" href="/manage/extensions">Extensions 관리</a>
           </div>
           <dl class="pfs-module-management__facts">
             <dt>정본 경로</dt><dd class="os-mono">/pfss/{{ routeId(p.id) }}</dd>
-            <dt>계약 상태</dt><dd>{{ p.lifecycle === 'migration-required' ? 'ContractMigrationRequired' : 'RegistryActivationPending' }}</dd>
-            <dt>설치 선언</dt><dd>{{ reg.modelOf(p.id) ?? '확인 중' }}</dd>
-            <dt>Runtime</dt><dd>{{ reg.health(p).label }}</dd>
-            <dt>UI 상태</dt><dd>{{ p.lifecycle === 'migration-required' ? '직접 실행 차단' : 'Activation 대기' }}</dd>
+            <dt>모듈 상태</dt><dd>{{ p.lifecycle === 'migration-required' ? 'ContractMigrationRequired' : reg.moduleState(p.id) }}</dd>
+            <dt>서비스 설정</dt><dd>{{ reg.modelOf(p.id) ?? '확인 중' }}</dd>
+            <dt>서비스 관측</dt><dd>{{ reg.health(p).label }}</dd>
+            <dt>UI 상태</dt><dd>{{ p.lifecycle === 'migration-required' ? '직접 실행 차단' : '모듈 미설치' }}</dd>
           </dl>
           <clr-alert clrAlertType="warning" [clrAlertClosable]="false">
             <clr-alert-item><span class="alert-text">{{ p.lifecycle === 'migration-required' ? '독립 source/image/Package/Registration 이관이 완료될 때까지 변경 작업은 차단됩니다.' : '서명·의존성·플랫폼 준비도 검증이 끝날 때까지 변경 작업은 차단됩니다.' }}</span></clr-alert-item>
@@ -199,7 +199,8 @@ export class AppComponent implements OnInit, OnDestroy {
   /** Navigation은 Registry-backed 항목과 명시적 migration 대상만 투영한다. planned는 catalog 전용이다. */
   readonly groups = computed<NavGroup[]>(() => {
     const pick = (prefix: string): NavChild[] => this.reg.all
-      .filter((p) => p.capability.startsWith(prefix) && ['registry-backed', 'migration-required'].includes(p.lifecycle))
+      .filter((p) => p.capability.startsWith(prefix)
+        && (p.lifecycle === 'migration-required' || (p.lifecycle === 'registry-backed' && this.reg.moduleAvailable(p.id))))
       .map((p) => ({ id:this.routeId(p.id), name:p.name }));
     return [
       { id:'identity', label:'Identity', iconKey:'identity', children:pick('identity.') },
@@ -243,9 +244,10 @@ export class AppComponent implements OnInit, OnDestroy {
   activePlugin(): HostedPlugin | undefined {
     const route = this.vr.module();
     const id = this.pluginId(route === 'delivery' ? this.vr.tab() : route);
-    const p = this.reg.all.find((x) => x.id === id && x.lifecycle === 'registry-backed' && !!x.activation);
-    if (!p) { return undefined; }
-    return p.activation?.element && customElements.get(p.activation.element) ? p : undefined;
+    return this.reg.all.find((x) => x.id === id
+      && x.lifecycle === 'registry-backed'
+      && !!x.activation
+      && this.reg.moduleAvailable(x.id));
   }
 
   inactivePlugin(): HostedPlugin | undefined {
@@ -253,7 +255,7 @@ export class AppComponent implements OnInit, OnDestroy {
     const id = this.pluginId(route === 'delivery' ? this.vr.tab() : route);
     const plugin = this.reg.all.find((item) => item.id === id && ['registry-backed', 'migration-required'].includes(item.lifecycle));
     if (!plugin) return undefined;
-    if (plugin.lifecycle === 'registry-backed' && (!plugin.activation?.element || customElements.get(plugin.activation.element))) return undefined;
+    if (plugin.lifecycle === 'registry-backed' && this.reg.moduleAvailable(plugin.id)) return undefined;
     return plugin;
   }
 

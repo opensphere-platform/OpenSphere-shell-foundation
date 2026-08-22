@@ -11,6 +11,15 @@ import { apiBase, hostFetch, writeHeaders } from '../api-base';
 // FoundationModel CR(foundation.opensphere.io/v1alpha1, Cluster-scope) — 수명주기의 클러스터 정본.
 const FM_PATH = 'apis/foundation.opensphere.io/v1alpha1/foundationmodels';
 type EngineState = 'Installed' | 'Disabled';
+
+function activeHostChildPackages(): ReadonlySet<string> {
+  const hostWindow = window as Window & {
+    __OPENSPHERE_HOST_CONTEXTS__?: Record<string, {
+      registry?: { activeChildren?: readonly string[] };
+    }>;
+  };
+  return new Set(hostWindow.__OPENSPHERE_HOST_CONTEXTS__?.['foundation']?.registry?.activeChildren ?? []);
+}
 export interface FoundationDomainObservation {
   id: string;
   healthy: boolean;
@@ -146,6 +155,7 @@ export class FoundationRegistryService {
   private syncope = inject(SyncopeService);
 
   readonly all: HostedPlugin[] = FOUNDATION_PLUGINS;
+  private readonly activeChildPackages = activeHostChildPackages();
 
   // 도메인 CR hydrate 상태 — null=아직 미로드(첫 응답 전 플리커 방지를 위해 낙관 Enabled 표시), 이후 CR 기준.
   private readonly domains = signal<Record<string, FoundationDomainState> | null>(null);
@@ -214,6 +224,22 @@ export class FoundationRegistryService {
     const m = this.domains();
     if (m === null) { return false; }
     return this.modelOf(id) === 'Installed';
+  }
+
+  /**
+   * Module availability comes only from Main Shell's verified Registry
+   * composition. Service desired/observed state remains exclusively in
+   * FoundationModel. Keeping these two questions separate lets an operator
+   * open a Ready module to configure a currently Disabled service.
+   */
+  moduleAvailable(id: string): boolean {
+    const plugin = this.all.find((item) => item.id === id);
+    const packageId = plugin?.activation?.packageId;
+    return Boolean(packageId && this.activeChildPackages.has(packageId));
+  }
+
+  moduleState(id: string): 'Ready' | 'NotInstalled' {
+    return this.moduleAvailable(id) ? 'Ready' : 'NotInstalled';
   }
 
   parametersOf(id: string): Record<string, unknown> {

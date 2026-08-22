@@ -210,7 +210,8 @@ test('Foundation retains PostgreSQL governed endpoints but no longer compiles it
   assert.doesNotMatch(app, /PostgresPluginComponent|app-postgres-plugin/);
   assert.doesNotMatch(app, /if \(id === 'postgres'\) return undefined/);
   assert.match(app, /<app-plugin-outlet \*ngIf="activePlugin\(\) as p"/);
-  assert.match(app, /\['samba', 'postgres'\]\.includes\(id\)/);
+  assert.match(app, /activePlugin\(\)[\s\S]*this\.reg\.moduleAvailable\(x\.id\)/);
+  assert.doesNotMatch(app, /activePlugin\(\)[\s\S]{0,500}modelOf\(/);
 });
 
 test('StackGres profile catalog accepts only typed, safe native profile specs', () => {
