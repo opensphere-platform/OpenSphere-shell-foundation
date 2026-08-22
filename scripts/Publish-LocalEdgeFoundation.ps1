@@ -125,7 +125,7 @@ try {
   Invoke-Checked git -C $repoRoot worktree add --detach $checkout $sourceRevision | Out-Null
   Invoke-Checked npm --prefix $checkout ci --ignore-scripts --no-audit --no-fund | Out-Null
   Invoke-Checked npm --prefix $checkout run build | Out-Null
-  Invoke-Checked node --test (Join-Path $checkout 'test\view-router.test.ts') | Out-Null
+  Invoke-Checked node --test (Join-Path $checkout 'test\host-child-projection.test.js') | Out-Null
 
   $env:DUPA_SIGNING_KEY = $SigningKey
   $env:DUPA_SIGNING_KEY_ID = $SigningKeyId
