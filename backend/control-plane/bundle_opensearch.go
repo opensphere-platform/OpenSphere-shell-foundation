@@ -109,7 +109,12 @@ func buildOpenSearchBundle(cfg *config, fm *unstructured.Unstructured) ([]*unstr
 					"securityConfigSecret":   map[string]interface{}{"name": openSearchSecurityConfigSecretName},
 				},
 			},
-			"dashboards": map[string]interface{}{"enable": false},
+			// The upstream OpenSearch operator requires replicas and version even
+			// when Dashboards is disabled. Keep the disabled declaration complete
+			// so API admission cannot reject the entire data-model reconcile.
+			"dashboards": map[string]interface{}{
+				"enable": false, "replicas": int64(1), "version": o.version,
+			},
 			"nodePools": []interface{}{
 				map[string]interface{}{
 					"component": "nodes", "replicas": o.replicas, "diskSize": o.storageSize, "jvm": o.javaOpts,
