@@ -1,5 +1,18 @@
 import { Injectable, signal } from '@angular/core';
 
+interface HostRouting {
+  currentPath?: () => string;
+  navigate?: (path: string, options?: { replace?: boolean }) => void;
+  subscribe?: (listener: (path: string) => void) => () => void;
+}
+
+function foundationHostRouting(): HostRouting | undefined {
+  const hostWindow = window as Window & {
+    __OPENSPHERE_HOST_CONTEXTS__?: Record<string, { routing?: HostRouting }>;
+  };
+  return hostWindow.__OPENSPHERE_HOST_CONTEXTS__?.['foundation']?.routing;
+}
+
 // Foundation 딥링크 — 플랫폼 표준(shell-template 원본)과 동일: **경로 세그먼트 + pushState/popstate**.
 // 콘솔 host matcher가 PFSS 정본 `/pfss/*`를 Foundation에 위임하므로, 경로가 바뀌어도
 // id(foundation)가 그대로면 재마운트되지 않는다. 주소 형태:
@@ -16,7 +29,12 @@ export class ViewRouter {
 
   constructor() {
     this.read();
-    try { window.addEventListener('popstate', () => this.read()); } catch { /* noop */ }
+    const routing = foundationHostRouting();
+    if (routing?.subscribe) {
+      routing.subscribe(() => this.read());
+    } else {
+      try { window.addEventListener('popstate', () => this.read()); } catch { /* noop */ }
+    }
   }
 
   /** URL 경로 → module/tab 복원(북마크·새로고침·뒤로가기). */
@@ -74,7 +92,13 @@ export class ViewRouter {
       if (m && m !== 'overview' && hasTabs && t && t !== 'overview') next += `/${t}`;
       if (m === 'delivery' && t && t !== 'overview' && this.detail() !== 'overview') next += `/${this.detail()}`;
       const target = next + location.search + location.hash;
-      if (location.pathname !== next) history.pushState(history.state, '', target);
+      if (location.pathname === next) return;
+      const routing = foundationHostRouting();
+      if (routing?.navigate) {
+        routing.navigate(target);
+        return;
+      }
+      history.pushState(history.state, '', target);
     } catch { /* noop */ }
   }
 }

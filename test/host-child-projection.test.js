@@ -23,9 +23,15 @@ test('Foundation reports Registry-approved child management surfaces', () => {
 
 test('responsive layout preserves Host navigation while child UI remains route scoped', () => {
   const component = read('src', 'app', 'app.component.ts');
+  const entry = read('ui-shell', 'ui-shell.plugin.js');
+  const router = read('src', 'app', 'view-router.ts');
 
   assert.match(component, /@media \(max-width: 760px\)[\s\S]*\.cm-nav \{ display: block; width: 100%; min-height: auto;/);
   assert.doesNotMatch(component, /@media \(max-width: 760px\)[\s\S]{0,180}\.cm-nav \{ display: none;/);
   assert.match(component, /goChild\(child: NavChild\)[\s\S]*this\.vr\.setModule/);
   assert.match(component, /customElements\.get\(p\.activation\.element\)/);
+  assert.match(entry, /routing: ctx\.routing/);
+  assert.match(router, /foundationHostRouting\(\)/);
+  assert.match(router, /routing\.navigate\(target\)/);
+  assert.match(router, /routing\.subscribe\(\(\) => this\.read\(\)\)/);
 });

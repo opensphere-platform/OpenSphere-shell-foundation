@@ -80,7 +80,10 @@ async function contributeFoundationManuals(ctx) {
 export async function activate(ctx) {
   const base = (ctx.api?.baseUrl ?? '').replace(/\/$/, '');
   const contexts = window.__OPENSPHERE_HOST_CONTEXTS__ ||= Object.create(null);
-  contexts.foundation = { api: { baseUrl: base, fetch: ctx.api?.fetch } };
+  contexts.foundation = {
+    api: { baseUrl: base, fetch: ctx.api?.fetch },
+    routing: ctx.routing,
+  };
   hostContextInstalled = true;
   activeContext = ctx;
   await injectOnce(ctx, base);
